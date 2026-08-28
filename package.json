@@ -2,7 +2,7 @@
   "name": "ddpro-app",
   "version": "1.0.0",
   "private": true,
-  "description": "DOĞRU DİZAYN PRO — Mobile App & Digital Ecosystem",
+  "description": "DOĞRU DİZAYN PRO - Mobile App & Digital Ecosystem",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -11,7 +11,8 @@
   },
   "dependencies": {
     "react": "latest",
-    "react-dom": "latest"
+    "react-dom": "latest",
+    "pg": "^8.16.3"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "latest",
