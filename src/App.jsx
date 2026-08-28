@@ -25,32 +25,63 @@ const modules = [
 
 function App() {
   const [activeModule, setActiveModule] = useState(0);
+  const [openModule, setOpenModule] = useState(null);
+
+  const selectModule = (index) => {
+    setActiveModule(index);
+    setOpenModule(null);
+  };
+
+  const openSelectedModule = () => {
+    setOpenModule(activeModule);
+  };
+
+  const closeModule = () => {
+    setOpenModule(null);
+  };
+
+  const active = modules[activeModule];
 
   return (
     <div style={styles.app}>
+
+      {/* HEADER */}
       <header style={styles.header}>
         <div>
           <div style={styles.logo}>DDPro</div>
+
           <div style={styles.subtitle}>
             DOĞRU DİZAYN PRO • AI TRADE
           </div>
         </div>
 
-        <button style={styles.profileButton}>
+        <button
+          style={styles.profileButton}
+          onClick={() => alert("Profil alanı hazırlanıyor.")}
+        >
           👤
         </button>
       </header>
 
+
+      {/* ANA İÇERİK */}
       <main style={styles.main}>
+
+        {/* HERO */}
         <section style={styles.hero}>
-          <div style={styles.badge}>DDPRO ECOSYSTEM</div>
+
+          <div style={styles.badge}>
+            DDPRO ECOSYSTEM
+          </div>
 
           <h1 style={styles.title}>
             Doğru Dizayn.
             <br />
             Doğru Çözüm.
             <br />
-            <span style={styles.titleAccent}>Doğru Sistem.</span>
+            <span style={styles.titleAccent}>
+              Doğru Sistem.
+            </span>
           </h1>
 
           <p style={styles.description}>
@@ -60,35 +91,57 @@ function App() {
 
           <button
             style={styles.primaryButton}
-            onClick={() => setActiveModule(1)}
+            onClick={() => {
+              setActiveModule(1);
+              setOpenModule(1);
+            }}
           >
             Sisteme Başla →
           </button>
+
         </section>
 
+
+        {/* MODÜLLER */}
         <section style={styles.section}>
+
           <div style={styles.sectionHeader}>
+
             <div>
-              <div style={styles.sectionEyebrow}>DDPRO PLATFORM</div>
-              <h2 style={styles.sectionTitle}>Ana Modüller</h2>
+              <div style={styles.sectionEyebrow}>
+                DDPRO PLATFORM
+              </div>
+
+              <h2 style={styles.sectionTitle}>
+                Ana Modüller
+              </h2>
             </div>
 
             <div style={styles.counter}>
               {activeModule + 1} / {modules.length}
             </div>
+
           </div>
 
+
           <div style={styles.moduleGrid}>
+
             {modules.map((module, index) => (
+
               <button
                 key={module.title}
-                onClick={() => setActiveModule(index)}
+                onClick={() => selectModule(index)}
                 style={{
                   ...styles.card,
-                  ...(activeModule === index ? styles.activeCard : {})
+                  ...(activeModule === index
+                    ? styles.activeCard
+                    : {})
                 }}
               >
-                <div style={styles.cardIcon}>{module.icon}</div>
+
+                <div style={styles.cardIcon}>
+                  {module.icon}
+                </div>
 
                 <h3 style={styles.cardTitle}>
                   {module.title}
@@ -98,50 +151,349 @@ function App() {
                   {module.text}
                 </p>
 
-                <div style={styles.cardArrow}>→</div>
+                <div style={styles.cardArrow}>
+                  →
+                </div>
+
               </button>
+
             ))}
+
           </div>
+
         </section>
 
-        <section style={styles.selectedPanel}>
-          <div style={styles.panelLabel}>
-            SEÇİLİ MODÜL
-          </div>
 
-          <div style={styles.panelContent}>
-            <div>
-              <div style={styles.panelIcon}>
-                {modules[activeModule].icon}
-              </div>
+        {/* SEÇİLİ MODÜL */}
+        {openModule === null && (
 
-              <h2 style={styles.panelTitle}>
-                {modules[activeModule].title}
-              </h2>
+          <section style={styles.selectedPanel}>
 
-              <p style={styles.panelText}>
-                {modules[activeModule].text}
-              </p>
+            <div style={styles.panelLabel}>
+              SEÇİLİ MODÜL
             </div>
 
-            <button style={styles.panelButton}>
-              Aç →
-            </button>
-          </div>
-        </section>
+            <div style={styles.panelContent}>
+
+              <div style={styles.panelInfo}>
+
+                <div style={styles.panelIcon}>
+                  {active.icon}
+                </div>
+
+                <h2 style={styles.panelTitle}>
+                  {active.title}
+                </h2>
+
+                <p style={styles.panelText}>
+                  {active.text}
+                </p>
+
+              </div>
+
+              <button
+                style={styles.panelButton}
+                onClick={openSelectedModule}
+              >
+                Aç →
+              </button>
+
+            </div>
+
+          </section>
+
+        )}
+
+
+        {/* MODÜL EKRANI */}
+        {openModule !== null && (
+
+          <section style={styles.moduleScreen}>
+
+            <div style={styles.moduleScreenTop}>
+
+              <div>
+
+                <div style={styles.panelLabel}>
+                  DDPRO MODÜL
+                </div>
+
+                <div style={styles.largeIcon}>
+                  {modules[openModule].icon}
+                </div>
+
+                <h2 style={styles.moduleScreenTitle}>
+                  {modules[openModule].title}
+                </h2>
+
+                <p style={styles.moduleScreenText}>
+                  {modules[openModule].text}
+                </p>
+
+              </div>
+
+              <button
+                style={styles.closeButton}
+                onClick={closeModule}
+              >
+                ← Geri
+              </button>
+
+            </div>
+
+
+            {/* PROJELER */}
+            {openModule === 1 && (
+
+              <div style={styles.realContent}>
+
+                <div style={styles.contentHeader}>
+                  <div>
+                    <div style={styles.contentEyebrow}>
+                      PROJE YÖNETİMİ
+                    </div>
+
+                    <h3 style={styles.contentTitle}>
+                      Projeler
+                    </h3>
+                  </div>
+
+                  <button
+                    style={styles.addButton}
+                    onClick={() =>
+                      alert("Yeni Proje ekranı bir sonraki aşamada oluşturulacak.")
+                    }
+                  >
+                    + Yeni Proje
+                  </button>
+                </div>
+
+
+                <div style={styles.emptyState}>
+
+                  <div style={styles.emptyIcon}>
+                    🏗️
+                  </div>
+
+                  <h3 style={styles.emptyTitle}>
+                    Henüz proje yok
+                  </h3>
+
+                  <p style={styles.emptyText}>
+                    İlk projenizi oluşturarak proje yönetim
+                    sistemini başlatabilirsiniz.
+                  </p>
+
+                  <button
+                    style={styles.primaryButton}
+                    onClick={() =>
+                      alert("Yeni Proje ekranı bir sonraki aşamada oluşturulacak.")
+                    }
+                  >
+                    + Yeni Proje Oluştur
+                  </button>
+
+                </div>
+
+              </div>
+
+            )}
+
+
+            {/* TEDARİK */}
+            {openModule === 2 && (
+
+              <div style={styles.realContent}>
+
+                <div style={styles.contentEyebrow}>
+                  TEDARİK & ARAŞTIRMA
+                </div>
+
+                <h3 style={styles.contentTitle}>
+                  Araştırma Merkezi
+                </h3>
+
+                <div style={styles.searchBox}>
+
+                  <input
+                    style={styles.searchInput}
+                    placeholder="Ürün, malzeme veya tedarikçi ara..."
+                  />
+
+                  <button style={styles.searchButton}>
+                    Ara →
+                  </button>
+
+                </div>
+
+              </div>
+
+            )}
+
+
+            {/* AI ASİSTAN */}
+            {openModule === 3 && (
+
+              <div style={styles.realContent}>
+
+                <div style={styles.contentEyebrow}>
+                  YAPAY ZEKÂ
+                </div>
+
+                <h3 style={styles.contentTitle}>
+                  DDPro AI Asistan
+                </h3>
+
+                <p style={styles.contentDescription}>
+                  Araştırma, analiz, tedarik ve operasyon
+                  süreçlerinde yapay zekâ destekli çalışma alanı.
+                </p>
+
+                <div style={styles.aiBox}>
+
+                  <div style={styles.aiIcon}>
+                    🤖
+                  </div>
+
+                  <div>
+                    <strong style={styles.aiTitle}>
+                      AI Asistan hazır
+                    </strong>
+
+                    <p style={styles.aiText}>
+                      Çalışmak istediğiniz konuyu girerek
+                      başlayabilirsiniz.
+                    </p>
+                  </div>
+
+                </div>
+
+              </div>
+
+            )}
+
+
+            {/* GENEL BAKIŞ */}
+            {openModule === 0 && (
+
+              <div style={styles.realContent}>
+
+                <div style={styles.contentEyebrow}>
+                  SİSTEM
+                </div>
+
+                <h3 style={styles.contentTitle}>
+                  Genel Bakış
+                </h3>
+
+                <div style={styles.statsGrid}>
+
+                  <div style={styles.statCard}>
+                    <span>Projeler</span>
+                    <strong>0</strong>
+                  </div>
+
+                  <div style={styles.statCard}>
+                    <span>Teklifler</span>
+                    <strong>0</strong>
+                  </div>
+
+                  <div style={styles.statCard}>
+                    <span>Tedarikler</span>
+                    <strong>0</strong>
+                  </div>
+
+                  <div style={styles.statCard}>
+                    <span>Aktiviteler</span>
+                    <strong>0</strong>
+                  </div>
+
+                </div>
+
+              </div>
+
+            )}
+
+          </section>
+
+        )}
+
       </main>
 
+
+      {/* ALT MENÜ */}
       <nav style={styles.bottomNav}>
-        <button style={styles.navItem}>⌂<span>Ana Sayfa</span></button>
-        <button style={styles.navItem}>▣<span>Projeler</span></button>
-        <button style={styles.navItem}>⌕<span>Araştır</span></button>
-        <button style={styles.navItem}>☰<span>Menü</span></button>
+
+        <button
+          style={{
+            ...styles.navItem,
+            ...(openModule === null
+              ? styles.activeNavItem
+              : {})
+          }}
+          onClick={() => {
+            setOpenModule(null);
+            setActiveModule(0);
+          }}
+        >
+          <span style={styles.navIcon}>⌂</span>
+          <span>Ana Sayfa</span>
+        </button>
+
+
+        <button
+          style={{
+            ...styles.navItem,
+            ...(openModule === 1
+              ? styles.activeNavItem
+              : {})
+          }}
+          onClick={() => {
+            setActiveModule(1);
+            setOpenModule(1);
+          }}
+        >
+          <span style={styles.navIcon}>▣</span>
+          <span>Projeler</span>
+        </button>
+
+
+        <button
+          style={{
+            ...styles.navItem,
+            ...(openModule === 2
+              ? styles.activeNavItem
+              : {})
+          }}
+          onClick={() => {
+            setActiveModule(2);
+            setOpenModule(2);
+          }}
+        >
+          <span style={styles.navIcon}>⌕</span>
+          <span>Araştır</span>
+        </button>
+
+
+        <button
+          style={styles.navItem}
+          onClick={() =>
+            alert("Menü ekranı bir sonraki aşamada oluşturulacak.")
+          }
+        >
+          <span style={styles.navIcon}>☰</span>
+          <span>Menü</span>
+        </button>
+
       </nav>
+
     </div>
   );
 }
 
+
 const styles = {
+
   app: {
     minHeight: "100vh",
     background: "#07111f",
@@ -166,8 +518,7 @@ const styles = {
   logo: {
     fontSize: "28px",
     fontWeight: "800",
-    letterSpacing: "-1px",
-    color: "#ffffff"
+    letterSpacing: "-1px"
   },
 
   subtitle: {
@@ -238,7 +589,8 @@ const styles = {
     color: "#fff",
     fontWeight: "800",
     fontSize: "16px",
-    boxShadow: "0 14px 35px rgba(55,127,240,0.25)"
+    boxShadow: "0 14px 35px rgba(55,127,240,0.25)",
+    cursor: "pointer"
   },
 
   section: {
@@ -262,8 +614,7 @@ const styles = {
 
   sectionTitle: {
     margin: 0,
-    fontSize: "28px",
-    letterSpacing: "-0.8px"
+    fontSize: "28px"
   },
 
   counter: {
@@ -274,7 +625,8 @@ const styles = {
 
   moduleGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))",
+    gridTemplateColumns:
+      "repeat(auto-fit, minmax(210px, 1fr))",
     gap: "12px"
   },
 
@@ -292,8 +644,10 @@ const styles = {
 
   activeCard: {
     border: "1px solid #4d91ff",
-    background: "linear-gradient(145deg, #10233d, #0d1928)",
-    boxShadow: "0 10px 35px rgba(30,96,200,0.18)"
+    background:
+      "linear-gradient(145deg, #10233d, #0d1928)",
+    boxShadow:
+      "0 10px 35px rgba(30,96,200,0.18)"
   },
 
   cardIcon: {
@@ -325,8 +679,10 @@ const styles = {
     margin: "20px",
     padding: "26px",
     borderRadius: "24px",
-    background: "linear-gradient(135deg, #102642, #0b1726)",
-    border: "1px solid rgba(77,145,255,0.25)"
+    background:
+      "linear-gradient(135deg, #102642, #0b1726)",
+    border:
+      "1px solid rgba(77,145,255,0.25)"
   },
 
   panelLabel: {
@@ -342,6 +698,10 @@ const styles = {
     justifyContent: "space-between",
     gap: "20px",
     alignItems: "center"
+  },
+
+  panelInfo: {
+    flex: 1
   },
 
   panelIcon: {
@@ -366,7 +726,198 @@ const styles = {
     borderRadius: "12px",
     padding: "14px 18px",
     fontWeight: "800",
+    whiteSpace: "nowrap",
+    cursor: "pointer"
+  },
+
+  moduleScreen: {
+    margin: "20px",
+    padding: "30px",
+    borderRadius: "26px",
+    background:
+      "linear-gradient(145deg, #102642, #0b1726)",
+    border:
+      "1px solid rgba(77,145,255,0.28)",
+    boxShadow:
+      "0 20px 60px rgba(0,0,0,0.25)"
+  },
+
+  moduleScreenTop: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: "20px"
+  },
+
+  largeIcon: {
+    fontSize: "48px",
+    marginBottom: "8px"
+  },
+
+  moduleScreenTitle: {
+    fontSize: "34px",
+    margin: "0 0 10px"
+  },
+
+  moduleScreenText: {
+    color: "#a8b6c9",
+    lineHeight: "1.6",
+    maxWidth: "600px"
+  },
+
+  closeButton: {
+    border: "1px solid rgba(255,255,255,0.15)",
+    background: "rgba(255,255,255,0.08)",
+    color: "#fff",
+    borderRadius: "12px",
+    padding: "12px 16px",
+    fontWeight: "800",
+    cursor: "pointer"
+  },
+
+  realContent: {
+    marginTop: "30px",
+    paddingTop: "26px",
+    borderTop:
+      "1px solid rgba(255,255,255,0.08)"
+  },
+
+  contentHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: "15px",
+    marginBottom: "25px"
+  },
+
+  contentEyebrow: {
+    color: "#6898db",
+    fontSize: "10px",
+    fontWeight: "800",
+    letterSpacing: "1.4px",
+    marginBottom: "8px"
+  },
+
+  contentTitle: {
+    fontSize: "26px",
+    margin: "0 0 20px"
+  },
+
+  contentDescription: {
+    color: "#a8b6c9",
+    lineHeight: "1.6"
+  },
+
+  addButton: {
+    border: 0,
+    borderRadius: "12px",
+    padding: "13px 18px",
+    background: "#377ff0",
+    color: "#fff",
+    fontWeight: "800",
+    cursor: "pointer",
     whiteSpace: "nowrap"
+  },
+
+  emptyState: {
+    textAlign: "center",
+    padding: "40px 20px",
+    borderRadius: "20px",
+    border:
+      "1px dashed rgba(255,255,255,0.12)",
+    background: "rgba(255,255,255,0.025)"
+  },
+
+  emptyIcon: {
+    fontSize: "46px",
+    marginBottom: "15px"
+  },
+
+  emptyTitle: {
+    fontSize: "22px",
+    margin: "0 0 8px"
+  },
+
+  emptyText: {
+    color: "#91a0b5",
+    lineHeight: "1.6",
+    maxWidth: "500px",
+    margin: "0 auto 22px"
+  },
+
+  searchBox: {
+    display: "flex",
+    gap: "10px",
+    width: "100%"
+  },
+
+  searchInput: {
+    flex: 1,
+    minWidth: 0,
+    borderRadius: "12px",
+    border:
+      "1px solid rgba(255,255,255,0.12)",
+    background: "#091625",
+    color: "#fff",
+    padding: "15px",
+    fontSize: "15px",
+    outline: "none"
+  },
+
+  searchButton: {
+    border: 0,
+    borderRadius: "12px",
+    padding: "0 20px",
+    background: "#377ff0",
+    color: "#fff",
+    fontWeight: "800"
+  },
+
+  aiBox: {
+    display: "flex",
+    gap: "18px",
+    alignItems: "center",
+    padding: "22px",
+    borderRadius: "18px",
+    background: "#0d1928",
+    border:
+      "1px solid rgba(77,145,255,0.2)"
+  },
+
+  aiIcon: {
+    fontSize: "40px"
+  },
+
+  aiTitle: {
+    fontSize: "18px"
+  },
+
+  aiText: {
+    color: "#91a0b5",
+    margin: "6px 0 0"
+  },
+
+  statsGrid: {
+    display: "grid",
+    gridTemplateColumns:
+      "repeat(auto-fit, minmax(150px, 1fr))",
+    gap: "12px"
+  },
+
+  statCard: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "10px",
+    padding: "20px",
+    borderRadius: "18px",
+    background: "#0d1928",
+    border:
+      "1px solid rgba(255,255,255,0.08)",
+    color: "#91a0b5"
+  },
+
+  navIcon: {
+    fontSize: "21px"
   },
 
   bottomNav: {
@@ -379,7 +930,8 @@ const styles = {
     alignItems: "center",
     justifyContent: "space-around",
     background: "rgba(10,19,31,0.97)",
-    borderTop: "1px solid rgba(255,255,255,0.08)",
+    borderTop:
+      "1px solid rgba(255,255,255,0.08)",
     zIndex: 20
   },
 
@@ -387,11 +939,18 @@ const styles = {
     border: 0,
     background: "transparent",
     color: "#9caabd",
-    fontSize: "20px",
+    fontSize: "14px",
     display: "flex",
     flexDirection: "column",
     alignItems: "center",
-    gap: "4px"
+    gap: "4px",
+    cursor: "pointer",
+    minWidth: "80px"
+  },
+
+  activeNavItem: {
+    color: "#4d91ff",
+    fontWeight: "800"
   }
 };
 
