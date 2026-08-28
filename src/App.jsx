@@ -193,7 +193,7 @@ function App() {
 
               <button
                 style={styles.panelButton}
-                onClick={openSelectedModule}
+                onClick={() => setOpenModule(activeModule)}
               >
                 Aç →
               </button>
