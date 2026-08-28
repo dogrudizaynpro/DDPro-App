@@ -953,5 +953,4 @@ const styles = {
     fontWeight: "800"
   }
 };
-
 export default App;
