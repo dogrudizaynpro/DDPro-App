@@ -26,6 +26,7 @@ const modules = [
 function App() {
   const [activeModule, setActiveModule] = useState(0);
   const [openModule, setOpenModule] = useState(null);
+  const [searchTerm, setSearchTerm] = useState("");
 
   const selectModule = (index) => {
     setActiveModule(index);
@@ -40,6 +41,17 @@ function App() {
     setOpenModule(null);
   };
 
+  const handleSearch = () => {
+    if (!searchTerm.trim()) {
+      alert("Lütfen ürün, malzeme veya tedarikçi adı girin.");
+      return;
+    }
+
+    alert(
+      `"${searchTerm.trim()}" için araştırma sistemi bir sonraki aşamada aktif edilecek.`
+    );
+  };
+
   const active = modules[activeModule];
 
   return (
@@ -48,7 +60,9 @@ function App() {
       {/* HEADER */}
       <header style={styles.header}>
         <div>
-          <div style={styles.logo}>DDPro</div>
+          <div style={styles.logo}>
+            DDPro
+          </div>
 
           <div style={styles.subtitle}>
             DOĞRU DİZAYN PRO • AI TRADE
@@ -56,6 +70,7 @@ function App() {
         </div>
 
         <button
+          type="button"
           style={styles.profileButton}
           onClick={() => alert("Profil alanı hazırlanıyor.")}
         >
@@ -90,6 +105,7 @@ function App() {
           </p>
 
           <button
+            type="button"
             style={styles.primaryButton}
             onClick={() => {
               setActiveModule(1);
@@ -129,6 +145,7 @@ function App() {
             {modules.map((module, index) => (
 
               <button
+                type="button"
                 key={module.title}
                 onClick={() => selectModule(index)}
                 style={{
@@ -192,8 +209,9 @@ function App() {
               </div>
 
               <button
+                type="button"
                 style={styles.panelButton}
-                onClick={() => setOpenModule(activeModule)}
+                onClick={openSelectedModule}
               >
                 Aç →
               </button>
@@ -212,7 +230,7 @@ function App() {
 
             <div style={styles.moduleScreenTop}>
 
-              <div>
+              <div style={styles.moduleScreenInfo}>
 
                 <div style={styles.panelLabel}>
                   DDPRO MODÜL
@@ -233,6 +251,7 @@ function App() {
               </div>
 
               <button
+                type="button"
                 style={styles.closeButton}
                 onClick={closeModule}
               >
@@ -242,12 +261,120 @@ function App() {
             </div>
 
 
+            {/* GENEL BAKIŞ */}
+            {openModule === 0 && (
+
+              <div style={styles.realContent}>
+
+                <div style={styles.contentEyebrow}>
+                  DDPRO DASHBOARD
+                </div>
+
+                <h3 style={styles.contentTitle}>
+                  Genel Bakış
+                </h3>
+
+                <div style={styles.dashboardGrid}>
+
+                  <div style={styles.statCard}>
+                    <div style={styles.statIcon}>
+                      🏗️
+                    </div>
+
+                    <div style={styles.statValue}>
+                      0
+                    </div>
+
+                    <div style={styles.statLabel}>
+                      Aktif Proje
+                    </div>
+                  </div>
+
+
+                  <div style={styles.statCard}>
+                    <div style={styles.statIcon}>
+                      📄
+                    </div>
+
+                    <div style={styles.statValue}>
+                      0
+                    </div>
+
+                    <div style={styles.statLabel}>
+                      Teklif
+                    </div>
+                  </div>
+
+
+                  <div style={styles.statCard}>
+                    <div style={styles.statIcon}>
+                      📦
+                    </div>
+
+                    <div style={styles.statValue}>
+                      0
+                    </div>
+
+                    <div style={styles.statLabel}>
+                      Tedarik
+                    </div>
+                  </div>
+
+
+                  <div style={styles.statCard}>
+                    <div style={styles.statIcon}>
+                      🤖
+                    </div>
+
+                    <div style={styles.statValue}>
+                      0
+                    </div>
+
+                    <div style={styles.statLabel}>
+                      AI İşlemi
+                    </div>
+                  </div>
+
+                </div>
+
+
+                <div style={styles.overviewPanel}>
+
+                  <div style={styles.contentEyebrow}>
+                    SİSTEM DURUMU
+                  </div>
+
+                  <div style={styles.statusRow}>
+
+                    <span style={styles.statusDot}>
+                      ●
+                    </span>
+
+                    <span>
+                      DDPro ana uygulama arayüzü hazır.
+                    </span>
+
+                  </div>
+
+                  <p style={styles.overviewText}>
+                    Proje, teklif, tedarik ve AI modülleri
+                    merkezi sistem üzerinden yönetilecek.
+                  </p>
+
+                </div>
+
+              </div>
+
+            )}
+
+
             {/* PROJELER */}
             {openModule === 1 && (
 
               <div style={styles.realContent}>
 
                 <div style={styles.contentHeader}>
+
                   <div>
                     <div style={styles.contentEyebrow}>
                       PROJE YÖNETİMİ
@@ -259,13 +386,17 @@ function App() {
                   </div>
 
                   <button
+                    type="button"
                     style={styles.addButton}
                     onClick={() =>
-                      alert("Yeni Proje ekranı bir sonraki aşamada oluşturulacak.")
+                      alert(
+                        "Yeni Proje ekranı bir sonraki aşamada oluşturulacak."
+                      )
                     }
                   >
                     + Yeni Proje
                   </button>
+
                 </div>
 
 
@@ -285,9 +416,12 @@ function App() {
                   </p>
 
                   <button
+                    type="button"
                     style={styles.primaryButton}
                     onClick={() =>
-                      alert("Yeni Proje ekranı bir sonraki aşamada oluşturulacak.")
+                      alert(
+                        "Yeni Proje ekranı bir sonraki aşamada oluşturulacak."
+                      )
                     }
                   >
                     + Yeni Proje Oluştur
@@ -316,13 +450,46 @@ function App() {
                 <div style={styles.searchBox}>
 
                   <input
+                    type="text"
+                    value={searchTerm}
+                    onChange={(event) =>
+                      setSearchTerm(event.target.value)
+                    }
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        handleSearch();
+                      }
+                    }}
                     style={styles.searchInput}
                     placeholder="Ürün, malzeme veya tedarikçi ara..."
                   />
 
-                  <button style={styles.searchButton}>
+                  <button
+                    type="button"
+                    style={styles.searchButton}
+                    onClick={handleSearch}
+                  >
                     Ara →
                   </button>
+
+                </div>
+
+
+                <div style={styles.emptyState}>
+
+                  <div style={styles.emptyIcon}>
+                    🔎
+                  </div>
+
+                  <h3 style={styles.emptyTitle}>
+                    Araştırma Merkezi
+                  </h3>
+
+                  <p style={styles.emptyText}>
+                    Ürün, malzeme, fiyat ve tedarikçi
+                    araştırmalarını bu merkez üzerinden
+                    karşılaştırabilirsiniz.
+                  </p>
 
                 </div>
 
@@ -344,69 +511,33 @@ function App() {
                   DDPro AI Asistan
                 </h3>
 
-                <p style={styles.contentDescription}>
-                  Araştırma, analiz, tedarik ve operasyon
-                  süreçlerinde yapay zekâ destekli çalışma alanı.
-                </p>
-
-                <div style={styles.aiBox}>
+                <div style={styles.aiPanel}>
 
                   <div style={styles.aiIcon}>
                     🤖
                   </div>
 
-                  <div>
-                    <strong style={styles.aiTitle}>
-                      AI Asistan hazır
-                    </strong>
+                  <h3 style={styles.emptyTitle}>
+                    AI Asistan Hazır
+                  </h3>
 
-                    <p style={styles.aiText}>
-                      Çalışmak istediğiniz konuyu girerek
-                      başlayabilirsiniz.
-                    </p>
-                  </div>
+                  <p style={styles.emptyText}>
+                    Araştırma, analiz, tedarik, proje ve
+                    operasyon süreçlerinde yapay zekâ
+                    desteği burada çalışacak.
+                  </p>
 
-                </div>
-
-              </div>
-
-            )}
-
-
-            {/* GENEL BAKIŞ */}
-            {openModule === 0 && (
-
-              <div style={styles.realContent}>
-
-                <div style={styles.contentEyebrow}>
-                  SİSTEM
-                </div>
-
-                <h3 style={styles.contentTitle}>
-                  Genel Bakış
-                </h3>
-
-                <div style={styles.statsGrid}>
-
-                  <div style={styles.statCard}>
-                    <span>Projeler</span>
-                    <strong>0</strong>
-                  </div>
-
-                  <div style={styles.statCard}>
-                    <span>Teklifler</span>
-                    <strong>0</strong>
-                  </div>
-
-                  <div style={styles.statCard}>
-                    <span>Tedarikler</span>
-                    <strong>0</strong>
-                  </div>
-
-                  <div style={styles.statCard}>
-                    <span>Aktiviteler</span>
-                    <strong>0</strong>
-                  </div>
+                  <button
+                    type="button"
+                    style={styles.primaryButton}
+                    onClick={() =>
+                      alert(
+                        "AI Asistan bir sonraki aşamada aktif edilecek."
+                      )
+                    }
+                  >
+                    AI Asistanı Aç →
+                  </button>
 
                 </div>
 
@@ -421,536 +552,533 @@ function App() {
       </main>
 
 
-      {/* ALT MENÜ */}
-      <nav style={styles.bottomNav}>
+      {/* FOOTER */}
+      <footer style={styles.footer}>
 
-        <button
-          style={{
-            ...styles.navItem,
-            ...(openModule === null
-              ? styles.activeNavItem
-              : {})
-          }}
-          onClick={() => {
-            setOpenModule(null);
-            setActiveModule(0);
-          }}
-        >
-          <span style={styles.navIcon}>⌂</span>
-          <span>Ana Sayfa</span>
-        </button>
+        <div>
+          © {new Date().getFullYear()} DDPro — DOĞRU DİZAYN PRO
+        </div>
 
+        <div style={styles.footerRight}>
+          AI TRADE • DIGITAL ECOSYSTEM
+        </div>
 
-        <button
-          style={{
-            ...styles.navItem,
-            ...(openModule === 1
-              ? styles.activeNavItem
-              : {})
-          }}
-          onClick={() => {
-            setActiveModule(1);
-            setOpenModule(1);
-          }}
-        >
-          <span style={styles.navIcon}>▣</span>
-          <span>Projeler</span>
-        </button>
-
-
-        <button
-          style={{
-            ...styles.navItem,
-            ...(openModule === 2
-              ? styles.activeNavItem
-              : {})
-          }}
-          onClick={() => {
-            setActiveModule(2);
-            setOpenModule(2);
-          }}
-        >
-          <span style={styles.navIcon}>⌕</span>
-          <span>Araştır</span>
-        </button>
-
-
-        <button
-          style={styles.navItem}
-          onClick={() =>
-            alert("Menü ekranı bir sonraki aşamada oluşturulacak.")
-          }
-        >
-          <span style={styles.navIcon}>☰</span>
-          <span>Menü</span>
-        </button>
-
-      </nav>
+      </footer>
 
     </div>
   );
 }
 
 
+/* =========================================================
+   STYLES
+   ========================================================= */
+
 const styles = {
 
   app: {
     minHeight: "100vh",
-    background: "#07111f",
-    color: "#f4f7fb",
+    background: "#f5f7fa",
+    color: "#111827",
     fontFamily:
-      "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-    paddingBottom: "90px"
+      "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
   },
+
 
   header: {
     display: "flex",
-    alignItems: "center",
     justifyContent: "space-between",
-    padding: "24px 20px",
-    borderBottom: "1px solid rgba(255,255,255,0.08)",
-    background: "rgba(7,17,31,0.96)",
-    position: "sticky",
-    top: 0,
-    zIndex: 10
+    alignItems: "center",
+    padding: "22px 32px",
+    background: "#111827",
+    color: "#ffffff"
   },
+
 
   logo: {
-    fontSize: "28px",
+    fontSize: "26px",
     fontWeight: "800",
-    letterSpacing: "-1px"
+    letterSpacing: "-0.5px"
   },
+
 
   subtitle: {
-    fontSize: "10px",
-    letterSpacing: "1.4px",
-    color: "#7f96b4",
-    marginTop: "4px"
+    marginTop: "4px",
+    fontSize: "11px",
+    letterSpacing: "1.5px",
+    opacity: 0.7
   },
+
 
   profileButton: {
-    width: "46px",
-    height: "46px",
-    borderRadius: "50%",
-    border: "1px solid rgba(255,255,255,0.12)",
-    background: "#101d2d",
-    color: "#fff",
-    fontSize: "20px"
-  },
-
-  main: {
-    width: "100%",
-    maxWidth: "900px",
-    margin: "0 auto"
-  },
-
-  hero: {
-    padding: "64px 20px 48px"
-  },
-
-  badge: {
-    display: "inline-block",
-    padding: "8px 12px",
-    borderRadius: "999px",
-    background: "rgba(73,144,255,0.12)",
-    border: "1px solid rgba(73,144,255,0.22)",
-    color: "#73a9ff",
-    fontSize: "10px",
-    fontWeight: "800",
-    letterSpacing: "1.4px",
-    marginBottom: "24px"
-  },
-
-  title: {
-    fontSize: "clamp(42px, 10vw, 76px)",
-    lineHeight: "1.02",
-    letterSpacing: "-2px",
-    margin: "0 0 24px",
-    fontWeight: "850"
-  },
-
-  titleAccent: {
-    color: "#4d91ff"
-  },
-
-  description: {
-    maxWidth: "620px",
-    color: "#a7b4c5",
-    fontSize: "17px",
-    lineHeight: "1.65",
-    marginBottom: "30px"
-  },
-
-  primaryButton: {
-    border: 0,
-    borderRadius: "14px",
-    padding: "17px 24px",
-    background: "#377ff0",
-    color: "#fff",
-    fontWeight: "800",
-    fontSize: "16px",
-    boxShadow: "0 14px 35px rgba(55,127,240,0.25)",
+    border: "1px solid rgba(255,255,255,0.2)",
+    background: "rgba(255,255,255,0.08)",
+    color: "#ffffff",
+    borderRadius: "12px",
+    width: "42px",
+    height: "42px",
+    fontSize: "18px",
     cursor: "pointer"
   },
 
-  section: {
-    padding: "20px"
+
+  main: {
+    maxWidth: "1180px",
+    margin: "0 auto",
+    padding: "50px 24px"
   },
+
+
+  hero: {
+    padding: "56px 40px",
+    borderRadius: "28px",
+    background: "#ffffff",
+    boxShadow: "0 20px 60px rgba(15,23,42,0.08)"
+  },
+
+
+  badge: {
+    display: "inline-block",
+    padding: "7px 12px",
+    borderRadius: "999px",
+    background: "#eef2ff",
+    color: "#4f46e5",
+    fontSize: "11px",
+    fontWeight: "700",
+    letterSpacing: "1px"
+  },
+
+
+  title: {
+    margin: "24px 0 18px",
+    fontSize: "clamp(42px, 7vw, 76px)",
+    lineHeight: 1.02,
+    letterSpacing: "-3px",
+    fontWeight: "800"
+  },
+
+
+  titleAccent: {
+    color: "#4f46e5"
+  },
+
+
+  description: {
+    maxWidth: "650px",
+    fontSize: "18px",
+    lineHeight: 1.7,
+    color: "#64748b"
+  },
+
+
+  primaryButton: {
+    marginTop: "24px",
+    padding: "14px 22px",
+    border: "none",
+    borderRadius: "12px",
+    background: "#111827",
+    color: "#ffffff",
+    fontSize: "15px",
+    fontWeight: "700",
+    cursor: "pointer"
+  },
+
+
+  section: {
+    marginTop: "52px"
+  },
+
 
   sectionHeader: {
     display: "flex",
     justifyContent: "space-between",
-    alignItems: "flex-end",
-    marginBottom: "20px"
+    alignItems: "end",
+    marginBottom: "22px"
   },
+
 
   sectionEyebrow: {
-    fontSize: "10px",
-    fontWeight: "800",
-    letterSpacing: "1.4px",
-    color: "#5e7da6",
-    marginBottom: "8px"
+    fontSize: "11px",
+    fontWeight: "700",
+    letterSpacing: "1.5px",
+    color: "#64748b"
   },
+
 
   sectionTitle: {
-    margin: 0,
-    fontSize: "28px"
+    margin: "6px 0 0",
+    fontSize: "30px"
   },
 
+
   counter: {
-    color: "#6f8db5",
+    fontSize: "14px",
     fontWeight: "700",
-    fontSize: "14px"
+    color: "#64748b"
   },
+
 
   moduleGrid: {
     display: "grid",
     gridTemplateColumns:
-      "repeat(auto-fit, minmax(210px, 1fr))",
-    gap: "12px"
+      "repeat(auto-fit, minmax(220px, 1fr))",
+    gap: "16px"
   },
+
 
   card: {
+    position: "relative",
     textAlign: "left",
-    padding: "22px",
+    padding: "24px",
     borderRadius: "20px",
-    border: "1px solid rgba(255,255,255,0.08)",
-    background: "#0d1928",
-    color: "#fff",
+    border: "1px solid #e5e7eb",
+    background: "#ffffff",
     cursor: "pointer",
-    minHeight: "230px",
-    transition: "0.2s"
+    minHeight: "210px"
   },
+
 
   activeCard: {
-    border: "1px solid #4d91ff",
-    background:
-      "linear-gradient(145deg, #10233d, #0d1928)",
+    border: "2px solid #4f46e5",
     boxShadow:
-      "0 10px 35px rgba(30,96,200,0.18)"
+      "0 12px 35px rgba(79,70,229,0.12)"
   },
+
 
   cardIcon: {
-    fontSize: "32px",
-    marginBottom: "22px"
+    fontSize: "28px",
+    marginBottom: "18px"
   },
+
 
   cardTitle: {
-    fontSize: "19px",
     margin: "0 0 10px",
-    fontWeight: "750"
+    fontSize: "19px"
   },
+
 
   cardText: {
-    color: "#91a0b5",
-    fontSize: "14px",
-    lineHeight: "1.55",
-    margin: 0
+    margin: 0,
+    color: "#64748b",
+    lineHeight: 1.6,
+    fontSize: "14px"
   },
+
 
   cardArrow: {
-    marginTop: "24px",
-    color: "#65a0ff",
-    fontSize: "22px",
-    fontWeight: "800"
+    position: "absolute",
+    right: "20px",
+    bottom: "18px",
+    fontSize: "20px"
   },
+
 
   selectedPanel: {
-    margin: "20px",
-    padding: "26px",
-    borderRadius: "24px",
-    background:
-      "linear-gradient(135deg, #102642, #0b1726)",
-    border:
-      "1px solid rgba(77,145,255,0.25)"
+    marginTop: "28px",
+    padding: "28px",
+    borderRadius: "22px",
+    background: "#111827",
+    color: "#ffffff"
   },
 
+
   panelLabel: {
-    color: "#6898db",
     fontSize: "10px",
-    fontWeight: "800",
-    letterSpacing: "1.4px",
-    marginBottom: "20px"
+    fontWeight: "700",
+    letterSpacing: "1.5px",
+    opacity: 0.6
   },
+
 
   panelContent: {
     display: "flex",
     justifyContent: "space-between",
+    alignItems: "center",
     gap: "20px",
-    alignItems: "center"
+    marginTop: "18px"
   },
+
 
   panelInfo: {
     flex: 1
   },
 
+
   panelIcon: {
-    fontSize: "36px"
+    fontSize: "30px"
   },
+
 
   panelTitle: {
-    fontSize: "26px",
-    margin: "10px 0"
+    margin: "8px 0",
+    fontSize: "24px"
   },
+
 
   panelText: {
-    color: "#a8b6c9",
-    lineHeight: "1.55",
-    margin: 0
+    margin: 0,
+    color: "#cbd5e1",
+    lineHeight: 1.6
   },
 
+
   panelButton: {
-    border: "1px solid rgba(255,255,255,0.15)",
+    padding: "12px 20px",
+    border: "none",
+    borderRadius: "10px",
     background: "#ffffff",
-    color: "#0b1726",
-    borderRadius: "12px",
-    padding: "14px 18px",
-    fontWeight: "800",
-    whiteSpace: "nowrap",
+    color: "#111827",
+    fontWeight: "700",
     cursor: "pointer"
   },
 
+
   moduleScreen: {
-    margin: "20px",
-    padding: "30px",
-    borderRadius: "26px",
-    background:
-      "linear-gradient(145deg, #102642, #0b1726)",
-    border:
-      "1px solid rgba(77,145,255,0.28)",
+    marginTop: "28px",
+    padding: "32px",
+    borderRadius: "24px",
+    background: "#ffffff",
     boxShadow:
-      "0 20px 60px rgba(0,0,0,0.25)"
+      "0 15px 45px rgba(15,23,42,0.08)"
   },
+
 
   moduleScreenTop: {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "flex-start",
-    gap: "20px"
+    gap: "24px"
   },
+
+
+  moduleScreenInfo: {
+    flex: 1
+  },
+
 
   largeIcon: {
-    fontSize: "48px",
-    marginBottom: "8px"
+    marginTop: "18px",
+    fontSize: "42px"
   },
+
 
   moduleScreenTitle: {
-    fontSize: "34px",
-    margin: "0 0 10px"
+    margin: "8px 0",
+    fontSize: "32px"
   },
+
 
   moduleScreenText: {
-    color: "#a8b6c9",
-    lineHeight: "1.6",
-    maxWidth: "600px"
+    color: "#64748b",
+    maxWidth: "700px",
+    lineHeight: 1.6
   },
+
 
   closeButton: {
-    border: "1px solid rgba(255,255,255,0.15)",
-    background: "rgba(255,255,255,0.08)",
-    color: "#fff",
-    borderRadius: "12px",
-    padding: "12px 16px",
-    fontWeight: "800",
-    cursor: "pointer"
+    height: "42px",
+    padding: "0 16px",
+    border: "1px solid #e5e7eb",
+    borderRadius: "10px",
+    background: "#ffffff",
+    cursor: "pointer",
+    fontWeight: "700"
   },
 
+
   realContent: {
-    marginTop: "30px",
-    paddingTop: "26px",
-    borderTop:
-      "1px solid rgba(255,255,255,0.08)"
+    marginTop: "35px",
+    paddingTop: "30px",
+    borderTop: "1px solid #e5e7eb"
   },
+
 
   contentHeader: {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
-    gap: "15px",
-    marginBottom: "25px"
+    gap: "20px"
   },
+
 
   contentEyebrow: {
-    color: "#6898db",
-    fontSize: "10px",
-    fontWeight: "800",
+    fontSize: "11px",
+    fontWeight: "700",
     letterSpacing: "1.4px",
-    marginBottom: "8px"
+    color: "#64748b"
   },
+
 
   contentTitle: {
-    fontSize: "26px",
-    margin: "0 0 20px"
+    margin: "7px 0 24px",
+    fontSize: "26px"
   },
 
-  contentDescription: {
-    color: "#a8b6c9",
-    lineHeight: "1.6"
-  },
 
   addButton: {
-    border: 0,
-    borderRadius: "12px",
-    padding: "13px 18px",
-    background: "#377ff0",
-    color: "#fff",
-    fontWeight: "800",
-    cursor: "pointer",
-    whiteSpace: "nowrap"
+    padding: "11px 16px",
+    border: "none",
+    borderRadius: "10px",
+    background: "#111827",
+    color: "#ffffff",
+    fontWeight: "700",
+    cursor: "pointer"
   },
+
 
   emptyState: {
+    marginTop: "24px",
+    padding: "50px 24px",
     textAlign: "center",
-    padding: "40px 20px",
-    borderRadius: "20px",
-    border:
-      "1px dashed rgba(255,255,255,0.12)",
-    background: "rgba(255,255,255,0.025)"
+    border: "1px dashed #cbd5e1",
+    borderRadius: "18px"
   },
+
 
   emptyIcon: {
-    fontSize: "46px",
-    marginBottom: "15px"
+    fontSize: "42px"
   },
+
 
   emptyTitle: {
-    fontSize: "22px",
-    margin: "0 0 8px"
+    margin: "14px 0 8px",
+    fontSize: "21px"
   },
 
+
   emptyText: {
-    color: "#91a0b5",
-    lineHeight: "1.6",
-    maxWidth: "500px",
-    margin: "0 auto 22px"
+    maxWidth: "560px",
+    margin: "0 auto",
+    color: "#64748b",
+    lineHeight: 1.6
   },
+
 
   searchBox: {
     display: "flex",
     gap: "10px",
-    width: "100%"
+    marginTop: "20px"
   },
+
 
   searchInput: {
     flex: 1,
     minWidth: 0,
-    borderRadius: "12px",
-    border:
-      "1px solid rgba(255,255,255,0.12)",
-    background: "#091625",
-    color: "#fff",
-    padding: "15px",
-    fontSize: "15px",
-    outline: "none"
+    padding: "14px 16px",
+    border: "1px solid #dbe1e8",
+    borderRadius: "11px",
+    outline: "none",
+    fontSize: "14px",
+    boxSizing: "border-box"
   },
+
 
   searchButton: {
-    border: 0,
-    borderRadius: "12px",
     padding: "0 20px",
-    background: "#377ff0",
-    color: "#fff",
-    fontWeight: "800"
+    border: "none",
+    borderRadius: "11px",
+    background: "#111827",
+    color: "#ffffff",
+    fontWeight: "700",
+    cursor: "pointer"
   },
 
-  aiBox: {
-    display: "flex",
-    gap: "18px",
-    alignItems: "center",
-    padding: "22px",
+
+  aiPanel: {
+    padding: "45px 24px",
+    textAlign: "center",
     borderRadius: "18px",
-    background: "#0d1928",
-    border:
-      "1px solid rgba(77,145,255,0.2)"
+    background: "#f8fafc"
   },
+
 
   aiIcon: {
-    fontSize: "40px"
+    fontSize: "48px"
   },
 
-  aiTitle: {
-    fontSize: "18px"
-  },
 
-  aiText: {
-    color: "#91a0b5",
-    margin: "6px 0 0"
-  },
-
-  statsGrid: {
+  dashboardGrid: {
     display: "grid",
     gridTemplateColumns:
-      "repeat(auto-fit, minmax(150px, 1fr))",
-    gap: "12px"
+      "repeat(auto-fit, minmax(180px, 1fr))",
+    gap: "16px"
   },
+
 
   statCard: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "10px",
-    padding: "20px",
-    borderRadius: "18px",
-    background: "#0d1928",
-    border:
-      "1px solid rgba(255,255,255,0.08)",
-    color: "#91a0b5"
+    padding: "22px",
+    borderRadius: "16px",
+    border: "1px solid #e5e7eb",
+    background: "#ffffff"
   },
 
-  navIcon: {
-    fontSize: "21px"
+
+  statIcon: {
+    fontSize: "24px"
   },
 
-  bottomNav: {
-    position: "fixed",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: "72px",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-around",
-    background: "rgba(10,19,31,0.97)",
-    borderTop:
-      "1px solid rgba(255,255,255,0.08)",
-    zIndex: 20
-  },
 
-  navItem: {
-    border: 0,
-    background: "transparent",
-    color: "#9caabd",
-    fontSize: "14px",
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    gap: "4px",
-    cursor: "pointer",
-    minWidth: "80px"
-  },
-
-  activeNavItem: {
-    color: "#4d91ff",
+  statValue: {
+    marginTop: "14px",
+    fontSize: "30px",
     fontWeight: "800"
+  },
+
+
+  statLabel: {
+    marginTop: "4px",
+    color: "#64748b",
+    fontSize: "13px"
+  },
+
+
+  overviewPanel: {
+    marginTop: "20px",
+    padding: "22px",
+    borderRadius: "16px",
+    background: "#f8fafc",
+    border: "1px solid #e5e7eb"
+  },
+
+
+  statusRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: "9px",
+    marginTop: "12px",
+    fontSize: "15px",
+    fontWeight: "600"
+  },
+
+
+  statusDot: {
+    color: "#16a34a",
+    fontSize: "16px"
+  },
+
+
+  overviewText: {
+    margin: "10px 0 0",
+    color: "#64748b",
+    lineHeight: 1.6
+  },
+
+
+  footer: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: "20px",
+    padding: "25px 32px",
+    borderTop: "1px solid #e5e7eb",
+    color: "#64748b",
+    fontSize: "12px"
+  },
+
+
+  footerRight: {
+    letterSpacing: "1px"
   }
+
 };
+
 export default App;
