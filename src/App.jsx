@@ -27,18 +27,30 @@ function App() {
   const [activeModule, setActiveModule] = useState(0);
   const [openModule, setOpenModule] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [showNewProject, setShowNewProject] = useState(false);
 
   const selectModule = (index) => {
     setActiveModule(index);
     setOpenModule(null);
+    setShowNewProject(false);
   };
 
   const openSelectedModule = () => {
     setOpenModule(activeModule);
+    setShowNewProject(false);
   };
 
   const closeModule = () => {
     setOpenModule(null);
+    setShowNewProject(false);
+  };
+
+  const openNewProject = () => {
+    setShowNewProject(true);
+  };
+
+  const closeNewProject = () => {
+    setShowNewProject(false);
   };
 
   const handleSearch = () => {
@@ -110,6 +122,7 @@ function App() {
             onClick={() => {
               setActiveModule(1);
               setOpenModule(1);
+              setShowNewProject(false);
             }}
           >
             Sisteme Başla →
@@ -369,7 +382,7 @@ function App() {
 
 
             {/* PROJELER */}
-            {openModule === 1 && (
+            {openModule === 1 && !showNewProject && (
 
               <div style={styles.realContent}>
 
@@ -388,11 +401,7 @@ function App() {
                   <button
                     type="button"
                     style={styles.addButton}
-                    onClick={() =>
-                      alert(
-                        "Yeni Proje ekranı bir sonraki aşamada oluşturulacak."
-                      )
-                    }
+                    onClick={openNewProject}
                   >
                     + Yeni Proje
                   </button>
@@ -418,14 +427,207 @@ function App() {
                   <button
                     type="button"
                     style={styles.primaryButton}
-                    onClick={() =>
-                      alert(
-                        "Yeni Proje ekranı bir sonraki aşamada oluşturulacak."
-                      )
-                    }
+                    onClick={openNewProject}
                   >
                     + Yeni Proje Oluştur
                   </button>
+
+                </div>
+
+              </div>
+
+            )}
+
+
+            {/* YENİ PROJE EKRANI */}
+            {openModule === 1 && showNewProject && (
+
+              <div style={styles.realContent}>
+
+                <div style={styles.newProjectHeader}>
+
+                  <div>
+
+                    <div style={styles.contentEyebrow}>
+                      PROJE OLUŞTUR
+                    </div>
+
+                    <h3 style={styles.contentTitle}>
+                      Yeni Proje
+                    </h3>
+
+                    <p style={styles.newProjectDescription}>
+                      Yeni proje kaydını oluşturarak proje yönetim
+                      sürecini başlatın.
+                    </p>
+
+                  </div>
+
+                  <button
+                    type="button"
+                    style={styles.closeButton}
+                    onClick={closeNewProject}
+                  >
+                    ← Projelere Dön
+                  </button>
+
+                </div>
+
+
+                <div style={styles.projectForm}>
+
+                  <div style={styles.formSection}>
+
+                    <div style={styles.formSectionTitle}>
+                      Temel Proje Bilgileri
+                    </div>
+
+                    <div style={styles.formGrid}>
+
+                      <div style={styles.formGroup}>
+                        <label style={styles.formLabel}>
+                          Proje Adı
+                        </label>
+
+                        <input
+                          type="text"
+                          style={styles.formInput}
+                          placeholder="Proje adını girin"
+                        />
+                      </div>
+
+
+                      <div style={styles.formGroup}>
+                        <label style={styles.formLabel}>
+                          Proje Kodu
+                        </label>
+
+                        <input
+                          type="text"
+                          style={styles.formInput}
+                          placeholder="Örn: DDPRO-001"
+                        />
+                      </div>
+
+
+                      <div style={styles.formGroup}>
+                        <label style={styles.formLabel}>
+                          Proje Türü
+                        </label>
+
+                        <select style={styles.formInput}>
+                          <option>Proje türü seçin</option>
+                          <option>İç Mekân</option>
+                          <option>Dış Cephe</option>
+                          <option>Tavan</option>
+                          <option>Ofis</option>
+                          <option>Mağaza</option>
+                          <option>Otel</option>
+                          <option>Restoran</option>
+                          <option>Diğer</option>
+                        </select>
+                      </div>
+
+
+                      <div style={styles.formGroup}>
+                        <label style={styles.formLabel}>
+                          Proje Durumu
+                        </label>
+
+                        <select style={styles.formInput}>
+                          <option>Taslak</option>
+                          <option>Aktif</option>
+                          <option>Teklif Aşaması</option>
+                          <option>Planlama</option>
+                        </select>
+                      </div>
+
+                    </div>
+
+                  </div>
+
+
+                  <div style={styles.formSection}>
+
+                    <div style={styles.formSectionTitle}>
+                      Lokasyon ve Müşteri
+                    </div>
+
+                    <div style={styles.formGrid}>
+
+                      <div style={styles.formGroup}>
+                        <label style={styles.formLabel}>
+                          Müşteri / Firma
+                        </label>
+
+                        <input
+                          type="text"
+                          style={styles.formInput}
+                          placeholder="Müşteri veya firma adı"
+                        />
+                      </div>
+
+
+                      <div style={styles.formGroup}>
+                        <label style={styles.formLabel}>
+                          Proje Lokasyonu
+                        </label>
+
+                        <input
+                          type="text"
+                          style={styles.formInput}
+                          placeholder="İl / İlçe / Ülke"
+                        />
+                      </div>
+
+                    </div>
+
+                  </div>
+
+
+                  <div style={styles.formSection}>
+
+                    <div style={styles.formSectionTitle}>
+                      Proje Notu
+                    </div>
+
+                    <div style={styles.formGroup}>
+                      <label style={styles.formLabel}>
+                        Açıklama
+                      </label>
+
+                      <textarea
+                        style={styles.formTextarea}
+                        placeholder="Proje hakkında kısa açıklama girin..."
+                      />
+                    </div>
+
+                  </div>
+
+
+                  <div style={styles.formActions}>
+
+                    <button
+                      type="button"
+                      style={styles.secondaryButton}
+                      onClick={closeNewProject}
+                    >
+                      İptal
+                    </button>
+
+                    <button
+                      type="button"
+                      style={styles.primaryButton}
+                      onClick={() =>
+                        alert(
+                          "Proje kayıt sistemi bir sonraki aşamada aktif edilecek."
+                        )
+                      }
+                    >
+                      Projeyi Oluştur →
+                    </button>
+
+                  </div>
 
                 </div>
 
@@ -684,6 +886,19 @@ const styles = {
   },
 
 
+  secondaryButton: {
+    marginTop: "24px",
+    padding: "14px 22px",
+    border: "1px solid #dbe1e8",
+    borderRadius: "12px",
+    background: "#ffffff",
+    color: "#111827",
+    fontSize: "15px",
+    fontWeight: "700",
+    cursor: "pointer"
+  },
+
+
   section: {
     marginTop: "52px"
   },
@@ -881,6 +1096,7 @@ const styles = {
     border: "1px solid #e5e7eb",
     borderRadius: "10px",
     background: "#ffffff",
+    color: "#111827",
     cursor: "pointer",
     fontWeight: "700"
   },
@@ -1061,6 +1277,106 @@ const styles = {
     margin: "10px 0 0",
     color: "#64748b",
     lineHeight: 1.6
+  },
+
+
+  newProjectHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: "24px"
+  },
+
+
+  newProjectDescription: {
+    margin: "-12px 0 0",
+    color: "#64748b",
+    lineHeight: 1.6
+  },
+
+
+  projectForm: {
+    marginTop: "28px",
+    padding: "28px",
+    borderRadius: "20px",
+    background: "#f8fafc",
+    border: "1px solid #e5e7eb"
+  },
+
+
+  formSection: {
+    paddingBottom: "28px",
+    marginBottom: "28px",
+    borderBottom: "1px solid #e5e7eb"
+  },
+
+
+  formSectionTitle: {
+    marginBottom: "20px",
+    fontSize: "17px",
+    fontWeight: "800",
+    color: "#111827"
+  },
+
+
+  formGrid: {
+    display: "grid",
+    gridTemplateColumns:
+      "repeat(auto-fit, minmax(240px, 1fr))",
+    gap: "18px"
+  },
+
+
+  formGroup: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "8px"
+  },
+
+
+  formLabel: {
+    fontSize: "13px",
+    fontWeight: "700",
+    color: "#334155"
+  },
+
+
+  formInput: {
+    width: "100%",
+    minHeight: "46px",
+    padding: "12px 14px",
+    border: "1px solid #dbe1e8",
+    borderRadius: "10px",
+    background: "#ffffff",
+    color: "#111827",
+    fontSize: "14px",
+    boxSizing: "border-box",
+    outline: "none"
+  },
+
+
+  formTextarea: {
+    width: "100%",
+    minHeight: "130px",
+    padding: "14px",
+    border: "1px solid #dbe1e8",
+    borderRadius: "10px",
+    background: "#ffffff",
+    color: "#111827",
+    fontSize: "14px",
+    fontFamily: "inherit",
+    lineHeight: 1.6,
+    resize: "vertical",
+    boxSizing: "border-box",
+    outline: "none"
+  },
+
+
+  formActions: {
+    display: "flex",
+    justifyContent: "flex-end",
+    gap: "12px",
+    alignItems: "center"
   },
 
 
