@@ -69,7 +69,6 @@ function App() {
   return (
     <div style={styles.app}>
 
-      {/* HEADER */}
       <header style={styles.header}>
         <div>
           <div style={styles.logo}>
@@ -90,11 +89,8 @@ function App() {
         </button>
       </header>
 
-
-      {/* ANA İÇERİK */}
       <main style={styles.main}>
 
-        {/* HERO */}
         <section style={styles.hero}>
 
           <div style={styles.badge}>
@@ -130,8 +126,6 @@ function App() {
 
         </section>
 
-
-        {/* MODÜLLER */}
         <section style={styles.section}>
 
           <div style={styles.sectionHeader}>
@@ -151,7 +145,6 @@ function App() {
             </div>
 
           </div>
-
 
           <div style={styles.moduleGrid}>
 
@@ -193,8 +186,6 @@ function App() {
 
         </section>
 
-
-        {/* SEÇİLİ MODÜL */}
         {openModule === null && (
 
           <section style={styles.selectedPanel}>
@@ -235,8 +226,6 @@ function App() {
 
         )}
 
-
-        {/* MODÜL EKRANI */}
         {openModule !== null && (
 
           <section style={styles.moduleScreen}>
@@ -273,8 +262,6 @@ function App() {
 
             </div>
 
-
-            {/* GENEL BAKIŞ */}
             {openModule === 0 && (
 
               <div style={styles.realContent}>
@@ -290,66 +277,30 @@ function App() {
                 <div style={styles.dashboardGrid}>
 
                   <div style={styles.statCard}>
-                    <div style={styles.statIcon}>
-                      🏗️
-                    </div>
-
-                    <div style={styles.statValue}>
-                      0
-                    </div>
-
-                    <div style={styles.statLabel}>
-                      Aktif Proje
-                    </div>
+                    <div style={styles.statIcon}>🏗️</div>
+                    <div style={styles.statValue}>0</div>
+                    <div style={styles.statLabel}>Aktif Proje</div>
                   </div>
 
-
                   <div style={styles.statCard}>
-                    <div style={styles.statIcon}>
-                      📄
-                    </div>
-
-                    <div style={styles.statValue}>
-                      0
-                    </div>
-
-                    <div style={styles.statLabel}>
-                      Teklif
-                    </div>
+                    <div style={styles.statIcon}>📄</div>
+                    <div style={styles.statValue}>0</div>
+                    <div style={styles.statLabel}>Teklif</div>
                   </div>
 
-
                   <div style={styles.statCard}>
-                    <div style={styles.statIcon}>
-                      📦
-                    </div>
-
-                    <div style={styles.statValue}>
-                      0
-                    </div>
-
-                    <div style={styles.statLabel}>
-                      Tedarik
-                    </div>
+                    <div style={styles.statIcon}>📦</div>
+                    <div style={styles.statValue}>0</div>
+                    <div style={styles.statLabel}>Tedarik</div>
                   </div>
 
-
                   <div style={styles.statCard}>
-                    <div style={styles.statIcon}>
-                      🤖
-                    </div>
-
-                    <div style={styles.statValue}>
-                      0
-                    </div>
-
-                    <div style={styles.statLabel}>
-                      AI İşlemi
-                    </div>
+                    <div style={styles.statIcon}>🤖</div>
+                    <div style={styles.statValue}>0</div>
+                    <div style={styles.statLabel}>AI İşlemi</div>
                   </div>
 
                 </div>
-
 
                 <div style={styles.overviewPanel}>
 
@@ -358,15 +309,8 @@ function App() {
                   </div>
 
                   <div style={styles.statusRow}>
-
-                    <span style={styles.statusDot}>
-                      ●
-                    </span>
-
-                    <span>
-                      DDPro ana uygulama arayüzü hazır.
-                    </span>
-
+                    <span style={styles.statusDot}>●</span>
+                    <span>DDPro ana uygulama arayüzü hazır.</span>
                   </div>
 
                   <p style={styles.overviewText}>
@@ -380,8 +324,6 @@ function App() {
 
             )}
 
-
-            {/* PROJELER */}
             {openModule === 1 && !showNewProject && (
 
               <div style={styles.realContent}>
@@ -408,12 +350,9 @@ function App() {
 
                 </div>
 
-
                 <div style={styles.emptyState}>
 
-                  <div style={styles.emptyIcon}>
-                    🏗️
-                  </div>
+                  <div style={styles.emptyIcon}>🏗️</div>
 
                   <h3 style={styles.emptyTitle}>
                     Henüz proje yok
@@ -438,8 +377,6 @@ function App() {
 
             )}
 
-
-            {/* YENİ PROJE EKRANI */}
             {openModule === 1 && showNewProject && (
 
               <div style={styles.realContent}>
@@ -473,7 +410,6 @@ function App() {
 
                 </div>
 
-
                 <div style={styles.projectForm}>
 
                   <div style={styles.formSection}>
@@ -496,7 +432,6 @@ function App() {
                         />
                       </div>
 
-
                       <div style={styles.formGroup}>
                         <label style={styles.formLabel}>
                           Proje Kodu
@@ -508,7 +443,6 @@ function App() {
                           placeholder="Örn: DDPRO-001"
                         />
                       </div>
-
 
                       <div style={styles.formGroup}>
                         <label style={styles.formLabel}>
@@ -528,7 +462,6 @@ function App() {
                         </select>
                       </div>
 
-
                       <div style={styles.formGroup}>
                         <label style={styles.formLabel}>
                           Proje Durumu
@@ -545,7 +478,6 @@ function App() {
                     </div>
 
                   </div>
-
 
                   <div style={styles.formSection}>
 
@@ -567,7 +499,6 @@ function App() {
                         />
                       </div>
 
-
                       <div style={styles.formGroup}>
                         <label style={styles.formLabel}>
                           Proje Lokasyonu
@@ -583,7 +514,6 @@ function App() {
                     </div>
 
                   </div>
-
 
                   <div style={styles.formSection}>
 
@@ -603,7 +533,6 @@ function App() {
                     </div>
 
                   </div>
-
 
                   <div style={styles.formActions}>
 
@@ -635,8 +564,6 @@ function App() {
 
             )}
 
-
-            {/* TEDARİK */}
             {openModule === 2 && (
 
               <div style={styles.realContent}>
@@ -676,12 +603,9 @@ function App() {
 
                 </div>
 
-
                 <div style={styles.emptyState}>
 
-                  <div style={styles.emptyIcon}>
-                    🔎
-                  </div>
+                  <div style={styles.emptyIcon}>🔎</div>
 
                   <h3 style={styles.emptyTitle}>
                     Araştırma Merkezi
@@ -699,8 +623,6 @@ function App() {
 
             )}
 
-
-            {/* AI ASİSTAN */}
             {openModule === 3 && (
 
               <div style={styles.realContent}>
@@ -715,9 +637,7 @@ function App() {
 
                 <div style={styles.aiPanel}>
 
-                  <div style={styles.aiIcon}>
-                    🤖
-                  </div>
+                  <div style={styles.aiIcon}>🤖</div>
 
                   <h3 style={styles.emptyTitle}>
                     AI Asistan Hazır
@@ -753,8 +673,6 @@ function App() {
 
       </main>
 
-
-      {/* FOOTER */}
       <footer style={styles.footer}>
 
         <div>
@@ -771,11 +689,6 @@ function App() {
   );
 }
 
-
-/* =========================================================
-   STYLES
-   ========================================================= */
-
 const styles = {
 
   app: {
@@ -786,7 +699,6 @@ const styles = {
       "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
   },
 
-
   header: {
     display: "flex",
     justifyContent: "space-between",
@@ -796,13 +708,11 @@ const styles = {
     color: "#ffffff"
   },
 
-
   logo: {
     fontSize: "26px",
     fontWeight: "800",
     letterSpacing: "-0.5px"
   },
-
 
   subtitle: {
     marginTop: "4px",
@@ -810,7 +720,6 @@ const styles = {
     letterSpacing: "1.5px",
     opacity: 0.7
   },
-
 
   profileButton: {
     border: "1px solid rgba(255,255,255,0.2)",
@@ -823,13 +732,11 @@ const styles = {
     cursor: "pointer"
   },
 
-
   main: {
     maxWidth: "1180px",
     margin: "0 auto",
     padding: "50px 24px"
   },
-
 
   hero: {
     padding: "56px 40px",
@@ -837,7 +744,6 @@ const styles = {
     background: "#ffffff",
     boxShadow: "0 20px 60px rgba(15,23,42,0.08)"
   },
-
 
   badge: {
     display: "inline-block",
@@ -850,7 +756,6 @@ const styles = {
     letterSpacing: "1px"
   },
 
-
   title: {
     margin: "24px 0 18px",
     fontSize: "clamp(42px, 7vw, 76px)",
@@ -859,11 +764,9 @@ const styles = {
     fontWeight: "800"
   },
 
-
   titleAccent: {
     color: "#4f46e5"
   },
-
 
   description: {
     maxWidth: "650px",
@@ -871,7 +774,6 @@ const styles = {
     lineHeight: 1.7,
     color: "#64748b"
   },
-
 
   primaryButton: {
     marginTop: "24px",
@@ -885,7 +787,6 @@ const styles = {
     cursor: "pointer"
   },
 
-
   secondaryButton: {
     marginTop: "24px",
     padding: "14px 22px",
@@ -898,11 +799,9 @@ const styles = {
     cursor: "pointer"
   },
 
-
   section: {
     marginTop: "52px"
   },
-
 
   sectionHeader: {
     display: "flex",
@@ -911,7 +810,6 @@ const styles = {
     marginBottom: "22px"
   },
 
-
   sectionEyebrow: {
     fontSize: "11px",
     fontWeight: "700",
@@ -919,12 +817,10 @@ const styles = {
     color: "#64748b"
   },
 
-
   sectionTitle: {
     margin: "6px 0 0",
     fontSize: "30px"
   },
-
 
   counter: {
     fontSize: "14px",
@@ -932,14 +828,12 @@ const styles = {
     color: "#64748b"
   },
 
-
   moduleGrid: {
     display: "grid",
     gridTemplateColumns:
       "repeat(auto-fit, minmax(220px, 1fr))",
     gap: "16px"
   },
-
 
   card: {
     position: "relative",
@@ -952,25 +846,21 @@ const styles = {
     minHeight: "210px"
   },
 
-
   activeCard: {
     border: "2px solid #4f46e5",
     boxShadow:
       "0 12px 35px rgba(79,70,229,0.12)"
   },
 
-
   cardIcon: {
     fontSize: "28px",
     marginBottom: "18px"
   },
 
-
   cardTitle: {
     margin: "0 0 10px",
     fontSize: "19px"
   },
-
 
   cardText: {
     margin: 0,
@@ -979,14 +869,12 @@ const styles = {
     fontSize: "14px"
   },
 
-
   cardArrow: {
     position: "absolute",
     right: "20px",
     bottom: "18px",
     fontSize: "20px"
   },
-
 
   selectedPanel: {
     marginTop: "28px",
@@ -996,14 +884,12 @@ const styles = {
     color: "#ffffff"
   },
 
-
   panelLabel: {
     fontSize: "10px",
     fontWeight: "700",
     letterSpacing: "1.5px",
     opacity: 0.6
   },
-
 
   panelContent: {
     display: "flex",
@@ -1013,29 +899,24 @@ const styles = {
     marginTop: "18px"
   },
 
-
   panelInfo: {
     flex: 1
   },
 
-
   panelIcon: {
     fontSize: "30px"
   },
-
 
   panelTitle: {
     margin: "8px 0",
     fontSize: "24px"
   },
 
-
   panelText: {
     margin: 0,
     color: "#cbd5e1",
     lineHeight: 1.6
   },
-
 
   panelButton: {
     padding: "12px 20px",
@@ -1047,7 +928,6 @@ const styles = {
     cursor: "pointer"
   },
 
-
   moduleScreen: {
     marginTop: "28px",
     padding: "32px",
@@ -1057,7 +937,6 @@ const styles = {
       "0 15px 45px rgba(15,23,42,0.08)"
   },
 
-
   moduleScreenTop: {
     display: "flex",
     justifyContent: "space-between",
@@ -1065,30 +944,25 @@ const styles = {
     gap: "24px"
   },
 
-
   moduleScreenInfo: {
     flex: 1
   },
-
 
   largeIcon: {
     marginTop: "18px",
     fontSize: "42px"
   },
 
-
   moduleScreenTitle: {
     margin: "8px 0",
     fontSize: "32px"
   },
-
 
   moduleScreenText: {
     color: "#64748b",
     maxWidth: "700px",
     lineHeight: 1.6
   },
-
 
   closeButton: {
     height: "42px",
@@ -1101,13 +975,11 @@ const styles = {
     fontWeight: "700"
   },
 
-
   realContent: {
     marginTop: "35px",
     paddingTop: "30px",
     borderTop: "1px solid #e5e7eb"
   },
-
 
   contentHeader: {
     display: "flex",
@@ -1116,7 +988,6 @@ const styles = {
     gap: "20px"
   },
 
-
   contentEyebrow: {
     fontSize: "11px",
     fontWeight: "700",
@@ -1124,12 +995,10 @@ const styles = {
     color: "#64748b"
   },
 
-
   contentTitle: {
     margin: "7px 0 24px",
     fontSize: "26px"
   },
-
 
   addButton: {
     padding: "11px 16px",
@@ -1141,7 +1010,6 @@ const styles = {
     cursor: "pointer"
   },
 
-
   emptyState: {
     marginTop: "24px",
     padding: "50px 24px",
@@ -1150,17 +1018,14 @@ const styles = {
     borderRadius: "18px"
   },
 
-
   emptyIcon: {
     fontSize: "42px"
   },
-
 
   emptyTitle: {
     margin: "14px 0 8px",
     fontSize: "21px"
   },
-
 
   emptyText: {
     maxWidth: "560px",
@@ -1169,13 +1034,11 @@ const styles = {
     lineHeight: 1.6
   },
 
-
   searchBox: {
     display: "flex",
     gap: "10px",
     marginTop: "20px"
   },
-
 
   searchInput: {
     flex: 1,
@@ -1188,7 +1051,6 @@ const styles = {
     boxSizing: "border-box"
   },
 
-
   searchButton: {
     padding: "0 20px",
     border: "none",
@@ -1199,7 +1061,6 @@ const styles = {
     cursor: "pointer"
   },
 
-
   aiPanel: {
     padding: "45px 24px",
     textAlign: "center",
@@ -1207,11 +1068,9 @@ const styles = {
     background: "#f8fafc"
   },
 
-
   aiIcon: {
     fontSize: "48px"
   },
-
 
   dashboardGrid: {
     display: "grid",
@@ -1220,7 +1079,6 @@ const styles = {
     gap: "16px"
   },
 
-
   statCard: {
     padding: "22px",
     borderRadius: "16px",
@@ -1228,11 +1086,9 @@ const styles = {
     background: "#ffffff"
   },
 
-
   statIcon: {
     fontSize: "24px"
   },
-
 
   statValue: {
     marginTop: "14px",
@@ -1240,13 +1096,11 @@ const styles = {
     fontWeight: "800"
   },
 
-
   statLabel: {
     marginTop: "4px",
     color: "#64748b",
     fontSize: "13px"
   },
-
 
   overviewPanel: {
     marginTop: "20px",
@@ -1255,7 +1109,6 @@ const styles = {
     background: "#f8fafc",
     border: "1px solid #e5e7eb"
   },
-
 
   statusRow: {
     display: "flex",
@@ -1266,19 +1119,16 @@ const styles = {
     fontWeight: "600"
   },
 
-
   statusDot: {
     color: "#16a34a",
     fontSize: "16px"
   },
-
 
   overviewText: {
     margin: "10px 0 0",
     color: "#64748b",
     lineHeight: 1.6
   },
-
 
   newProjectHeader: {
     display: "flex",
@@ -1287,13 +1137,11 @@ const styles = {
     gap: "24px"
   },
 
-
   newProjectDescription: {
     margin: "-12px 0 0",
     color: "#64748b",
     lineHeight: 1.6
   },
-
 
   projectForm: {
     marginTop: "28px",
@@ -1303,13 +1151,11 @@ const styles = {
     border: "1px solid #e5e7eb"
   },
 
-
   formSection: {
     paddingBottom: "28px",
     marginBottom: "28px",
     borderBottom: "1px solid #e5e7eb"
   },
-
 
   formSectionTitle: {
     marginBottom: "20px",
@@ -1318,7 +1164,6 @@ const styles = {
     color: "#111827"
   },
 
-
   formGrid: {
     display: "grid",
     gridTemplateColumns:
@@ -1326,20 +1171,17 @@ const styles = {
     gap: "18px"
   },
 
-
   formGroup: {
     display: "flex",
     flexDirection: "column",
     gap: "8px"
   },
 
-
   formLabel: {
     fontSize: "13px",
     fontWeight: "700",
     color: "#334155"
   },
-
 
   formInput: {
     width: "100%",
@@ -1353,7 +1195,6 @@ const styles = {
     boxSizing: "border-box",
     outline: "none"
   },
-
 
   formTextarea: {
     width: "100%",
@@ -1371,14 +1212,12 @@ const styles = {
     outline: "none"
   },
 
-
   formActions: {
     display: "flex",
     justifyContent: "flex-end",
     gap: "12px",
     alignItems: "center"
   },
-
 
   footer: {
     display: "flex",
@@ -1389,7 +1228,6 @@ const styles = {
     color: "#64748b",
     fontSize: "12px"
   },
-
 
   footerRight: {
     letterSpacing: "1px"
