@@ -431,5 +431,131 @@ function App() {
       })
     );
   };
+const sendAiMessage = (event) => {
+  event.preventDefault();
 
-  const sendAiMessage = (event)
+  const form = event.currentTarget;
+  const input = form.querySelector("input, textarea");
+
+  if (!input) return;
+
+  const message = input.value.trim();
+
+  if (!message) return;
+
+  addLog("AI", "Kullanıcı AI mesajı gönderdi.", "info");
+
+  input.value = "";
+
+  alert(`DDPro AI mesajınızı aldı:\n\n${message}`);
+};
+
+const renderModule = () => {
+  switch (activeModule) {
+    case "projects":
+      return renderProjects();
+
+    case "research":
+      return renderResearch();
+
+    case "ai":
+      return renderAI();
+
+    case "offers":
+      return renderOffers();
+
+    case "systems":
+      return renderSystems();
+
+    case "dashboard":
+    default:
+      return renderDashboard();
+  }
+};
+
+return (
+  <div className="ddpro-app">
+    <header className="app-header">
+      <div className="brand-area">
+        <div className="brand-logo">DD</div>
+
+        <div className="brand-content">
+          <strong>DOĞRU DİZAYN PRO</strong>
+          <span>DDPro Dijital Yönetim Sistemi</span>
+        </div>
+      </div>
+
+      <div className="header-status">
+        <span className="status-dot"></span>
+        Sistem Aktif
+      </div>
+    </header>
+
+    <div className="app-layout">
+      <aside className="sidebar">
+        <div className="sidebar-title">
+          ANA MODÜLLER
+        </div>
+
+        <nav className="module-nav">
+          {modules.map((module) => (
+            <button
+              key={module.id}
+              type="button"
+              className={`module-button ${
+                activeModule === module.id ? "active" : ""
+              }`}
+              onClick={() => setActiveModule(module.id)}
+            >
+              <span className="module-icon">
+                {module.icon}
+              </span>
+
+              <span className="module-text">
+                <strong>{module.title}</strong>
+                <small>{module.short}</small>
+              </span>
+            </button>
+          ))}
+        </nav>
+
+        <div className="sidebar-footer">
+          <div className="sidebar-system">
+            <span className="status-dot"></span>
+            DDPro Core v1.0
+          </div>
+        </div>
+      </aside>
+
+      <main className="main-content">
+        <section className="content-header">
+          <div>
+            <h1>
+              {
+                modules.find(
+                  (module) => module.id === activeModule
+                )?.title || "Genel Bakış"
+              }
+            </h1>
+
+            <p>
+              {
+                modules.find(
+                  (module) => module.id === activeModule
+                )?.description ||
+                "DDPro operasyonlarını merkezi olarak yönetin."
+              }
+            </p>
+          </div>
+        </section>
+
+        <section className="content-body">
+          {renderModule()}
+        </section>
+      </main>
+    </div>
+  </div>
+);
+}
+
+export default App;
