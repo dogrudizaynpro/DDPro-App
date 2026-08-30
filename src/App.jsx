@@ -770,8 +770,24 @@ function App() {
         </div>
 
         <nav className="navigation">
-          {modules.map((module) => (
-            <button
-              key={module.id}
-              className={`nav-item ${
-                activePage
+        {modules.map((module) => (
+          <button
+            key={module.id}
+            className={`nav-item ${activePage === module.id ? "active" : ""}`}
+            onClick={() => setActivePage(module.id)}
+          >
+            <span className="nav-icon">{module.icon}</span>
+            <span>{module.title}</span>
+          </button>
+        ))}
+      </nav>
+    </aside>
+
+    <main className="main-content">
+      {renderContent()}
+    </main>
+  </div>
+);
+}
+
+export default App;
