@@ -773,33 +773,37 @@ function App() {
       )}
 
       <div className="data-list">
-        {offersError && (
-          <p className="empty-state">{offersError}</p>
-        )}
-
         {offersLoading ? (
           <p className="empty-state">Teklifler yükleniyor...</p>
+        ) : offersError && offers.length === 0 ? (
+          <p className="empty-state">{offersError}</p>
         ) : offers.length === 0 ? (
           <p className="empty-state">Henüz teklif kaydı bulunmuyor.</p>
         ) : (
-          offers.map((offer) => (
-            <div className="data-card" key={offer.id}>
-              <div>
-                <h3>{offer.name}</h3>
-                <p>{offer.amount}</p>
-                <small>
-                  {offer.status} · {offer.date}
-                </small>
-              </div>
+          <>
+            {offersError && (
+              <p className="empty-state">{offersError}</p>
+            )}
 
-              <button
-                type="button"
-                onClick={() => deleteOffer(offer.id)}
-              >
-                Sil
-              </button>
-            </div>
-          ))
+            {offers.map((offer) => (
+              <div className="data-card" key={offer.id}>
+                <div>
+                  <h3>{offer.name}</h3>
+                  <p>{offer.amount}</p>
+                  <small>
+                    {offer.status} · {offer.date}
+                  </small>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => deleteOffer(offer.id)}
+                >
+                  Sil
+                </button>
+              </div>
+            ))}
+          </>
         )}
       </div>
     </div>
