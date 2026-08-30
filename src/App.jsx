@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { getProjects } from "./services/projects.service.js";
 import "./styles.css";
 import { getOffers } from "./services/offers.service.js";
@@ -140,8 +140,11 @@ function App() {
     getStoredData(STORAGE_KEYS.offers)
   );
 
-  const [offersLoading, setOffersLoading] = useState(false);
+  const [offersLoading, setOffersLoading] = useState(true);
   const [offersError, setOffersError] = useState(null);
+  const projectsTouchedRef = useRef(false);
+  const researchTouchedRef = useRef(false);
+  const offersTouchedRef = useRef(false);
 
   const [memoryItems, setMemoryItems] = useState(() =>
     getStoredData(STORAGE_KEYS.memory)
@@ -218,20 +221,41 @@ function App() {
     let cancelled = false;
 
     const fetchOffersFromApi = async () => {
+      const localOffers = getStoredData(STORAGE_KEYS.offers);
       setOffersLoading(true);
       setOffersError(null);
 
       try {
         const apiOffers = await getOffers();
 
-        if (!cancelled) {
+        if (cancelled) return;
+
+        if (offersTouchedRef.current) {
+          addLog(
+            "Tekliflerde yerel değişiklik algılandı, API yanıtı üzerine yazmadı."
+          );
+          return;
+        }
+
+        if (apiOffers && apiOffers.length > 0) {
           setOffers(apiOffers);
-          setOffersLoading(false);
+          addLog("Teklifler API üzerinden yüklendi.");
+        } else {
+          setOffers(localOffers);
+          addLog("Teklifler API boş döndü, yerel veriler kullanıldı.");
         }
       } catch (error) {
         if (!cancelled) {
-          console.warn("API erişilemedi, localStorage verileri kullanılıyor:", error.message);
+          console.warn(
+            "API erişilemedi, localStorage verileri kullanılıyor:",
+            error.message
+          );
+          setOffers(localOffers);
           setOffersError("API erişilemedi. Yerel veriler gösteriliyor.");
+          addLog("Tekliflerde API bağlantı hatası, yerel veriler kullanıldı.");
+        }
+      } finally {
+        if (!cancelled) {
           setOffersLoading(false);
         }
       }
@@ -248,6 +272,7 @@ function App() {
     let cancelled = false;
 
     const fetchResearchFromApi = async () => {
+      const localResearchItems = getStoredData(STORAGE_KEYS.research);
       setResearchLoading(true);
       setResearchError(null);
 
@@ -256,16 +281,23 @@ function App() {
 
         if (cancelled) return;
 
+        if (researchTouchedRef.current) {
+          addLog(
+            "Araştırmalarda yerel değişiklik algılandı, API yanıtı üzerine yazmadı."
+          );
+          return;
+        }
+
         if (apiResearchItems && apiResearchItems.length > 0) {
           setResearchItems(apiResearchItems);
           addLog("Araştırmalar API üzerinden yüklendi.");
         } else {
-          setResearchItems(getStoredData(STORAGE_KEYS.research));
+          setResearchItems(localResearchItems);
           addLog("Araştırmalar API boş döndü, yerel veriler kullanıldı.");
         }
       } catch (error) {
         if (!cancelled) {
-          setResearchItems(getStoredData(STORAGE_KEYS.research));
+          setResearchItems(localResearchItems);
           setResearchError(
             "API erişilemedi. Yerel araştırma verileri gösteriliyor."
           );
@@ -307,24 +339,48 @@ function App() {
   }, [integrations]);
 
   useEffect(() => {
-    const localProjects = getStoredData(STORAGE_KEYS.projects);
-    getProjects()
-      .then((apiProjects) => {
+    let cancelled = false;
+
+    const fetchProjectsFromApi = async () => {
+      const localProjects = getStoredData(STORAGE_KEYS.projects);
+      setProjectsLoading(true);
+
+      try {
+        const apiProjects = await getProjects();
+
+        if (cancelled) return;
+
+        if (projectsTouchedRef.current) {
+          addLog(
+            "Projelerde yerel değişiklik algılandı, API yanıtı üzerine yazmadı."
+          );
+          return;
+        }
+
         if (apiProjects && apiProjects.length > 0) {
           setProjects(apiProjects);
           addLog("Projeler API üzerinden yüklendi.");
         } else {
           setProjects(localProjects);
-          addLog("API boş döndü, yerel veriler kullanıldı.");
+          addLog("Projeler API boş döndü, yerel veriler kullanıldı.");
         }
-      })
-      .catch(() => {
-        setProjects(localProjects);
-        addLog("API bağlantı hatası, yerel veriler kullanıldı.");
-      })
-      .finally(() => {
-        setProjectsLoading(false);
-      });
+      } catch (error) {
+        if (!cancelled) {
+          setProjects(localProjects);
+          addLog("Projelerde API bağlantı hatası, yerel veriler kullanıldı.");
+        }
+      } finally {
+        if (!cancelled) {
+          setProjectsLoading(false);
+        }
+      }
+    };
+
+    fetchProjectsFromApi();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const addLog = (message) => {
@@ -367,6 +423,7 @@ function App() {
     event.preventDefault();
 
     if (!projectName.trim()) return;
+    projectsTouchedRef.current = true;
 
     const newProject = {
       id: createId(),
@@ -391,6 +448,7 @@ function App() {
 
   const deleteProject = (id) => {
     const project = projects.find((item) => item.id === id);
+    projectsTouchedRef.current = true;
 
     setProjects((currentProjects) =>
       currentProjects.filter((item) => item.id !== id)
@@ -405,6 +463,7 @@ function App() {
     event.preventDefault();
 
     if (!researchName.trim()) return;
+    researchTouchedRef.current = true;
 
     const newResearch = {
       id: createId(),
@@ -429,6 +488,7 @@ function App() {
     const item = researchItems.find(
       (research) => research.id === id
     );
+    researchTouchedRef.current = true;
 
     setResearchItems((currentItems) =>
       currentItems.filter((research) => research.id !== id)
@@ -443,6 +503,7 @@ function App() {
     event.preventDefault();
 
     if (!offerName.trim()) return;
+    offersTouchedRef.current = true;
 
     const newOffer = {
       id: createId(),
@@ -467,6 +528,7 @@ function App() {
 
   const deleteOffer = (id) => {
     const offer = offers.find((item) => item.id === id);
+    offersTouchedRef.current = true;
 
     setOffers((currentOffers) =>
       currentOffers.filter((item) => item.id !== id)
