@@ -241,7 +241,7 @@ function App() {
 
   useEffect(() => {
     let isMounted = true;
-    const storedOffers = getStoredData(STORAGE_KEYS.offers);
+    const storedOffers = offers;
 
     const loadOffers = async () => {
       try {
