@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { getOffers } from "./services/offers.service.js";
 import "./styles.css";
 
 const STORAGE_KEYS = {
@@ -132,6 +133,7 @@ function App() {
   const [offers, setOffers] = useState(() =>
     getStoredData(STORAGE_KEYS.offers)
   );
+  const [offersLoading, setOffersLoading] = useState(true);
 
   const [memoryItems, setMemoryItems] = useState(() =>
     getStoredData(STORAGE_KEYS.memory)
@@ -236,6 +238,51 @@ function App() {
       [newLog, ...currentLogs].slice(0, 50)
     );
   };
+
+  useEffect(() => {
+    let isMounted = true;
+    const storedOffers = getStoredData(STORAGE_KEYS.offers);
+
+    const loadOffers = async () => {
+      try {
+        const apiOffers = await getOffers();
+
+        if (!isMounted) return;
+
+        if (Array.isArray(apiOffers) && apiOffers.length > 0) {
+          setOffers(apiOffers);
+        } else if (storedOffers.length > 0) {
+          setOffers((currentOffers) =>
+            currentOffers.length > 0 ? currentOffers : storedOffers
+          );
+        }
+      } catch (error) {
+        if (!isMounted) return;
+
+        if (storedOffers.length > 0) {
+          setOffers((currentOffers) =>
+            currentOffers.length > 0 ? currentOffers : storedOffers
+          );
+        }
+
+        addLog(
+          `Teklifler yüklenemedi, localStorage verileri kullanıldı: ${
+            error?.message || "Bilinmeyen hata"
+          }`
+        );
+      } finally {
+        if (isMounted) {
+          setOffersLoading(false);
+        }
+      }
+    };
+
+    loadOffers();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const dashboardStats = useMemo(
     () => [
@@ -730,7 +777,9 @@ function App() {
       )}
 
       <div className="data-list">
-        {offers.length === 0 ? (
+        {offersLoading ? (
+          <p className="empty-state">Teklifler yükleniyor...</p>
+        ) : offers.length === 0 ? (
           <p className="empty-state">Henüz teklif kaydı bulunmuyor.</p>
         ) : (
           offers.map((offer) => (
