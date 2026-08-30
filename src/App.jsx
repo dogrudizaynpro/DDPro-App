@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { getProjects } from "./services/projects.service.js";
 import "./styles.css";
 
 const STORAGE_KEYS = {
@@ -125,6 +126,8 @@ function App() {
     getStoredData(STORAGE_KEYS.projects)
   );
 
+  const [projectsLoading, setProjectsLoading] = useState(true);
+
   const [researchItems, setResearchItems] = useState(() =>
     getStoredData(STORAGE_KEYS.research)
   );
@@ -224,6 +227,27 @@ function App() {
       JSON.stringify(integrations)
     );
   }, [integrations]);
+
+  useEffect(() => {
+    const localProjects = getStoredData(STORAGE_KEYS.projects);
+    getProjects()
+      .then((apiProjects) => {
+        if (apiProjects && apiProjects.length > 0) {
+          setProjects(apiProjects);
+          addLog("Projeler API üzerinden yüklendi.");
+        } else {
+          setProjects(localProjects);
+          addLog("API boş döndü, yerel veriler kullanıldı.");
+        }
+      })
+      .catch(() => {
+        setProjects(localProjects);
+        addLog("API bağlantı hatası, yerel veriler kullanıldı.");
+      })
+      .finally(() => {
+        setProjectsLoading(false);
+      });
+  }, []);
 
   const addLog = (message) => {
     const newLog = {
@@ -574,7 +598,9 @@ function App() {
       )}
 
       <div className="data-list">
-        {projects.length === 0 ? (
+        {projectsLoading ? (
+          <p className="empty-state">Projeler yükleniyor...</p>
+        ) : projects.length === 0 ? (
           <p className="empty-state">Henüz proje kaydı bulunmuyor.</p>
         ) : (
           projects.map((project) => (
