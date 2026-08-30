@@ -4,8 +4,11 @@ const STORAGE_KEYS = {
   projects: "ddpro_projects_v1",
   research: "ddpro_research_v1",
   profile: "ddpro_profile_v1",
+  offers: "ddpro_offers_v1",
+  memory: "ddpro_memory_v1",
+  systemLogs: "ddpro_system_logs_v1",
+  integrations: "ddpro_integrations_v1",
 };
-
 const modules = [
   {
     id: "dashboard",
