@@ -4,6 +4,7 @@ import helmet from "helmet";
 import { notFound } from "./middleware/notFound.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 import projectsRouter from "./routes/projects.routes.js";
+import researchRouter from "./routes/research.routes.js";
 
 const app = express();
 
@@ -33,6 +34,7 @@ app.use(express.urlencoded({ extended: true }));
 // ============================================================
 
 app.use("/api/projects", projectsRouter);
+app.use("/api/research", researchRouter);
 
 // ============================================================
 // HEALTH CHECK ENDPOINT
