@@ -776,7 +776,7 @@ function App() {
         {offersLoading ? (
           <p className="empty-state">Teklifler yükleniyor...</p>
         ) : offersError && offers.length === 0 ? (
-          <p className="empty-state">{offersError}</p>
+          <p className="status-message warning-message">{offersError}</p>
         ) : offers.length === 0 ? (
           <p className="empty-state">Henüz teklif kaydı bulunmuyor.</p>
         ) : (
