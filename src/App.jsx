@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { getProjects } from "./services/projects.service.js";
 import "./styles.css";
 import { getOffers } from "./services/offers.service.js";
+import { getResearchItems } from "./services/research.service.js";
 
 const STORAGE_KEYS = {
   projects: "ddpro_projects_v1",
@@ -132,6 +133,8 @@ function App() {
   const [researchItems, setResearchItems] = useState(() =>
     getStoredData(STORAGE_KEYS.research)
   );
+  const [researchLoading, setResearchLoading] = useState(true);
+  const [researchError, setResearchError] = useState(null);
 
   const [offers, setOffers] = useState(() =>
     getStoredData(STORAGE_KEYS.offers)
@@ -235,6 +238,48 @@ function App() {
     };
 
     fetchOffersFromApi();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const localResearchItems = getStoredData(STORAGE_KEYS.research);
+
+    const fetchResearchFromApi = async () => {
+      setResearchLoading(true);
+      setResearchError(null);
+
+      try {
+        const apiResearchItems = await getResearchItems();
+
+        if (cancelled) return;
+
+        if (apiResearchItems && apiResearchItems.length > 0) {
+          setResearchItems(apiResearchItems);
+          addLog("Araştırmalar API üzerinden yüklendi.");
+        } else {
+          setResearchItems(localResearchItems);
+          addLog("Araştırmalar API boş döndü, yerel veriler kullanıldı.");
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setResearchItems(localResearchItems);
+          setResearchError(
+            "API erişilemedi. Yerel araştırma verileri gösteriliyor."
+          );
+          addLog("Araştırmalar API bağlantı hatası, yerel veriler kullanıldı.");
+        }
+      } finally {
+        if (!cancelled) {
+          setResearchLoading(false);
+        }
+      }
+    };
+
+    fetchResearchFromApi();
 
     return () => {
       cancelled = true;
@@ -690,8 +735,16 @@ function App() {
         </form>
       )}
 
+      {researchError && (
+        <p className="empty-state" style={{ color: "#f59e0b" }}>
+          ⚠ {researchError}
+        </p>
+      )}
+
       <div className="data-list">
-        {researchItems.length === 0 ? (
+        {researchLoading ? (
+          <p className="empty-state">Araştırmalar yükleniyor…</p>
+        ) : researchItems.length === 0 ? (
           <p className="empty-state">
             Henüz araştırma kaydı bulunmuyor.
           </p>
