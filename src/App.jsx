@@ -246,7 +246,6 @@ function App() {
 
   useEffect(() => {
     let cancelled = false;
-    const localResearchItems = getStoredData(STORAGE_KEYS.research);
 
     const fetchResearchFromApi = async () => {
       setResearchLoading(true);
@@ -261,12 +260,12 @@ function App() {
           setResearchItems(apiResearchItems);
           addLog("Araştırmalar API üzerinden yüklendi.");
         } else {
-          setResearchItems(localResearchItems);
+          setResearchItems(getStoredData(STORAGE_KEYS.research));
           addLog("Araştırmalar API boş döndü, yerel veriler kullanıldı.");
         }
       } catch (error) {
         if (!cancelled) {
-          setResearchItems(localResearchItems);
+          setResearchItems(getStoredData(STORAGE_KEYS.research));
           setResearchError(
             "API erişilemedi. Yerel araştırma verileri gösteriliyor."
           );
