@@ -1,99 +1,67 @@
-import { useMemo, useState } from "react";
+import { useState, useEffect } from "react";
+import "./styles.css";
 
 const STORAGE_KEYS = {
   projects: "ddpro_projects_v1",
   research: "ddpro_research_v1",
-  profile: "ddpro_profile_v1",
   offers: "ddpro_offers_v1",
   memory: "ddpro_memory_v1",
-  systemLogs: "ddpro_system_logs_v1",
+  logs: "ddpro_system_logs_v1",
   integrations: "ddpro_integrations_v1",
 };
+
 const modules = [
   {
     id: "dashboard",
-    icon: "◈",
+    icon: "◉",
     title: "Genel Bakış",
     short: "Sistem Merkezi",
-    text: "Projeler, teklifler, tedarik, araştırma ve sistem aktivitelerini tek merkezden takip et.",
+    description:
+      "Tüm DDPro operasyonlarını, kayıtları ve sistem hareketlerini tek merkezden takip et.",
   },
   {
     id: "projects",
     icon: "▣",
     title: "Projeler",
     short: "Proje Yönetimi",
-    text: "Aktif projelerini oluştur, yönet, düzenle ve tüm süreçlerini merkezi olarak takip et.",
+    description:
+      "Aktif projelerini oluştur, yönet, düzenle ve tüm süreçlerini merkezi olarak takip et.",
   },
   {
     id: "research",
     icon: "⌕",
     title: "Tedarik & Araştırma",
     short: "Araştırma Merkezi",
-    text: "Ürün, malzeme, fiyat ve tedarikçi araştırmalarını kayıt altına al ve karşılaştır.",
+    description:
+      "Ürün, malzeme, fiyat ve tedarikçi araştırmalarını merkezi araştırma havuzunda topla.",
   },
   {
     id: "ai",
     icon: "✦",
     title: "DDPro AI",
-    short: "AI Asistan",
-    text: "Proje, araştırma ve operasyon verilerini analiz etmek için merkezi yapay zekâ çalışma alanı.",
+    short: "Yapay Zeka Sistemi",
+    description:
+      "Araştırma, analiz ve operasyon süreçlerinde yapay zeka destekli merkezi çalışma alanı.",
   },
   {
     id: "offers",
     icon: "€",
-    title: "Teklifler",
+    title: "Teklif Merkezi",
     short: "Teklif Sistemi",
-    text: "Maliyetleri, metrajları, işçilikleri ve teklif süreçlerini profesyonel şekilde yönet.",
+    description:
+      "Tekliflerini oluştur, kayıt altına al, takip et ve proje süreçleriyle ilişkilendir.",
   },
   {
     id: "systems",
-    icon: "◉",
-    title: "Sistemlerimiz",
-    short: "6 Ana Sistem",
-    text: "DDPro altyapısında çalışan tüm ana sistemleri tek merkezden görüntüle ve yönet.",
-  },
-];
-
-const systemList = [
-  {
-    id: "projects",
-    icon: "▣",
-    title: "Proje Yönetim Sistemi",
-    text: "Proje oluşturma, takip, durum yönetimi ve süreç kontrol merkezi.",
-  },
-  {
-    id: "research",
-    icon: "⌕",
-    title: "Tedarik & Araştırma Sistemi",
-    text: "Ürün, malzeme, fiyat, tedarikçi ve pazar araştırma merkezi.",
-  },
-  {
-    id: "ai",
-    icon: "✦",
-    title: "DDPro AI Sistemi",
-    text: "Verileri analiz eden ve operasyon süreçlerine destek veren AI merkezi.",
-  },
-  {
-    id: "offers",
-    icon: "€",
-    title: "Teklif & Maliyet Sistemi",
-    text: "Metraj, işçilik, malzeme ve teklif hesaplama yönetim sistemi.",
-  },
-  {
-    id: "data",
-    icon: "▤",
-    title: "Veri & Hafıza Sistemi",
-    text: "Sistem verilerinin düzenli, erişilebilir ve merkezi şekilde yönetildiği alan.",
-  },
-  {
-    id: "automation",
     icon: "⚙",
-    title: "Otomasyon Sistemi",
-    text: "Tekrarlayan operasyonları düzenlemek ve sistemler arası akışı güçlendirmek için otomasyon merkezi.",
+    title: "Sistemler",
+    short: "Altyapı Merkezi",
+    description:
+      "DDPro altyapısı, entegrasyonlar, kayıtlar ve merkezi sistem bileşenlerini yönet.",
   },
 ];
 
-const getStoredData = (key, fallback) => {
+const getStoredData = (key, fallback = []) => {
   try {
     const value = localStorage.getItem(key);
     return value ? JSON.parse(value) : fallback;
@@ -104,24 +72,26 @@ const getStoredData = (key, fallback) => {
 
 function App() {
   const [activePage, setActivePage] = useState("dashboard");
-  const [search, setSearch] = useState("");
+
   const [projects, setProjects] = useState(() =>
-    getStoredData(STORAGE_KEYS.projects, [
-      {
-        id: 1,
-        name: "Göztepe MLP",
-        status: "Aktif",
-        type: "Metal Tavan",
-      },
-    ])
+    getStoredData(STORAGE_KEYS.projects)
   );
 
   const [researchItems, setResearchItems] = useState(() =>
-    getStoredData(STORAGE_KEYS.research, [])
+    getStoredData(STORAGE_KEYS.research)
+  );
+
+  const [offers, setOffers] = useState(() =>
+    getStoredData(STORAGE_KEYS.offers)
+  );
+
+  const [systemLogs, setSystemLogs] = useState(() =>
+    getStoredData(STORAGE_KEYS.logs)
   );
 
   const [showProjectForm, setShowProjectForm] = useState(false);
   const [showResearchForm, setShowResearchForm] = useState(false);
+  const [showOfferForm, setShowOfferForm] = useState(false);
 
   const [projectName, setProjectName] = useState("");
   const [projectType, setProjectType] = useState("");
@@ -129,141 +99,145 @@ function App() {
   const [researchName, setResearchName] = useState("");
   const [researchNote, setResearchNote] = useState("");
 
-  const filteredModules = useMemo(() => {
-    const value = search.trim().toLocaleLowerCase("tr");
+  const [offerName, setOfferName] = useState("");
+  const [offerAmount, setOfferAmount] = useState("");
 
-    if (!value) return modules;
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.projects, JSON.stringify(projects));
+  }, [projects]);
 
-    return modules.filter((item) => {
-      return (
-        item.title.toLocaleLowerCase("tr").includes(value) ||
-        item.short.toLocaleLowerCase("tr").includes(value) ||
-        item.text.toLocaleLowerCase("tr").includes(value)
-      );
-    });
-  }, [search]);
+  useEffect(() => {
+    localStorage.setItem(
+      STORAGE_KEYS.research,
+      JSON.stringify(researchItems)
+    );
+  }, [researchItems]);
 
-  const saveProjects = (nextProjects) => {
-    setProjects(nextProjects);
-    localStorage.setItem(STORAGE_KEYS.projects, JSON.stringify(nextProjects));
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.offers, JSON.stringify(offers));
+  }, [offers]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.logs, JSON.stringify(systemLogs));
+  }, [systemLogs]);
+
+  const addLog = (message) => {
+    const newLog = {
+      id: Date.now(),
+      message,
+      date: new Date().toLocaleString("tr-TR"),
+    };
+
+    setSystemLogs((currentLogs) => [newLog, ...currentLogs].slice(0, 20));
   };
 
-  const saveResearch = (nextResearch) => {
-  setResearchItems(nextResearch);
-  localStorage.setItem(
-    STORAGE_KEYS.research,
-    JSON.stringify(nextResearch)
-  );
-};
-const saveOffers = (nextOffers) => {
-  setOffers(nextOffers);
-  localStorage.setItem(
-    STORAGE_KEYS.offers,
-    JSON.stringify(nextOffers)
-  );
-};
-
-const saveMemory = (nextMemory) => {
-  setMemory(nextMemory);
-  localStorage.setItem(
-    STORAGE_KEYS.memory,
-    JSON.stringify(nextMemory)
-  );
-};
-
-const saveSystemLogs = (nextLogs) => {
-  setSystemLogs(nextLogs);
-  localStorage.setItem(
-    STORAGE_KEYS.systemLogs,
-    JSON.stringify(nextLogs)
-  );
-};
-
-const saveIntegrations = (nextIntegrations) => {
-  setIntegrations(nextIntegrations);
-  localStorage.setItem(
-    STORAGE_KEYS.integrations,
-    JSON.stringify(nextIntegrations)
-  );
-};
-
-const createProject = (event) => {
-  event.preventDefault();
-
-  const name = projectName.trim();
-
-  if (!name) return;
-
-  const nextProject = {
-    id: Date.now(),
-    name,
-    status: "Aktif",
-    type: projectType.trim() || "Genel Proje",
-  };
-
-  saveProjects([nextProject, ...projects]);
-
-  setProjectName("");
-  setProjectType("");
-  setShowProjectForm(false);
-};
-  const createResearch = (event) => {
+  const createProject = (event) => {
     event.preventDefault();
 
-    const name = researchName.trim();
+    if (!projectName.trim()) return;
 
-    if (!name) return;
-
-    const nextResearch = {
+    const newProject = {
       id: Date.now(),
-      name,
-      note: researchNote.trim() || "Araştırma kaydı oluşturuldu.",
+      name: projectName.trim(),
+      type: projectType.trim() || "Genel Proje",
+      status: "Aktif",
       date: new Date().toLocaleDateString("tr-TR"),
     };
 
-    saveResearch([nextResearch, ...researchItems]);
+    setProjects((currentProjects) => [newProject, ...currentProjects]);
+
+    addLog(`Yeni proje oluşturuldu: ${newProject.name}`);
+
+    setProjectName("");
+    setProjectType("");
+    setShowProjectForm(false);
+  };
+
+  const deleteProject = (id) => {
+    const project = projects.find((item) => item.id === id);
+
+    setProjects((currentProjects) =>
+      currentProjects.filter((item) => item.id !== id)
+    );
+
+    if (project) {
+      addLog(`Proje silindi: ${project.name}`);
+    }
+  };
+
+  const createResearch = (event) => {
+    event.preventDefault();
+
+    if (!researchName.trim()) return;
+
+    const newResearch = {
+      id: Date.now(),
+      name: researchName.trim(),
+      note: researchNote.trim() || "Not eklenmedi.",
+      date: new Date().toLocaleDateString("tr-TR"),
+    };
+
+    setResearchItems((currentItems) => [newResearch, ...currentItems]);
+
+    addLog(`Yeni araştırma kaydı oluşturuldu: ${newResearch.name}`);
 
     setResearchName("");
     setResearchNote("");
     setShowResearchForm(false);
   };
 
-  const deleteProject = (id) => {
-    saveProjects(projects.filter((project) => project.id !== id));
+  const deleteResearch = (id) => {
+    const item = researchItems.find((research) => research.id === id);
+
+    setResearchItems((currentItems) =>
+      currentItems.filter((research) => research.id !== id)
+    );
+
+    if (item) {
+      addLog(`Araştırma kaydı silindi: ${item.name}`);
+    }
   };
 
-  const deleteResearch = (id) => {
-    saveResearch(researchItems.filter((item) => item.id !== id));
+  const createOffer = (event) => {
+    event.preventDefault();
+
+    if (!offerName.trim()) return;
+
+    const newOffer = {
+      id: Date.now(),
+      name: offerName.trim(),
+      amount: offerAmount.trim() || "Tutar belirtilmedi",
+      status: "Hazırlanıyor",
+      date: new Date().toLocaleDateString("tr-TR"),
+    };
+
+    setOffers((currentOffers) => [newOffer, ...currentOffers]);
+
+    addLog(`Yeni teklif oluşturuldu: ${newOffer.name}`);
+
+    setOfferName("");
+    setOfferAmount("");
+    setShowOfferForm(false);
+  };
+
+  const deleteOffer = (id) => {
+    const offer = offers.find((item) => item.id === id);
+
+    setOffers((currentOffers) =>
+      currentOffers.filter((item) => item.id !== id)
+    );
+
+    if (offer) {
+      addLog(`Teklif silindi: ${offer.name}`);
+    }
   };
 
   const renderHeader = (title, description) => (
-    <div className="topbar">
-      <div className="page-title">
+    <div className="page-header">
+      <div>
+        <div className="page-eyebrow">DDPRO MERKEZİ SİSTEM</div>
         <h1>{title}</h1>
         <p>{description}</p>
-      </div>
-
-      <div className="top-actions">
-        <div className="search-box">
-          <span>⌕</span>
-          <input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Sistemde ara..."
-          />
-        </div>
-
-        <button
-          className="icon-button"
-          type="button"
-          onClick={() => {
-            setSearch("");
-            setActivePage("dashboard");
-          }}
-          aria-label="Ana sayfaya dön"
-        >
-          ⌂
-        </button>
       </div>
     </div>
   );
@@ -271,25 +245,19 @@ const createProject = (event) => {
   const renderDashboard = () => (
     <>
       {renderHeader(
-        "DDPro Sistem Merkezi",
-        "Tüm operasyonlarını, projelerini ve sistemlerini tek merkezden yönet."
+        "Genel Bakış",
+        "Tüm DDPro sistemlerini tek bir merkezi yapı üzerinden takip et."
       )}
 
       <section className="hero">
         <div className="hero-content">
-          <div className="hero-badge">
-            <span>●</span>
-            DDPRO CENTRAL ECOSYSTEM
-          </div>
+          <div className="hero-badge">DOĞRU DİZAYN PRO AI TRADE</div>
 
-          <h2>
-            Doğru Dizayn Pro’nun tüm operasyonları artık tek merkezde.
-          </h2>
+          <h2>Doğru çizgi. Doğru çözüm. Doğru sistem.</h2>
 
           <p>
-            Projeler, tedarik, araştırma, teklifler, yapay zekâ ve sistem
-            altyapısı tek bir merkezi yapı altında birbirine bağlı şekilde
-            yönetilir.
+            Projeler, tedarik araştırmaları, teklifler, yapay zeka ve sistem
+            altyapısı tek bir merkezi operasyon yapısında birleşir.
           </p>
 
           <div className="hero-actions">
@@ -298,15 +266,15 @@ const createProject = (event) => {
               type="button"
               onClick={() => setActivePage("projects")}
             >
-              Projeleri Yönet
+              Projelere Git
             </button>
 
             <button
               className="secondary-button"
               type="button"
-              onClick={() => setActivePage("systems")}
+              onClick={() => setActivePage("research")}
             >
-              Sistemlerimizi Gör
+              Araştırma Merkezi
             </button>
           </div>
         </div>
@@ -314,147 +282,47 @@ const createProject = (event) => {
 
       <section className="stats-grid">
         <div className="stat-card">
-          <div className="stat-top">
-            <span className="stat-label">Aktif Projeler</span>
-            <span className="stat-icon">▣</span>
-          </div>
-          <div className="stat-value">{projects.length}</div>
-          <div className="stat-change">Sistem üzerinden takip ediliyor</div>
+          <span>AKTİF PROJELER</span>
+          <strong>{projects.length}</strong>
         </div>
 
         <div className="stat-card">
-          <div className="stat-top">
-            <span className="stat-label">Araştırmalar</span>
-            <span className="stat-icon">⌕</span>
-          </div>
-          <div className="stat-value">{researchItems.length}</div>
-          <div className="stat-change">Merkezi araştırma havuzu</div>
+          <span>ARAŞTIRMALAR</span>
+          <strong>{researchItems.length}</strong>
         </div>
 
         <div className="stat-card">
-          <div className="stat-top">
-            <span className="stat-label">Ana Sistemler</span>
-            <span className="stat-icon">◉</span>
-          </div>
-          <div className="stat-value">6</div>
-          <div className="stat-change">Birbirine entegre altyapı</div>
+          <span>TEKLİFLER</span>
+          <strong>{offers.length}</strong>
         </div>
 
         <div className="stat-card">
-          <div className="stat-top">
-            <span className="stat-label">Sistem Durumu</span>
-            <span className="stat-icon">✓</span>
-          </div>
-          <div className="stat-value">Aktif</div>
-          <div className="stat-change">Merkezi yapı çalışıyor</div>
+          <span>SİSTEM KAYITLARI</span>
+          <strong>{systemLogs.length}</strong>
         </div>
       </section>
 
       <section className="section">
         <div className="section-header">
           <div>
-            <h3>Merkezi Çalışma Alanları</h3>
-            <p>
-              DDPro ekosistemindeki ana modüllere buradan doğrudan ulaşabilirsin.
-            </p>
+            <h3>DDPro Sistemleri</h3>
+            <p>Merkezi operasyon yapısındaki ana çalışma alanları.</p>
           </div>
         </div>
 
         <div className="modules-grid">
-          {filteredModules.map((module) => (
+          {modules.slice(1).map((module) => (
             <button
-              className="module-card"
+              className="module-card module-button"
               type="button"
               key={module.id}
               onClick={() => setActivePage(module.id)}
             >
               <span className="module-icon">{module.icon}</span>
-
               <h4>{module.title}</h4>
-
-              <p>{module.text}</p>
-
-              <div className="module-footer">
-                <span className="module-status">
-                  <span className="status-dot" />
-                  {module.short}
-                </span>
-
-                <span className="module-arrow">→</span>
-              </div>
+              <p>{module.description}</p>
             </button>
           ))}
-        </div>
-      </section>
-
-      <section className="bottom-grid">
-        <div className="panel">
-          <div className="section-header">
-            <div>
-              <h3>Son Projeler</h3>
-              <p>Merkezi sistemde kayıtlı son proje hareketleri.</p>
-            </div>
-          </div>
-
-          {projects.length === 0 ? (
-            <p className="module-card p">
-              Henüz proje kaydı bulunmuyor.
-            </p>
-          ) : (
-            <div className="nav">
-              {projects.slice(0, 4).map((project) => (
-                <button
-                  key={project.id}
-                  className="nav-item"
-                  type="button"
-                  onClick={() => setActivePage("projects")}
-                >
-                  <span className="nav-icon">▣</span>
-                  <span className="nav-label">
-                    {project.name} — {project.type}
-                  </span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="panel">
-          <div className="section-header">
-            <div>
-              <h3>Hızlı Erişim</h3>
-              <p>Sık kullanılan merkezi işlemler.</p>
-            </div>
-          </div>
-
-          <div className="nav">
-            <button
-              className="nav-item"
-              type="button"
-              onClick={() => setActivePage("projects")}
-            >
-              <span className="nav-icon">＋</span>
-              <span className="nav-label">Yeni Proje</span>
-            </button>
-
-            <button
-              className="nav-item"
-              type="button"
-              onClick={() => setActivePage("research")}
-            >
-              <span className="nav-icon">⌕</span>
-              <span className="nav-label">Yeni Araştırma</span>
-            </button>
-
-            <button
-              className="nav-item"
-              type="button"
-              onClick={() => setActivePage("offers")}
-            >
-              <span className="nav-icon">€</span>
-              <span className="nav-label">Teklif Merkezi</span>
-            </button>
-          </div>
         </div>
       </section>
     </>
@@ -482,7 +350,7 @@ const createProject = (event) => {
             <button
               className="primary-button"
               type="button"
-              onClick={() => setShowProjectForm(!showProjectForm)}
+              onClick={() => setShowProjectForm((value) => !value)}
             >
               {showProjectForm ? "Formu Kapat" : "Yeni Proje Oluştur"}
             </button>
@@ -500,37 +368,17 @@ const createProject = (event) => {
               </div>
             </div>
 
-            <div className="hero-actions">
+            <div className="form-grid">
               <input
                 value={projectName}
                 onChange={(event) => setProjectName(event.target.value)}
                 placeholder="Proje adı"
-                style={{
-                  flex: 1,
-                  minWidth: "220px",
-                  minHeight: "45px",
-                  padding: "0 14px",
-                  borderRadius: "12px",
-                  border: "1px solid rgba(148, 163, 184, 0.15)",
-                  background: "rgba(13, 27, 47, 0.82)",
-                  color: "#edf3ff",
-                }}
               />
 
               <input
                 value={projectType}
                 onChange={(event) => setProjectType(event.target.value)}
                 placeholder="Proje türü"
-                style={{
-                  flex: 1,
-                  minWidth: "220px",
-                  minHeight: "45px",
-                  padding: "0 14px",
-                  borderRadius: "12px",
-                  border: "1px solid rgba(148, 163, 184, 0.15)",
-                  background: "rgba(13, 27, 47, 0.82)",
-                  color: "#edf3ff",
-                }}
               />
 
               <button className="primary-button" type="submit">
@@ -550,30 +398,36 @@ const createProject = (event) => {
         </div>
 
         <div className="modules-grid">
-          {projects.map((project) => (
-            <div className="module-card" key={project.id}>
+          {projects.length === 0 ? (
+            <div className="empty-card">
               <span className="module-icon">▣</span>
-
-              <h4>{project.name}</h4>
-
-              <p>{project.type}</p>
-
-              <div className="module-footer">
-                <span className="module-status">
-                  <span className="status-dot" />
-                  {project.status}
-                </span>
-
-                <button
-                  className="secondary-button"
-                  type="button"
-                  onClick={() => deleteProject(project.id)}
-                >
-                  Sil
-                </button>
-              </div>
+              <h4>Henüz proje yok</h4>
+              <p>İlk proje kaydını oluşturarak başlayabilirsin.</p>
             </div>
-          ))}
+          ) : (
+            projects.map((project) => (
+              <div className="module-card" key={project.id}>
+                <span className="module-icon">▣</span>
+                <h4>{project.name}</h4>
+                <p>{project.type}</p>
+
+                <div className="module-footer">
+                  <span className="module-status">
+                    <span className="status-dot" />
+                    {project.status}
+                  </span>
+
+                  <button
+                    className="secondary-button"
+                    type="button"
+                    onClick={() => deleteProject(project.id)}
+                  >
+                    Sil
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </section>
     </>
@@ -601,7 +455,7 @@ const createProject = (event) => {
             <button
               className="primary-button"
               type="button"
-              onClick={() => setShowResearchForm(!showResearchForm)}
+              onClick={() => setShowResearchForm((value) => !value)}
             >
               {showResearchForm ? "Formu Kapat" : "Yeni Araştırma Ekle"}
             </button>
@@ -619,25 +473,11 @@ const createProject = (event) => {
               </div>
             </div>
 
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: "12px",
-              }}
-            >
+            <div className="form-column">
               <input
                 value={researchName}
                 onChange={(event) => setResearchName(event.target.value)}
                 placeholder="Araştırma başlığı"
-                style={{
-                  minHeight: "45px",
-                  padding: "0 14px",
-                  borderRadius: "12px",
-                  border: "1px solid rgba(148, 163, 184, 0.15)",
-                  background: "rgba(13, 27, 47, 0.82)",
-                  color: "#edf3ff",
-                }}
               />
 
               <textarea
@@ -645,36 +485,30 @@ const createProject = (event) => {
                 onChange={(event) => setResearchNote(event.target.value)}
                 placeholder="Araştırma notu"
                 rows="5"
-                style={{
-                  padding: "14px",
-                  borderRadius: "12px",
-                  border: "1px solid rgba(148, 163, 184, 0.15)",
-                  background: "rgba(13, 27, 47, 0.82)",
-                  color: "#edf3ff",
-                  resize: "vertical",
-                }}
               />
 
-              <div>
-                <button className="primary-button" type="submit">
-                  Araştırmayı Kaydet
-                </button>
-              </div>
+              <button className="primary-button" type="submit">
+                Araştırmayı Kaydet
+              </button>
             </div>
           </form>
         </section>
       )}
 
       <section className="section">
+        <div className="section-header">
+          <div>
+            <h3>Araştırma Havuzu</h3>
+            <p>Kayıt altına alınan merkezi araştırma verileri.</p>
+          </div>
+        </div>
+
         <div className="modules-grid">
           {researchItems.length === 0 ? (
-            <div className="module-card">
+            <div className="empty-card">
               <span className="module-icon">⌕</span>
               <h4>Henüz araştırma yok</h4>
-              <p>
-                İlk ürün, malzeme veya tedarikçi araştırmanı buradan sisteme
-                ekleyebilirsin.
-              </p>
+              <p>İlk araştırma kaydını oluşturarak merkezi havuzu başlat.</p>
             </div>
           ) : (
             researchItems.map((item) => (
@@ -706,45 +540,39 @@ const createProject = (event) => {
     <>
       {renderHeader(
         "DDPro AI",
-        "DDPro ekosisteminin merkezi yapay zekâ çalışma alanı."
+        "Merkezi yapay zeka çalışma ve analiz sistemi."
       )}
 
       <section className="hero">
         <div className="hero-content">
-          <div className="hero-badge">DDPRO ARTIFICIAL INTELLIGENCE</div>
-
-          <h2>Verileri analiz eden merkezi yapay zekâ çalışma alanı.</h2>
-
+          <div className="hero-badge">DDPRO AI CORE</div>
+          <h2>Analiz eden, araştıran ve karar süreçlerini güçlendiren yapı.</h2>
           <p>
-            Projeler, araştırmalar ve operasyon verileri büyüdükçe DDPro AI bu
-            merkezi yapının analiz ve karar destek katmanını oluşturacak.
+            DDPro AI, proje, tedarik, maliyet, teklif ve sistem verilerinin
+            gelecekte merkezi olarak işlenmesi için hazırlanan ana yapıdır.
           </p>
         </div>
       </section>
 
-      <section className="modules-grid">
-        <div className="module-card">
-          <span className="module-icon">✦</span>
-          <h4>Proje Analizi</h4>
-          <p>Proje verilerini analiz etmek için hazırlanan merkezi AI alanı.</p>
-        </div>
+      <section className="section">
+        <div className="modules-grid">
+          <div className="module-card">
+            <span className="module-icon">✦</span>
+            <h4>AI Araştırma</h4>
+            <p>Ürün, malzeme, fiyat ve tedarikçi verilerinin analizi.</p>
+          </div>
 
-        <div className="module-card">
-          <span className="module-icon">⌕</span>
-          <h4>Araştırma Analizi</h4>
-          <p>
-            Tedarik, ürün ve fiyat araştırmalarını karşılaştırmaya yönelik AI
-            çalışma alanı.
-          </p>
-        </div>
+          <div className="module-card">
+            <span className="module-icon">◈</span>
+            <h4>AI Karar Desteği</h4>
+            <p>Toplanan verilerden karşılaştırmalı karar desteği üretir.</p>
+          </div>
 
-        <div className="module-card">
-          <span className="module-icon">⚙</span>
-          <h4>Operasyon Desteği</h4>
-          <p>
-            Tekrarlayan operasyonları ve merkezi iş akışlarını analiz etmek için
-            sistem altyapısı.
-          </p>
+          <div className="module-card">
+            <span className="module-icon">◌</span>
+            <h4>AI Operasyon</h4>
+            <p>DDPro sistemleri arasında akıllı operasyon akışları için altyapı.</p>
+          </div>
         </div>
       </section>
     </>
@@ -753,40 +581,96 @@ const createProject = (event) => {
   const renderOffers = () => (
     <>
       {renderHeader(
-        "Teklifler",
-        "Metraj, maliyet, işçilik ve teklif süreçlerinin merkezi yönetim alanı."
+        "Teklif Merkezi",
+        "Teklif oluşturma ve merkezi teklif yönetim sistemi."
       )}
 
       <section className="hero">
         <div className="hero-content">
-          <div className="hero-badge">TEKLİF & MALİYET SİSTEMİ</div>
+          <div className="hero-badge">TEKLİF YÖNETİM SİSTEMİ</div>
 
-          <h2>Teklif süreçlerini daha düzenli ve profesyonel yönet.</h2>
+          <h2>Tekliflerini düzenli, hızlı ve merkezi şekilde yönet.</h2>
 
           <p>
-            Malzeme, işçilik, metraj ve diğer maliyet kalemlerini merkezi
-            sistemde toplayarak teklif altyapısını güçlendir.
+            Proje tekliflerini kayıt altına al, tutarlarını takip et ve tüm
+            teklif süreçlerini tek merkezden kontrol et.
           </p>
+
+          <div className="hero-actions">
+            <button
+              className="primary-button"
+              type="button"
+              onClick={() => setShowOfferForm((value) => !value)}
+            >
+              {showOfferForm ? "Formu Kapat" : "Yeni Teklif Oluştur"}
+            </button>
+          </div>
         </div>
       </section>
 
-      <section className="modules-grid">
-        <div className="module-card">
-          <span className="module-icon">€</span>
-          <h4>Maliyet Hesaplama</h4>
-          <p>Proje maliyet kalemlerinin merkezi hesaplama alanı.</p>
-        </div>
+      {showOfferForm && (
+        <section className="panel">
+          <form onSubmit={createOffer}>
+            <div className="section-header">
+              <div>
+                <h3>Yeni Teklif</h3>
+                <p>Yeni teklif kaydını merkezi sisteme ekle.</p>
+              </div>
+            </div>
 
-        <div className="module-card">
-          <span className="module-icon">▤</span>
-          <h4>Metraj Yönetimi</h4>
-          <p>Metraj verilerini düzenli ve kontrol edilebilir yapıda yönet.</p>
-        </div>
+            <div className="form-grid">
+              <input
+                value={offerName}
+                onChange={(event) => setOfferName(event.target.value)}
+                placeholder="Teklif adı"
+              />
 
-        <div className="module-card">
-          <span className="module-icon">✓</span>
-          <h4>Teklif Süreci</h4>
-          <p>Hazırlanan teklifleri proje süreçleriyle merkezi olarak ilişkilendir.</p>
+              <input
+                value={offerAmount}
+                onChange={(event) => setOfferAmount(event.target.value)}
+                placeholder="Teklif tutarı"
+              />
+
+              <button className="primary-button" type="submit">
+                Kaydet
+              </button>
+            </div>
+          </form>
+        </section>
+      )}
+
+      <section className="section">
+        <div className="modules-grid">
+          {offers.length === 0 ? (
+            <div className="empty-card">
+              <span className="module-icon">€</span>
+              <h4>Henüz teklif yok</h4>
+              <p>Yeni teklif oluşturarak teklif merkezini başlat.</p>
+            </div>
+          ) : (
+            offers.map((offer) => (
+              <div className="module-card" key={offer.id}>
+                <span className="module-icon">€</span>
+                <h4>{offer.name}</h4>
+                <p>{offer.amount}</p>
+
+                <div className="module-footer">
+                  <span className="module-status">
+                    <span className="status-dot" />
+                    {offer.status}
+                  </span>
+
+                  <button
+                    className="secondary-button"
+                    type="button"
+                    onClick={() => deleteOffer(offer.id)}
+                  >
+                    Sil
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </section>
     </>
@@ -795,55 +679,57 @@ const createProject = (event) => {
   const renderSystems = () => (
     <>
       {renderHeader(
-        "Sistemlerimiz",
-        "DDPro merkezi ekosisteminde birbirine bağlı çalışan 6 ana sistem."
+        "Sistemler",
+        "DDPro merkezi altyapısı ve sistem hareketleri."
       )}
 
-      <section className="hero">
-        <div className="hero-content">
-          <div className="hero-badge">DDPRO CENTRAL ECOSYSTEM</div>
+      <section className="stats-grid">
+        <div className="stat-card">
+          <span>PROJE SİSTEMİ</span>
+          <strong>AKTİF</strong>
+        </div>
 
-          <h2>6 ana sistem. Tek merkez. Birbirine bağlı güçlü altyapı.</h2>
+        <div className="stat-card">
+          <span>ARAŞTIRMA SİSTEMİ</span>
+          <strong>AKTİF</strong>
+        </div>
 
-          <p>
-            DDPro'nun ana amacı, farklı operasyonları birbirinden kopuk araçlar
-            halinde değil, merkezi veri ve çalışma yapısı altında birbirine
-            entegre şekilde yönetmektir.
-          </p>
+        <div className="stat-card">
+          <span>TEKLİF SİSTEMİ</span>
+          <strong>AKTİF</strong>
+        </div>
+
+        <div className="stat-card">
+          <span>DDPRO AI CORE</span>
+          <strong>HAZIR</strong>
         </div>
       </section>
 
       <section className="section">
-        <div className="modules-grid">
-          {systemList.map((system) => (
-            <button
-              className="module-card"
-              key={system.id}
-              type="button"
-              onClick={() => {
-                if (
-                  ["projects", "research", "ai", "offers"].includes(system.id)
-                ) {
-                  setActivePage(system.id);
-                }
-              }}
-            >
-              <span className="module-icon">{system.icon}</span>
+        <div className="section-header">
+          <div>
+            <h3>Sistem Hareketleri</h3>
+            <p>Merkezi DDPro sistemi tarafından kaydedilen son işlemler.</p>
+          </div>
+        </div>
 
-              <h4>{system.title}</h4>
-
-              <p>{system.text}</p>
-
-              <div className="module-footer">
-                <span className="module-status">
-                  <span className="status-dot" />
-                  Sistem Merkezi
-                </span>
-
-                <span className="module-arrow">→</span>
+        <div className="logs-list">
+          {systemLogs.length === 0 ? (
+            <div className="empty-card">
+              <span className="module-icon">⚙</span>
+              <h4>Henüz sistem hareketi yok</h4>
+              <p>Yapılan işlemler burada kayıt altına alınacaktır.</p>
+            </div>
+          ) : (
+            systemLogs.map((log) => (
+              <div className="log-item" key={log.id}>
+                <div>
+                  <strong>{log.message}</strong>
+                  <span>{log.date}</span>
+                </div>
               </div>
-            </button>
-          ))}
+            ))
+          )}
         </div>
       </section>
     </>
@@ -872,98 +758,20 @@ const createProject = (event) => {
   };
 
   return (
-    <div className="app">
+    <div className="app-shell">
       <aside className="sidebar">
-        <div className="logo">
-          <div className="logo-mark">D</div>
+        <div className="brand">
+          <div className="brand-mark">DD</div>
 
-          <div className="logo-text">
+          <div>
             <strong>DDPro</strong>
-            <span>Central Ecosystem</span>
+            <span>DOĞRU DİZAYN PRO</span>
           </div>
         </div>
 
-        <nav className="nav">
-          <button
-            className={`nav-item ${
-              activePage === "dashboard" ? "active" : ""
-            }`}
-            type="button"
-            onClick={() => setActivePage("dashboard")}
-          >
-            <span className="nav-icon">◈</span>
-            <span className="nav-label">Genel Bakış</span>
-          </button>
-
-          <button
-            className={`nav-item ${
-              activePage === "projects" ? "active" : ""
-            }`}
-            type="button"
-            onClick={() => setActivePage("projects")}
-          >
-            <span className="nav-icon">▣</span>
-            <span className="nav-label">Projeler</span>
-          </button>
-
-          <button
-            className={`nav-item ${
-              activePage === "research" ? "active" : ""
-            }`}
-            type="button"
-            onClick={() => setActivePage("research")}
-          >
-            <span className="nav-icon">⌕</span>
-            <span className="nav-label">Tedarik & Araştırma</span>
-          </button>
-
-          <button
-            className={`nav-item ${activePage === "ai" ? "active" : ""}`}
-            type="button"
-            onClick={() => setActivePage("ai")}
-          >
-            <span className="nav-icon">✦</span>
-            <span className="nav-label">DDPro AI</span>
-          </button>
-
-          <button
-            className={`nav-item ${
-              activePage === "offers" ? "active" : ""
-            }`}
-            type="button"
-            onClick={() => setActivePage("offers")}
-          >
-            <span className="nav-icon">€</span>
-            <span className="nav-label">Teklifler</span>
-          </button>
-
-          <button
-            className={`nav-item ${
-              activePage === "systems" ? "active" : ""
-            }`}
-            type="button"
-            onClick={() => setActivePage("systems")}
-          >
-            <span className="nav-icon">◉</span>
-            <span className="nav-label">Sistemlerimiz</span>
-          </button>
-        </nav>
-
-        <div className="sidebar-bottom">
-          <div className="user-card">
-            <div className="avatar">DD</div>
-
-            <div className="user-info">
-              <strong>Doğru Dizayn Pro</strong>
-              <span>Merkezi Sistem Aktif</span>
-            </div>
-          </div>
-        </div>
-      </aside>
-
-      <main className="main-content">{renderContent()}</main>
-    </div>
-  );
-}
-
-export default App;
+        <nav className="navigation">
+          {modules.map((module) => (
+            <button
+              key={module.id}
+              className={`nav-item ${
+                activePage
