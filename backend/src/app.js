@@ -1,6 +1,8 @@
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
+import { notFound } from "./middleware/notFound.js";
+import { errorHandler } from "./middleware/errorHandler.js";
 
 const app = express();
 
@@ -51,15 +53,15 @@ app.get("/", (req, res) => {
 });
 
 // ============================================================
-// ERROR HANDLING
+// 404 NOT FOUND MIDDLEWARE
 // ============================================================
 
-app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({
-    status: "error",
-    message: "Internal server error",
-  });
-});
+app.use(notFound);
+
+// ============================================================
+// ERROR HANDLING MIDDLEWARE
+// ============================================================
+
+app.use(errorHandler);
 
 export default app;
