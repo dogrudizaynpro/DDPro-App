@@ -119,7 +119,7 @@ const formatDate = () =>
   });
 
 function App() {
-  const [activePage, setActivePage] = useState("dashboard");
+  const [activeModule, setActiveModule] = useState("dashboard");
 
   const [projects, setProjects] = useState(() =>
     getStoredData(STORAGE_KEYS.projects)
@@ -178,6 +178,7 @@ function App() {
   const [memoryContent, setMemoryContent] = useState("");
 
   const [aiInput, setAiInput] = useState("");
+
   const [aiMessages, setAiMessages] = useState([
     {
       id: "welcome",
@@ -315,9 +316,7 @@ function App() {
       ...currentItems,
     ]);
 
-    addLog(
-      `Yeni araştırma kaydı oluşturuldu: ${newResearch.name}`
-    );
+    addLog(`Yeni araştırma kaydı oluşturuldu: ${newResearch.name}`);
 
     setResearchName("");
     setResearchNote("");
@@ -413,149 +412,541 @@ function App() {
   };
 
   const toggleIntegration = (id) => {
+    const integration = integrations.find((item) => item.id === id);
+
+    if (!integration) return;
+
+    const nextStatus =
+      integration.status === "Aktif" ? "Pasif" : "Aktif";
+
     setIntegrations((currentItems) =>
-      currentItems.map((item) => {
-        if (item.id !== id) return item;
+      currentItems.map((item) =>
+        item.id === id
+          ? {
+              ...item,
+              status: nextStatus,
+            }
+          : item
+      )
+    );
 
-        const nextStatus =
-          item.status === "Aktif" ? "Pasif" : "Aktif";
-
-        addLog(
-          `${item.name} entegrasyon durumu değiştirildi: ${nextStatus}`
-        );
-
-        return {
-          ...item,
-          status: nextStatus,
-        };
-      })
+    addLog(
+      `${integration.name} entegrasyon durumu değiştirildi: ${nextStatus}`
     );
   };
-const sendAiMessage = (event) => {
-  event.preventDefault();
 
-  const form = event.currentTarget;
-  const input = form.querySelector("input, textarea");
+  const sendAiMessage = (event) => {
+    event.preventDefault();
 
-  if (!input) return;
+    const message = aiInput.trim();
 
-  const message = input.value.trim();
+    if (!message) return;
 
-  if (!message) return;
+    const userMessage = {
+      id: createId(),
+      role: "user",
+      text: message,
+      date: formatDate(),
+    };
 
-  addLog("AI", "Kullanıcı AI mesajı gönderdi.", "info");
+    const assistantMessage = {
+      id: createId(),
+      role: "assistant",
+      text:
+        `Mesaj alındı: "${message}". ` +
+        "DDPro AI çalışma alanı bu mesajı kayıt altına aldı. " +
+        "Gelişmiş AI/API entegrasyonu sonraki altyapı aşamasında bu alana bağlanabilir.",
+      date: formatDate(),
+    };
 
-  input.value = "";
+    setAiMessages((currentMessages) => [
+      ...currentMessages,
+      userMessage,
+      assistantMessage,
+    ]);
 
-  alert(`DDPro AI mesajınızı aldı:\n\n${message}`);
-};
+    addLog(`DDPro AI mesajı gönderildi: ${message}`);
 
-const renderModule = () => {
-  switch (activeModule) {
-    case "projects":
-      return renderProjects();
+    setAiInput("");
+  };
 
-    case "research":
-      return renderResearch();
-
-    case "ai":
-      return renderAI();
-
-    case "offers":
-      return renderOffers();
-
-    case "systems":
-      return renderSystems();
-
-    case "dashboard":
-    default:
-      return renderDashboard();
-  }
-};
-
-return (
-  <div className="ddpro-app">
-    <header className="app-header">
-      <div className="brand-area">
-        <div className="brand-logo">DD</div>
-
-        <div className="brand-content">
-          <strong>DOĞRU DİZAYN PRO</strong>
-          <span>DDPro Dijital Yönetim Sistemi</span>
-        </div>
+  const renderDashboard = () => (
+    <div className="dashboard-module">
+      <div className="stats-grid">
+        {dashboardStats.map((stat) => (
+          <div className="stat-card" key={stat.label}>
+            <span>{stat.label}</span>
+            <strong>{stat.value}</strong>
+          </div>
+        ))}
       </div>
 
-      <div className="header-status">
-        <span className="status-dot"></span>
-        Sistem Aktif
+      <div className="dashboard-grid">
+        <div className="panel">
+          <div className="panel-header">
+            <h2>Son Sistem Hareketleri</h2>
+          </div>
+
+          <div className="panel-content">
+            {systemLogs.length === 0 ? (
+              <p className="empty-state">
+                Henüz sistem kaydı bulunmuyor.
+              </p>
+            ) : (
+              <div className="log-list">
+                {systemLogs.slice(0, 8).map((log) => (
+                  <div className="log-item" key={log.id}>
+                    <strong>{log.message}</strong>
+                    <small>{log.date}</small>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="panel">
+          <div className="panel-header">
+            <h2>Hızlı Durum</h2>
+          </div>
+
+          <div className="panel-content">
+            <div className="quick-status">
+              <span>Proje Sistemi</span>
+              <strong>Hazır</strong>
+            </div>
+            <div className="quick-status">
+              <span>Araştırma Sistemi</span>
+              <strong>Hazır</strong>
+            </div>
+            <div className="quick-status">
+              <span>Teklif Sistemi</span>
+              <strong>Hazır</strong>
+            </div>
+            <div className="quick-status">
+              <span>Merkezi Hafıza</span>
+              <strong>Hazır</strong>
+            </div>
+          </div>
+        </div>
       </div>
-    </header>
-
-    <div className="app-layout">
-      <aside className="sidebar">
-        <div className="sidebar-title">
-          ANA MODÜLLER
-        </div>
-
-        <nav className="module-nav">
-          {modules.map((module) => (
-            <button
-              key={module.id}
-              type="button"
-              className={`module-button ${
-                activeModule === module.id ? "active" : ""
-              }`}
-              onClick={() => setActiveModule(module.id)}
-            >
-              <span className="module-icon">
-                {module.icon}
-              </span>
-
-              <span className="module-text">
-                <strong>{module.title}</strong>
-                <small>{module.short}</small>
-              </span>
-            </button>
-          ))}
-        </nav>
-
-        <div className="sidebar-footer">
-          <div className="sidebar-system">
-            <span className="status-dot"></span>
-            DDPro Core v1.0
-          </div>
-        </div>
-      </aside>
-
-      <main className="main-content">
-        <section className="content-header">
-          <div>
-            <h1>
-              {
-                modules.find(
-                  (module) => module.id === activeModule
-                )?.title || "Genel Bakış"
-              }
-            </h1>
-
-            <p>
-              {
-                modules.find(
-                  (module) => module.id === activeModule
-                )?.description ||
-                "DDPro operasyonlarını merkezi olarak yönetin."
-              }
-            </p>
-          </div>
-        </section>
-
-        <section className="content-body">
-          {renderModule()}
-        </section>
-      </main>
     </div>
-  </div>
-);
+  );
+
+  const renderProjects = () => (
+    <div className="module-page">
+      <div className="module-toolbar">
+        <button
+          type="button"
+          onClick={() => setShowProjectForm((value) => !value)}
+        >
+          {showProjectForm ? "Formu Kapat" : "+ Yeni Proje"}
+        </button>
+      </div>
+
+      {showProjectForm && (
+        <form className="data-form" onSubmit={createProject}>
+          <input
+            type="text"
+            placeholder="Proje adı"
+            value={projectName}
+            onChange={(event) => setProjectName(event.target.value)}
+          />
+
+          <input
+            type="text"
+            placeholder="Proje türü"
+            value={projectType}
+            onChange={(event) => setProjectType(event.target.value)}
+          />
+
+          <select
+            value={projectStatus}
+            onChange={(event) => setProjectStatus(event.target.value)}
+          >
+            <option>Aktif</option>
+            <option>Beklemede</option>
+            <option>Tamamlandı</option>
+          </select>
+
+          <button type="submit">Projeyi Kaydet</button>
+        </form>
+      )}
+
+      <div className="data-list">
+        {projects.length === 0 ? (
+          <p className="empty-state">Henüz proje kaydı bulunmuyor.</p>
+        ) : (
+          projects.map((project) => (
+            <div className="data-card" key={project.id}>
+              <div>
+                <h3>{project.name}</h3>
+                <p>{project.type}</p>
+                <small>
+                  {project.status} · {project.date}
+                </small>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => deleteProject(project.id)}
+              >
+                Sil
+              </button>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+
+  const renderResearch = () => (
+    <div className="module-page">
+      <div className="module-toolbar">
+        <button
+          type="button"
+          onClick={() => setShowResearchForm((value) => !value)}
+        >
+          {showResearchForm ? "Formu Kapat" : "+ Yeni Araştırma"}
+        </button>
+      </div>
+
+      {showResearchForm && (
+        <form className="data-form" onSubmit={createResearch}>
+          <input
+            type="text"
+            placeholder="Araştırma başlığı"
+            value={researchName}
+            onChange={(event) => setResearchName(event.target.value)}
+          />
+
+          <textarea
+            placeholder="Araştırma notu"
+            value={researchNote}
+            onChange={(event) => setResearchNote(event.target.value)}
+          />
+
+          <button type="submit">Araştırmayı Kaydet</button>
+        </form>
+      )}
+
+      <div className="data-list">
+        {researchItems.length === 0 ? (
+          <p className="empty-state">
+            Henüz araştırma kaydı bulunmuyor.
+          </p>
+        ) : (
+          researchItems.map((item) => (
+            <div className="data-card" key={item.id}>
+              <div>
+                <h3>{item.name}</h3>
+                <p>{item.note}</p>
+                <small>{item.date}</small>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => deleteResearch(item.id)}
+              >
+                Sil
+              </button>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+
+  const renderAI = () => (
+    <div className="module-page ai-module">
+      <div className="ai-chat">
+        {aiMessages.map((message) => (
+          <div
+            key={message.id}
+            className={`ai-message ${message.role}`}
+          >
+            <strong>
+              {message.role === "assistant"
+                ? "DDPro AI"
+                : "Sen"}
+            </strong>
+            <p>{message.text}</p>
+            <small>{message.date}</small>
+          </div>
+        ))}
+      </div>
+
+      <form className="ai-form" onSubmit={sendAiMessage}>
+        <textarea
+          placeholder="DDPro AI için mesajını yaz..."
+          value={aiInput}
+          onChange={(event) => setAiInput(event.target.value)}
+        />
+
+        <button type="submit">Gönder</button>
+      </form>
+    </div>
+  );
+
+  const renderOffers = () => (
+    <div className="module-page">
+      <div className="module-toolbar">
+        <button
+          type="button"
+          onClick={() => setShowOfferForm((value) => !value)}
+        >
+          {showOfferForm ? "Formu Kapat" : "+ Yeni Teklif"}
+        </button>
+      </div>
+
+      {showOfferForm && (
+        <form className="data-form" onSubmit={createOffer}>
+          <input
+            type="text"
+            placeholder="Teklif adı"
+            value={offerName}
+            onChange={(event) => setOfferName(event.target.value)}
+          />
+
+          <input
+            type="text"
+            placeholder="Teklif tutarı"
+            value={offerAmount}
+            onChange={(event) => setOfferAmount(event.target.value)}
+          />
+
+          <select
+            value={offerStatus}
+            onChange={(event) => setOfferStatus(event.target.value)}
+          >
+            <option>Hazırlanıyor</option>
+            <option>Gönderildi</option>
+            <option>Onaylandı</option>
+            <option>Reddedildi</option>
+          </select>
+
+          <button type="submit">Teklifi Kaydet</button>
+        </form>
+      )}
+
+      <div className="data-list">
+        {offers.length === 0 ? (
+          <p className="empty-state">Henüz teklif kaydı bulunmuyor.</p>
+        ) : (
+          offers.map((offer) => (
+            <div className="data-card" key={offer.id}>
+              <div>
+                <h3>{offer.name}</h3>
+                <p>{offer.amount}</p>
+                <small>
+                  {offer.status} · {offer.date}
+                </small>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => deleteOffer(offer.id)}
+              >
+                Sil
+              </button>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+
+  const renderSystems = () => (
+    <div className="module-page">
+      <div className="systems-grid">
+        {systemModules.map((system) => (
+          <div className="system-card" key={system.id}>
+            <h3>{system.title}</h3>
+            <p>{system.description}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="panel memory-panel">
+        <div className="panel-header">
+          <h2>Merkezi Hafıza</h2>
+
+          <button
+            type="button"
+            onClick={() => setShowMemoryForm((value) => !value)}
+          >
+            {showMemoryForm ? "Kapat" : "+ Yeni Kayıt"}
+          </button>
+        </div>
+
+        {showMemoryForm && (
+          <form className="data-form" onSubmit={createMemory}>
+            <input
+              type="text"
+              placeholder="Hafıza başlığı"
+              value={memoryTitle}
+              onChange={(event) => setMemoryTitle(event.target.value)}
+            />
+
+            <textarea
+              placeholder="Hafıza içeriği"
+              value={memoryContent}
+              onChange={(event) => setMemoryContent(event.target.value)}
+            />
+
+            <button type="submit">Hafızaya Kaydet</button>
+          </form>
+        )}
+
+        <div className="data-list">
+          {memoryItems.length === 0 ? (
+            <p className="empty-state">
+              Merkezi hafızada henüz kayıt bulunmuyor.
+            </p>
+          ) : (
+            memoryItems.map((item) => (
+              <div className="data-card" key={item.id}>
+                <div>
+                  <h3>{item.title}</h3>
+                  <p>{item.content}</p>
+                  <small>{item.date}</small>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => deleteMemory(item.id)}
+                >
+                  Sil
+                </button>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
+      <div className="panel">
+        <div className="panel-header">
+          <h2>Entegrasyonlar</h2>
+        </div>
+
+        <div className="data-list">
+          {integrations.map((item) => (
+            <div className="data-card" key={item.id}>
+              <div>
+                <h3>{item.name}</h3>
+                <p>{item.description}</p>
+                <small>Durum: {item.status}</small>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => toggleIntegration(item.id)}
+              >
+                {item.status === "Aktif" ? "Pasifleştir" : "Aktifleştir"}
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderModule = () => {
+    switch (activeModule) {
+      case "projects":
+        return renderProjects();
+
+      case "research":
+        return renderResearch();
+
+      case "ai":
+        return renderAI();
+
+      case "offers":
+        return renderOffers();
+
+      case "systems":
+        return renderSystems();
+
+      case "dashboard":
+      default:
+        return renderDashboard();
+    }
+  };
+
+  const currentModule =
+    modules.find((module) => module.id === activeModule) ||
+    modules[0];
+
+  return (
+    <div className="ddpro-app">
+      <header className="app-header">
+        <div className="brand-area">
+          <div className="brand-logo">DD</div>
+
+          <div className="brand-content">
+            <strong>DOĞRU DİZAYN PRO</strong>
+            <span>DDPro Dijital Yönetim Sistemi</span>
+          </div>
+        </div>
+
+        <div className="header-status">
+          <span className="status-dot"></span>
+          Sistem Aktif
+        </div>
+      </header>
+
+      <div className="app-layout">
+        <aside className="sidebar">
+          <div className="sidebar-title">
+            ANA MODÜLLER
+          </div>
+
+          <nav className="module-nav">
+            {modules.map((module) => (
+              <button
+                key={module.id}
+                type="button"
+                className={`module-button ${
+                  activeModule === module.id ? "active" : ""
+                }`}
+                onClick={() => setActiveModule(module.id)}
+              >
+                <span className="module-icon">
+                  {module.icon}
+                </span>
+
+                <span className="module-text">
+                  <strong>{module.title}</strong>
+                  <small>{module.short}</small>
+                </span>
+              </button>
+            ))}
+          </nav>
+
+          <div className="sidebar-footer">
+            <div className="sidebar-system">
+              <span className="status-dot"></span>
+              DDPro Core v1.0
+            </div>
+          </div>
+        </aside>
+
+        <main className="main-content">
+          <section className="content-header">
+            <div>
+              <h1>{currentModule.title}</h1>
+              <p>{currentModule.description}</p>
+            </div>
+          </section>
+
+          <section className="content-body">
+            {renderModule()}
+          </section>
+        </main>
+      </div>
+    </div>
+  );
 }
 
 export default App;
