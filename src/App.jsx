@@ -149,34 +149,64 @@ function App() {
   };
 
   const saveResearch = (nextResearch) => {
-    setResearchItems(nextResearch);
-    localStorage.setItem(
-      STORAGE_KEYS.research,
-      JSON.stringify(nextResearch)
-    );
+  setResearchItems(nextResearch);
+  localStorage.setItem(
+    STORAGE_KEYS.research,
+    JSON.stringify(nextResearch)
+  );
+};
+const saveOffers = (nextOffers) => {
+  setOffers(nextOffers);
+  localStorage.setItem(
+    STORAGE_KEYS.offers,
+    JSON.stringify(nextOffers)
+  );
+};
+
+const saveMemory = (nextMemory) => {
+  setMemory(nextMemory);
+  localStorage.setItem(
+    STORAGE_KEYS.memory,
+    JSON.stringify(nextMemory)
+  );
+};
+
+const saveSystemLogs = (nextLogs) => {
+  setSystemLogs(nextLogs);
+  localStorage.setItem(
+    STORAGE_KEYS.systemLogs,
+    JSON.stringify(nextLogs)
+  );
+};
+
+const saveIntegrations = (nextIntegrations) => {
+  setIntegrations(nextIntegrations);
+  localStorage.setItem(
+    STORAGE_KEYS.integrations,
+    JSON.stringify(nextIntegrations)
+  );
+};
+
+const createProject = (event) => {
+  event.preventDefault();
+
+  const name = projectName.trim();
+
+  if (!name) return;
+
+  const nextProject = {
+    id: Date.now(),
+    name,
+    status: "Aktif",
+    type: projectType.trim() || "Genel Proje",
   };
 
-  const createProject = (event) => {
-    event.preventDefault();
+  saveProjects([nextProject, ...projects]);
 
-    const name = projectName.trim();
-
-    if (!name) return;
-
-    const nextProject = {
-      id: Date.now(),
-      name,
-      status: "Aktif",
-      type: projectType.trim() || "Genel Proje",
-    };
-
-    saveProjects([nextProject, ...projects]);
-
-    setProjectName("");
-    setProjectType("");
-    setShowProjectForm(false);
-  };
-
+  setProjectName("");
+  setProjectType("");
+  setShowProjectForm(false);
+};
   const createResearch = (event) => {
     event.preventDefault();
 
