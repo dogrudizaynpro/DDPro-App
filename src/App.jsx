@@ -134,6 +134,7 @@ function App() {
     getStoredData(STORAGE_KEYS.offers)
   );
   const [offersLoading, setOffersLoading] = useState(true);
+  const [offersError, setOffersError] = useState("");
 
   const [memoryItems, setMemoryItems] = useState(() =>
     getStoredData(STORAGE_KEYS.memory)
@@ -248,11 +249,17 @@ function App() {
 
         if (!isMounted) return;
 
+        setOffersError("");
+
         if (Array.isArray(apiOffers) && apiOffers.length > 0) {
           setOffers(apiOffers);
         }
       } catch (error) {
         if (!isMounted) return;
+
+        setOffersError(
+          "Teklifler sunucudan yüklenemedi. Kayıtlı veriler gösteriliyor."
+        );
 
         addLog(
           `Teklifler yüklenemedi, localStorage verileri kullanıldı: ${
@@ -766,6 +773,10 @@ function App() {
       )}
 
       <div className="data-list">
+        {offersError && (
+          <p className="empty-state">{offersError}</p>
+        )}
+
         {offersLoading ? (
           <p className="empty-state">Teklifler yükleniyor...</p>
         ) : offers.length === 0 ? (
