@@ -3,6 +3,7 @@ import cors from "cors";
 import helmet from "helmet";
 import { notFound } from "./middleware/notFound.js";
 import { errorHandler } from "./middleware/errorHandler.js";
+import projectsRouter from "./routes/projects.routes.js";
 
 const app = express();
 
@@ -26,6 +27,12 @@ app.use(
 // Body parser
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// ============================================================
+// API ROUTES
+// ============================================================
+
+app.use("/api/projects", projectsRouter);
 
 // ============================================================
 // HEALTH CHECK ENDPOINT
