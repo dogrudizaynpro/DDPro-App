@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import "./styles.css";
+import { getOffers } from "./services/offers.service.js";
 
 const STORAGE_KEYS = {
   projects: "ddpro_projects_v1",
@@ -133,6 +134,9 @@ function App() {
     getStoredData(STORAGE_KEYS.offers)
   );
 
+  const [offersLoading, setOffersLoading] = useState(false);
+  const [offersError, setOffersError] = useState(null);
+
   const [memoryItems, setMemoryItems] = useState(() =>
     getStoredData(STORAGE_KEYS.memory)
   );
@@ -203,6 +207,36 @@ function App() {
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.offers, JSON.stringify(offers));
   }, [offers]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const fetchOffersFromApi = async () => {
+      setOffersLoading(true);
+      setOffersError(null);
+
+      try {
+        const apiOffers = await getOffers();
+
+        if (!cancelled) {
+          setOffers(apiOffers);
+          setOffersLoading(false);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.warn("API erişilemedi, localStorage verileri kullanılıyor:", error.message);
+          setOffersError("API erişilemedi. Yerel veriler gösteriliyor.");
+          setOffersLoading(false);
+        }
+      }
+    };
+
+    fetchOffersFromApi();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     localStorage.setItem(
@@ -699,6 +733,12 @@ function App() {
         </button>
       </div>
 
+      {offersError && (
+        <p className="empty-state" style={{ color: "#f59e0b" }}>
+          ⚠ {offersError}
+        </p>
+      )}
+
       {showOfferForm && (
         <form className="data-form" onSubmit={createOffer}>
           <input
@@ -730,7 +770,9 @@ function App() {
       )}
 
       <div className="data-list">
-        {offers.length === 0 ? (
+        {offersLoading ? (
+          <p className="empty-state">Teklifler yükleniyor…</p>
+        ) : offers.length === 0 ? (
           <p className="empty-state">Henüz teklif kaydı bulunmuyor.</p>
         ) : (
           offers.map((offer) => (
