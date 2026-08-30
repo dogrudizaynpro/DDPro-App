@@ -782,7 +782,9 @@ function App() {
         ) : (
           <>
             {offersError && (
-              <p className="empty-state">{offersError}</p>
+              <p className="status-message warning-message">
+                {offersError}
+              </p>
             )}
 
             {offers.map((offer) => (

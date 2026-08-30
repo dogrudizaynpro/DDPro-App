@@ -795,6 +795,21 @@ select {
   text-align: center;
 }
 
+.status-message {
+  width: 100%;
+  margin: 0;
+  padding: 14px 16px;
+  border-radius: 14px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.warning-message {
+  border: 1px solid rgba(245, 158, 11, 0.18);
+  background: rgba(245, 158, 11, 0.08);
+  color: #f4c16d;
+}
+
 /* =========================================================
    SYSTEMS
 ========================================================= */
