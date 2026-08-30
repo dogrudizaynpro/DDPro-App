@@ -241,7 +241,6 @@ function App() {
 
   useEffect(() => {
     let isMounted = true;
-    const storedOffers = offers;
 
     const loadOffers = async () => {
       try {
@@ -251,19 +250,9 @@ function App() {
 
         if (Array.isArray(apiOffers) && apiOffers.length > 0) {
           setOffers(apiOffers);
-        } else if (storedOffers.length > 0) {
-          setOffers((currentOffers) =>
-            currentOffers.length > 0 ? currentOffers : storedOffers
-          );
         }
       } catch (error) {
         if (!isMounted) return;
-
-        if (storedOffers.length > 0) {
-          setOffers((currentOffers) =>
-            currentOffers.length > 0 ? currentOffers : storedOffers
-          );
-        }
 
         addLog(
           `Teklifler yüklenemedi, localStorage verileri kullanıldı: ${
