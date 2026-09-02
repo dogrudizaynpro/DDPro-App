@@ -1,7 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { getProjects } from "./services/projects.service.js";
 import "./styles.css";
-import { getOffers } from "./services/offers.service.js";
+import {
+  createOffer as createOfferRequest,
+  deleteOffer as deleteOfferRequest,
+  getOffers,
+} from "./services/offers.service.js";
 import { getResearchItems } from "./services/research.service.js";
 
 const STORAGE_KEYS = {
@@ -499,7 +503,7 @@ function App() {
     }
   };
 
-  const createOffer = (event) => {
+  const createOffer = async (event) => {
     event.preventDefault();
 
     if (!offerName.trim()) return;
@@ -513,12 +517,30 @@ function App() {
       date: formatDate(),
     };
 
-    setOffers((currentOffers) => [
-      newOffer,
-      ...currentOffers,
-    ]);
+    setOffersError(null);
 
-    addLog(`Yeni teklif oluşturuldu: ${newOffer.name}`);
+    try {
+      const createdOffer = await createOfferRequest(newOffer);
+
+      setOffers((currentOffers) => [
+        createdOffer || newOffer,
+        ...currentOffers,
+      ]);
+
+      addLog(`Yeni teklif API üzerinden oluşturuldu: ${newOffer.name}`);
+    } catch (error) {
+      console.warn(
+        "Teklif API'ye kaydedilemedi, yerel kayıt oluşturuluyor:",
+        error.message
+      );
+
+      setOffers((currentOffers) => [
+        newOffer,
+        ...currentOffers,
+      ]);
+      setOffersError("Teklif API'ye kaydedilemedi. Yerel kayıt oluşturuldu.");
+      addLog(`Yeni teklif yerel olarak oluşturuldu: ${newOffer.name}`);
+    }
 
     setOfferName("");
     setOfferAmount("");
@@ -526,16 +548,34 @@ function App() {
     setShowOfferForm(false);
   };
 
-  const deleteOffer = (id) => {
+  const deleteOffer = async (id) => {
     const offer = offers.find((item) => item.id === id);
     offersTouchedRef.current = true;
 
-    setOffers((currentOffers) =>
-      currentOffers.filter((item) => item.id !== id)
-    );
+    try {
+      await deleteOfferRequest(id);
+      setOffersError(null);
+      setOffers((currentOffers) =>
+        currentOffers.filter((item) => item.id !== id)
+      );
 
-    if (offer) {
-      addLog(`Teklif silindi: ${offer.name}`);
+      if (offer) {
+        addLog(`Teklif API üzerinden silindi: ${offer.name}`);
+      }
+    } catch (error) {
+      console.warn("Teklif API üzerinden silinemedi:", error.message);
+
+      if (error.status === 404) {
+        setOffers((currentOffers) =>
+          currentOffers.filter((item) => item.id !== id)
+        );
+      }
+
+      setOffersError("Teklif silme işlemi API üzerinde tamamlanamadı.");
+
+      if (offer) {
+        addLog(`Teklif silme hatası: ${offer.name}`);
+      }
     }
   };
 

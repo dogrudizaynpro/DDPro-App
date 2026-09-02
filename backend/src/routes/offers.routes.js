@@ -6,7 +6,12 @@
 // ============================================================
 
 import express from "express";
-import { getOffers, getOfferById } from "../controllers/offers.controller.js";
+import {
+  createOffer,
+  deleteOffer,
+  getOfferById,
+  getOffers,
+} from "../controllers/offers.controller.js";
 
 const router = express.Router();
 
@@ -19,5 +24,11 @@ router.get("/", getOffers);
 
 // GET /:id - Get offer by ID
 router.get("/:id", getOfferById);
+
+// POST / - Create new offer
+router.post("/", createOffer);
+
+// DELETE /:id - Delete offer by ID
+router.delete("/:id", deleteOffer);
 
 export default router;
