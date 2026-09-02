@@ -411,8 +411,8 @@ function App() {
           setResearchItems(apiResearchItems);
           addLog("Araştırmalar API üzerinden yüklendi.");
         } else {
-          setResearchItems(localResearchItems);
-          addLog("Araştırmalar API boş döndü, yerel veriler kullanıldı.");
+          setResearchItems([]);
+          addLog("Araştırmalar API üzerinden yüklendi (kayıt bulunamadı).");
         }
       } catch (error) {
         if (!cancelled) {
@@ -480,8 +480,8 @@ function App() {
           setProjects(apiProjects);
           addLog("Projeler API üzerinden yüklendi.");
         } else {
-          setProjects(localProjects);
-          addLog("Projeler API boş döndü, yerel veriler kullanıldı.");
+          setProjects([]);
+          addLog("Projeler API üzerinden yüklendi (kayıt bulunamadı).");
         }
       } catch (error) {
         if (!cancelled) {

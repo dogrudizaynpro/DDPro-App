@@ -4,8 +4,35 @@
 // Centralized backend API configuration and utilities
 // ============================================================
 
+const normalizeBaseUrl = (value) => {
+  if (!value || typeof value !== "string") {
+    return "";
+  }
+
+  return value.trim().replace(/\/+$/, "");
+};
+
+const resolveApiBaseUrl = () => {
+  const configuredUrl = normalizeBaseUrl(import.meta.env.VITE_API_URL);
+
+  if (configuredUrl) {
+    return configuredUrl;
+  }
+
+  const host =
+    typeof window !== "undefined" ? window.location.hostname : "localhost";
+  const isLocalHost =
+    host === "localhost" || host === "127.0.0.1" || host === "::1";
+
+  if (isLocalHost) {
+    return "http://localhost:3001";
+  }
+
+  return "";
+};
+
 // API base URL - configurable for development/production
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3001";
+const API_BASE_URL = resolveApiBaseUrl();
 
 // ============================================================
 // FETCH WRAPPER
@@ -14,6 +41,12 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3001";
 
 export const fetchAPI = async (endpoint, options = {}) => {
   try {
+    if (!API_BASE_URL) {
+      throw new Error(
+        "Production API URL is not configured. Set VITE_API_URL for deployment."
+      );
+    }
+
     const url = `${API_BASE_URL}${endpoint}`;
 
     const response = await fetch(url, {

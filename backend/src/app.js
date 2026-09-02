@@ -9,6 +9,22 @@ import offersRouter from "./routes/offers.routes.js";
 
 const app = express();
 
+const DEFAULT_ALLOWED_ORIGINS = [
+  "http://localhost:3000",
+  "http://localhost:5173",
+  "http://localhost:5000",
+  "https://dogrudizaynpro.github.io",
+];
+
+const configuredOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(",")
+      .map((origin) => origin.trim().replace(/\/+$/, ""))
+      .filter(Boolean)
+  : [];
+
+const allowedOrigins =
+  configuredOrigins.length > 0 ? configuredOrigins : DEFAULT_ALLOWED_ORIGINS;
+
 // ============================================================
 // MIDDLEWARE
 // ============================================================
@@ -19,9 +35,15 @@ app.use(helmet());
 // CORS
 app.use(
   cors({
-    origin: process.env.ALLOWED_ORIGINS
-      ? process.env.ALLOWED_ORIGINS.split(",")
-      : ["http://localhost:3000", "http://localhost:5173"],
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      return callback(
+        new Error(`CORS blocked for origin: ${origin}`)
+      );
+    },
     credentials: true,
   })
 );
