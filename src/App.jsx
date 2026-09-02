@@ -154,6 +154,30 @@ const formatDate = () =>
     timeStyle: "short",
   });
 
+const getApiFailureReason = (error) => {
+  if (!error) {
+    return "Bilinmeyen hata";
+  }
+
+  if (error.code === "API_CONFIGURATION_ERROR") {
+    return error.message;
+  }
+
+  if (error.status === 503) {
+    return "Backend veritabanı yapılandırması eksik veya servis hazır değil (HTTP 503)";
+  }
+
+  if (error.status === 404) {
+    return "İstenen API rotası bulunamadı (HTTP 404)";
+  }
+
+  if (error.message) {
+    return error.message;
+  }
+
+  return "Bilinmeyen hata";
+};
+
 function App() {
   const [activeModule, setActiveModule] = useState("dashboard");
 
@@ -297,6 +321,7 @@ function App() {
           );
         }
       } catch (error) {
+        const reason = getApiFailureReason(error);
         if (!cancelled) {
           console.warn(
             "API erişilemedi, localStorage verileri kullanılıyor:",
@@ -311,10 +336,10 @@ function App() {
           setOffersFetchState("error");
           setOffersError(
             localOfferViewModels.length > 0
-              ? "Teklif API’sine ulaşılamadı. Son kaydedilen veriler gösteriliyor."
-              : "Teklif API’sine ulaşılamadı. Lütfen tekrar deneyin."
+              ? `Teklif API’sine ulaşılamadı (${reason}). Son kaydedilen veriler gösteriliyor.`
+              : `Teklif API’sine ulaşılamadı (${reason}). Lütfen tekrar deneyin.`
           );
-          addLog("Tekliflerde API bağlantı hatası, yerel veriler kullanıldı.");
+          addLog(`Tekliflerde API bağlantı hatası: ${reason}. Yerel veriler kullanıldı.`);
         }
       } finally {
         if (!cancelled) {
@@ -415,12 +440,13 @@ function App() {
           addLog("Araştırmalar API boş döndü, yerel veriler kullanıldı.");
         }
       } catch (error) {
+        const reason = getApiFailureReason(error);
         if (!cancelled) {
           setResearchItems(localResearchItems);
           setResearchError(
-            "API erişilemedi. Yerel araştırma verileri gösteriliyor."
+            `Araştırma API erişimi başarısız (${reason}). Yerel araştırma verileri gösteriliyor.`
           );
-          addLog("Araştırmalar API bağlantı hatası, yerel veriler kullanıldı.");
+          addLog(`Araştırmalar API bağlantı hatası: ${reason}. Yerel veriler kullanıldı.`);
         }
       } finally {
         if (!cancelled) {
@@ -484,9 +510,10 @@ function App() {
           addLog("Projeler API boş döndü, yerel veriler kullanıldı.");
         }
       } catch (error) {
+        const reason = getApiFailureReason(error);
         if (!cancelled) {
           setProjects(localProjects);
-          addLog("Projelerde API bağlantı hatası, yerel veriler kullanıldı.");
+          addLog(`Projelerde API bağlantı hatası: ${reason}. Yerel veriler kullanıldı.`);
         }
       } finally {
         if (!cancelled) {
