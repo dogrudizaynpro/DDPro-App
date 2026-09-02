@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { getProjects } from "./services/projects.service.js";
 import "./styles.css";
 import {
+  createOffer as createOfferRequest,
+  deleteOffer as deleteOfferRequest,
   getOfferById,
   getOffers,
   mapOfferToViewModel,
@@ -140,6 +142,12 @@ const getStoredData = (key, fallback = []) => {
 const createId = () =>
   `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 
+const isUuid = (value) =>
+  typeof value === "string" &&
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    value
+  );
+
 const formatDate = () =>
   new Date().toLocaleString("tr-TR", {
     dateStyle: "short",
@@ -252,9 +260,8 @@ function App() {
     let cancelled = false;
 
     const fetchOffersFromApi = async () => {
-      const localOffers = mapOffersToViewModel(
-        getStoredData(STORAGE_KEYS.offers)
-      );
+      const localOffers = getStoredData(STORAGE_KEYS.offers);
+      const localOfferViewModels = mapOffersToViewModel(localOffers);
       setOffersLoading(true);
       setOffersError(null);
       setOffersFetchState("loading");
@@ -277,7 +284,7 @@ function App() {
           setOffersFetchState("success");
           addLog("Teklifler API üzerinden yüklendi.");
         } else {
-          const localDrafts = localOffers.filter(
+          const localDrafts = localOfferViewModels.filter(
             (offer) => offer.source === "local"
           );
 
@@ -295,10 +302,15 @@ function App() {
             "API erişilemedi, localStorage verileri kullanılıyor:",
             error.message
           );
-          setOffers(localOffers);
+          setOffers(localOfferViewModels);
+          setSelectedOfferId((currentId) =>
+            localOfferViewModels.some((offer) => offer.id === currentId)
+              ? currentId
+              : localOfferViewModels[0]?.id || null
+          );
           setOffersFetchState("error");
           setOffersError(
-            localOffers.length > 0
+            localOfferViewModels.length > 0
               ? "Teklif API’sine ulaşılamadı. Son kaydedilen veriler gösteriliyor."
               : "Teklif API’sine ulaşılamadı. Lütfen tekrar deneyin."
           );
@@ -606,7 +618,7 @@ function App() {
     }
   };
 
-  const createOffer = (event) => {
+  const createOffer = async (event) => {
     event.preventDefault();
 
     if (!offerName.trim()) return;
@@ -617,17 +629,37 @@ function App() {
       title: offerName.trim(),
       amount: offerAmount.trim() || "Tutar belirtilmedi",
       status: offerStatus,
+      statusRaw: offerStatus,
       date: formatDate(),
       source: "local",
     });
 
-    setOffers((currentOffers) => [
-      newOffer,
-      ...currentOffers,
-    ]);
-    setSelectedOfferId(newOffer.id);
+    setOffersError(null);
 
-    addLog(`Yeni teklif oluşturuldu: ${newOffer.title}`);
+    try {
+      const createdOffer = await createOfferRequest(newOffer);
+      const nextOffer = createdOffer || newOffer;
+
+      setOffers((currentOffers) => [
+        nextOffer,
+        ...currentOffers,
+      ]);
+      setSelectedOfferId(nextOffer.id);
+      addLog(`Yeni teklif API üzerinden oluşturuldu: ${newOffer.title}`);
+    } catch (error) {
+      console.warn(
+        "Teklif API'ye kaydedilemedi, yerel kayıt oluşturuluyor:",
+        error.message
+      );
+
+      setOffers((currentOffers) => [
+        newOffer,
+        ...currentOffers,
+      ]);
+      setSelectedOfferId(newOffer.id);
+      setOffersError("Teklif API'ye kaydedilemedi. Yerel kayıt oluşturuldu.");
+      addLog(`Yeni teklif yerel olarak oluşturuldu: ${newOffer.title}`);
+    }
 
     setOfferName("");
     setOfferAmount("");
@@ -635,19 +667,65 @@ function App() {
     setShowOfferForm(false);
   };
 
-  const deleteOffer = (id) => {
+  const deleteOffer = async (id) => {
     const offer = offers.find((item) => item.id === id);
     offersTouchedRef.current = true;
 
-    setOffers((currentOffers) =>
-      currentOffers.filter((item) => item.id !== id)
-    );
-    if (selectedOfferId === id) {
-      setSelectedOfferId(null);
+    if (!isUuid(id)) {
+      setOffersError(null);
+      setOffers((currentOffers) =>
+        currentOffers.filter((item) => item.id !== id)
+      );
+      if (selectedOfferId === id) {
+        setSelectedOfferId(null);
+      }
+      setSelectedOfferDetail(null);
+
+      if (offer) {
+        addLog(`Yerel teklif silindi: ${offer.title || offer.name}`);
+      }
+
+      return;
     }
 
-    if (offer) {
-      addLog(`Teklif silindi: ${offer.title}`);
+    try {
+      await deleteOfferRequest(id);
+      setOffersError(null);
+      setOffers((currentOffers) =>
+        currentOffers.filter((item) => item.id !== id)
+      );
+      if (selectedOfferId === id) {
+        setSelectedOfferId(null);
+      }
+      setSelectedOfferDetail(null);
+
+      if (offer) {
+        addLog(`Teklif API üzerinden silindi: ${offer.title || offer.name}`);
+      }
+    } catch (error) {
+      console.warn("Teklif API üzerinden silinemedi:", error.message);
+
+      if (error.status === 404) {
+        setOffers((currentOffers) =>
+          currentOffers.filter((item) => item.id !== id)
+        );
+        if (selectedOfferId === id) {
+          setSelectedOfferId(null);
+        }
+        setSelectedOfferDetail(null);
+
+        if (offer) {
+          addLog(`Teklif yerelde temizlendi: ${offer.title || offer.name}`);
+        }
+
+        return;
+      }
+
+      setOffersError("Teklif silme işlemi API üzerinde tamamlanamadı.");
+
+      if (offer) {
+        addLog(`Teklif silme hatası: ${offer.title || offer.name}`);
+      }
     }
   };
 

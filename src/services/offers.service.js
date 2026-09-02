@@ -7,9 +7,18 @@
 
 import { fetchAPI } from "./api.js";
 
+const DEFAULT_OFFER_STATUS = "Hazırlanıyor";
+
+const CURRENCY_SYMBOLS = {
+  TRY: "₺",
+  EUR: "€",
+  USD: "$",
+  GBP: "£",
+};
+
 const STATUS_LABELS = {
-  draft: "Hazırlanıyor",
-  preparing: "Hazırlanıyor",
+  draft: DEFAULT_OFFER_STATUS,
+  preparing: DEFAULT_OFFER_STATUS,
   pending: "Beklemede",
   sent: "Gönderildi",
   submitted: "Gönderildi",
@@ -21,7 +30,7 @@ const STATUS_LABELS = {
 
 const toStatusLabel = (value) => {
   if (!value) {
-    return "Hazırlanıyor";
+    return DEFAULT_OFFER_STATUS;
   }
 
   const normalizedValue = String(value).trim();
@@ -30,33 +39,107 @@ const toStatusLabel = (value) => {
   return STATUS_LABELS[lookupKey] || normalizedValue;
 };
 
+const parseOfferAmount = (rawAmount) => {
+  if (typeof rawAmount === "number" && Number.isFinite(rawAmount)) {
+    return {
+      amount: rawAmount,
+      currency: null,
+    };
+  }
+
+  if (typeof rawAmount !== "string") {
+    return {
+      amount: null,
+      currency: null,
+    };
+  }
+
+  const trimmedAmount = rawAmount.trim();
+
+  if (!trimmedAmount) {
+    return {
+      amount: null,
+      currency: null,
+    };
+  }
+
+  let currency = null;
+
+  if (/₺|TL|TRY/i.test(trimmedAmount)) {
+    currency = "TRY";
+  } else if (/€|EUR/i.test(trimmedAmount)) {
+    currency = "EUR";
+  } else if (/\$|USD/i.test(trimmedAmount)) {
+    currency = "USD";
+  } else if (/£|GBP/i.test(trimmedAmount)) {
+    currency = "GBP";
+  }
+
+  const matchedNumber = trimmedAmount.match(/-?\d[\d.,]*/);
+
+  if (!matchedNumber) {
+    return {
+      amount: null,
+      currency,
+    };
+  }
+
+  let normalizedAmount = matchedNumber[0];
+
+  if (normalizedAmount.includes(".") && normalizedAmount.includes(",")) {
+    normalizedAmount = normalizedAmount.replace(/\./g, "").replace(",", ".");
+  } else if (normalizedAmount.includes(".")) {
+    const dotGroups = normalizedAmount.split(".");
+
+    if (
+      dotGroups.length > 1 &&
+      dotGroups.slice(1).every((group) => group.length === 3)
+    ) {
+      normalizedAmount = normalizedAmount.replace(/\./g, "");
+    }
+  } else if (normalizedAmount.includes(",")) {
+    normalizedAmount = normalizedAmount.replace(",", ".");
+  }
+
+  const amount = Number(normalizedAmount);
+
+  return {
+    amount: Number.isNaN(amount) ? null : amount,
+    currency,
+  };
+};
+
 const formatOfferAmount = (amount, currency) => {
   if (amount === null || amount === undefined || amount === "") {
     return "Tutar belirtilmedi";
   }
 
-  const numericAmount =
-    typeof amount === "number"
-      ? amount
-      : Number(String(amount).replace(",", "."));
+  const parsedAmount =
+    typeof amount === "number" && Number.isFinite(amount)
+      ? { amount, currency: null }
+      : parseOfferAmount(String(amount));
 
-  if (Number.isFinite(numericAmount)) {
-    if (currency) {
-      try {
-        return new Intl.NumberFormat("tr-TR", {
-          style: "currency",
-          currency,
-          maximumFractionDigits: 2,
-        }).format(numericAmount);
-      } catch {
-        return `${numericAmount.toLocaleString("tr-TR")} ${currency}`;
-      }
-    }
-
-    return numericAmount.toLocaleString("tr-TR");
+  if (parsedAmount.amount === null) {
+    return [amount, currency].filter(Boolean).join(" ");
   }
 
-  return [amount, currency].filter(Boolean).join(" ");
+  const resolvedCurrency =
+    String(currency || parsedAmount.currency || "").toUpperCase();
+
+  if (resolvedCurrency) {
+    try {
+      return new Intl.NumberFormat("tr-TR", {
+        style: "currency",
+        currency: resolvedCurrency,
+        maximumFractionDigits: 2,
+      }).format(parsedAmount.amount);
+    } catch {
+      const symbol = CURRENCY_SYMBOLS[resolvedCurrency] || resolvedCurrency;
+      return `${symbol}${parsedAmount.amount.toLocaleString("tr-TR")}`;
+    }
+  }
+
+  return parsedAmount.amount.toLocaleString("tr-TR");
 };
 
 const formatOfferDate = (value) => {
@@ -67,7 +150,7 @@ const formatOfferDate = (value) => {
   const date = new Date(value);
 
   if (Number.isNaN(date.getTime())) {
-    return value;
+    return String(value);
   }
 
   return date.toLocaleString("tr-TR", {
@@ -77,10 +160,15 @@ const formatOfferDate = (value) => {
 };
 
 export const mapOfferToViewModel = (offer = {}) => {
-  const title = offer.title || offer.name || "Adsız teklif";
+  const title =
+    typeof offer.title === "string" && offer.title.trim()
+      ? offer.title.trim()
+      : typeof offer.name === "string" && offer.name.trim()
+        ? offer.name.trim()
+        : "Adsız teklif";
   const amountValue =
     offer.amount ?? offer.amountValue ?? offer.totalAmount ?? "";
-  const currency = offer.currency || offer.currencyCode || "";
+  const currency = String(offer.currency || offer.currencyCode || "").toUpperCase();
   const createdAt = offer.created_at || offer.createdAt || offer.date || null;
   const updatedAt = offer.updated_at || offer.updatedAt || null;
   const source =
@@ -91,7 +179,7 @@ export const mapOfferToViewModel = (offer = {}) => {
     offer.updatedAt
       ? "api"
       : "local");
-  const statusRaw = offer.status || (source === "local" ? "Hazırlanıyor" : "");
+  const statusRaw = offer.status || (source === "local" ? DEFAULT_OFFER_STATUS : "");
 
   return {
     id: offer.id,
@@ -100,7 +188,9 @@ export const mapOfferToViewModel = (offer = {}) => {
     amount: amountValue,
     amountValue,
     amountDisplay:
-      offer.amountDisplay || formatOfferAmount(amountValue, currency),
+      typeof offer.amountDisplay === "string" && offer.amountDisplay.trim()
+        ? offer.amountDisplay
+        : formatOfferAmount(amountValue, currency),
     currency,
     status: toStatusLabel(statusRaw),
     statusRaw,
@@ -116,9 +206,42 @@ export const mapOfferToViewModel = (offer = {}) => {
 };
 
 export const mapOffersToViewModel = (offers = []) =>
-  offers
-    .filter(Boolean)
-    .map((offer) => mapOfferToViewModel(offer));
+  offers.filter(Boolean).map((offer) => mapOfferToViewModel(offer));
+
+const toOfferPayload = (offer) => {
+  const title =
+    typeof offer?.title === "string" && offer.title.trim()
+      ? offer.title.trim()
+      : typeof offer?.name === "string"
+        ? offer.name.trim()
+        : "";
+
+  if (!title) {
+    throw new Error("Offer name is required");
+  }
+
+  const amountSource =
+    typeof offer?.amountDisplay === "string" && offer.amountDisplay.trim()
+      ? offer.amountDisplay
+      : offer?.amount;
+  const { amount, currency } = parseOfferAmount(amountSource);
+
+  return {
+    title,
+    amount,
+    currency,
+    status:
+      typeof offer?.statusRaw === "string" && offer.statusRaw.trim()
+        ? offer.statusRaw.trim()
+        : typeof offer?.status === "string" && offer.status.trim()
+          ? offer.status.trim()
+          : DEFAULT_OFFER_STATUS,
+    project_id:
+      typeof offer?.projectId === "string" && offer.projectId.trim()
+        ? offer.projectId.trim()
+        : null,
+  };
+};
 
 // ============================================================
 // GET ALL OFFERS
@@ -151,12 +274,53 @@ export const getOfferById = async (id) => {
     const data = await fetchAPI(`/api/offers/${id}`);
     return data.data ? mapOfferToViewModel(data.data) : null;
   } catch (error) {
-    // Handle 404 errors gracefully
     if (error.status === 404) {
       console.warn(`Offer not found: ${id}`);
       return null;
     }
+
     console.error("Failed to fetch offer:", error.message);
+    throw error;
+  }
+};
+
+// ============================================================
+// CREATE OFFER
+// ============================================================
+
+export const createOffer = async (offer) => {
+  const payload = toOfferPayload(offer);
+
+  try {
+    const data = await fetchAPI("/api/offers", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+
+    return data.data ? mapOfferToViewModel(data.data) : null;
+  } catch (error) {
+    console.error("Failed to create offer:", error.message);
+    throw error;
+  }
+};
+
+// ============================================================
+// DELETE OFFER
+// ============================================================
+
+export const deleteOffer = async (id) => {
+  if (!id) {
+    throw new Error("Offer ID is required");
+  }
+
+  try {
+    const data = await fetchAPI(`/api/offers/${id}`, {
+      method: "DELETE",
+    });
+
+    return data.data ? mapOfferToViewModel(data.data) : null;
+  } catch (error) {
+    console.error("Failed to delete offer:", error.message);
     throw error;
   }
 };
