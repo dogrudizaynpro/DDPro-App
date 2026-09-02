@@ -8,25 +8,35 @@
 import { fetchAPI } from "./api.js";
 
 const DEFAULT_OFFER_STATUS = "Hazırlanıyor";
-const CURRENCY_SYMBOL_BY_CODE = {
+
+const CURRENCY_SYMBOLS = {
   TRY: "₺",
   EUR: "€",
   USD: "$",
   GBP: "£",
 };
 
-const formatOfferDate = (value) => {
+const STATUS_LABELS = {
+  draft: "Hazırlanıyor",
+  preparing: "Hazırlanıyor",
+  pending: "Beklemede",
+  sent: "Gönderildi",
+  submitted: "Gönderildi",
+  approved: "Onaylandı",
+  accepted: "Onaylandı",
+  rejected: "Reddedildi",
+  cancelled: "İptal",
+};
+
+const toDisplayDate = (value) => {
   if (!value) {
-    return new Date().toLocaleString("tr-TR", {
-      dateStyle: "short",
-      timeStyle: "short",
-    });
+    return "Tarih belirtilmedi";
   }
 
   const date = new Date(value);
 
   if (Number.isNaN(date.getTime())) {
-    return value;
+    return String(value);
   }
 
   return date.toLocaleString("tr-TR", {
@@ -35,55 +45,61 @@ const formatOfferDate = (value) => {
   });
 };
 
-const formatOfferAmount = (amount, currency) => {
-  if (amount === null || amount === undefined || amount === "") {
+const toStatusLabel = (value) => {
+  if (!value) {
+    return DEFAULT_OFFER_STATUS;
+  }
+
+  const normalizedValue = String(value).trim();
+  const lookupKey = normalizedValue.toLowerCase();
+
+  return STATUS_LABELS[lookupKey] || normalizedValue;
+};
+
+const toAmountDisplay = (rawAmount, rawCurrency) => {
+  if (rawAmount === undefined || rawAmount === null || rawAmount === "") {
     return "Tutar belirtilmedi";
   }
 
-  const numericAmount = Number(amount);
+  const amountAsNumber = Number(rawAmount);
+  const currency = String(rawCurrency || "").toUpperCase();
 
-  if (Number.isNaN(numericAmount)) {
-    return "Tutar belirtilmedi";
+  if (Number.isNaN(amountAsNumber)) {
+    return String(rawAmount);
   }
 
-  const normalizedCurrency =
-    typeof currency === "string" ? currency.trim().toUpperCase() : "";
-
-  if (normalizedCurrency) {
+  if (currency) {
     try {
       return new Intl.NumberFormat("tr-TR", {
         style: "currency",
-        currency: normalizedCurrency,
+        currency,
         maximumFractionDigits: 2,
-      }).format(numericAmount);
+      }).format(amountAsNumber);
     } catch {
-      const symbol = CURRENCY_SYMBOL_BY_CODE[normalizedCurrency];
-
-      if (symbol) {
-        return `${symbol}${numericAmount.toLocaleString("tr-TR")}`;
-      }
+      const symbol = CURRENCY_SYMBOLS[currency] || currency;
+      return `${symbol}${amountAsNumber.toLocaleString("tr-TR")}`;
     }
   }
 
-  return numericAmount.toLocaleString("tr-TR");
+  return amountAsNumber.toLocaleString("tr-TR");
 };
 
-const parseOfferAmount = (amount) => {
-  if (typeof amount === "number" && Number.isFinite(amount)) {
+const parseOfferAmount = (rawAmount) => {
+  if (typeof rawAmount === "number" && Number.isFinite(rawAmount)) {
     return {
-      amount,
+      amount: rawAmount,
       currency: null,
     };
   }
 
-  if (typeof amount !== "string") {
+  if (typeof rawAmount !== "string") {
     return {
       amount: null,
       currency: null,
     };
   }
 
-  const trimmedAmount = amount.trim();
+  const trimmedAmount = rawAmount.trim();
 
   if (!trimmedAmount) {
     return {
@@ -130,57 +146,89 @@ const parseOfferAmount = (amount) => {
     normalizedAmount = normalizedAmount.replace(",", ".");
   }
 
-  const parsedAmount = Number(normalizedAmount);
+  const amount = Number(normalizedAmount);
 
   return {
-    amount: Number.isNaN(parsedAmount) ? null : parsedAmount,
+    amount: Number.isNaN(amount) ? null : amount,
     currency,
   };
 };
 
-const normalizeOfferRecord = (offer) => {
+const normalizeOffer = (offer) => {
   if (!offer || typeof offer !== "object") {
     return null;
   }
 
+  const title =
+    typeof offer.title === "string" && offer.title.trim()
+      ? offer.title.trim()
+      : typeof offer.name === "string" && offer.name.trim()
+        ? offer.name.trim()
+        : "Adsız Teklif";
+
+  const createdAt = offer.created_at || offer.createdAt || offer.date || null;
+  const updatedAt = offer.updated_at || offer.updatedAt || null;
+  const amountValue =
+    offer.amount ?? offer.totalAmount ?? offer.amountDisplay ?? null;
+  const amountDisplay =
+    typeof amountValue === "string" &&
+    amountValue.trim() &&
+    !offer.currency &&
+    Number.isNaN(Number(amountValue))
+      ? amountValue.trim()
+      : toAmountDisplay(amountValue, offer.currency);
+  const statusRaw = offer.status || DEFAULT_OFFER_STATUS;
+
   return {
     id: offer.id,
-    name:
-      typeof offer.title === "string" && offer.title.trim()
-        ? offer.title.trim()
-        : typeof offer.name === "string" && offer.name.trim()
-          ? offer.name.trim()
-          : "İsimsiz teklif",
-    amount:
-      typeof offer.amount === "string" && offer.amount.trim() && !offer.currency
-        ? offer.amount.trim()
-        : formatOfferAmount(offer.amount, offer.currency),
-    status:
-      typeof offer.status === "string" && offer.status.trim()
-        ? offer.status.trim()
-        : DEFAULT_OFFER_STATUS,
-    date: formatOfferDate(offer.created_at || offer.updated_at || offer.date),
+    title,
+    name: title,
+    amountDisplay,
+    amount: amountDisplay,
+    date: toDisplayDate(createdAt),
+    createdAt,
+    updatedAt,
+    projectId: offer.project_id || offer.projectId || null,
+    status: toStatusLabel(statusRaw),
+    statusRaw: String(statusRaw),
+    notes: offer.notes || "",
+    source: offer.created_at ? "api" : offer.source || "local",
+    raw: offer,
   };
 };
 
 const toOfferPayload = (offer) => {
-  const normalizedName =
-    typeof offer?.name === "string" ? offer.name.trim() : "";
+  const title =
+    typeof offer?.title === "string" && offer.title.trim()
+      ? offer.title.trim()
+      : typeof offer?.name === "string"
+        ? offer.name.trim()
+        : "";
 
-  if (!normalizedName) {
+  if (!title) {
     throw new Error("Offer name is required");
   }
 
-  const { amount, currency } = parseOfferAmount(offer.amount);
+  const amountSource =
+    typeof offer?.amountDisplay === "string" && offer.amountDisplay.trim()
+      ? offer.amountDisplay
+      : offer?.amount;
+  const { amount, currency } = parseOfferAmount(amountSource);
 
   return {
-    title: normalizedName,
+    title,
     amount,
     currency,
     status:
-      typeof offer?.status === "string" && offer.status.trim()
-        ? offer.status.trim()
-        : DEFAULT_OFFER_STATUS,
+      typeof offer?.statusRaw === "string" && offer.statusRaw.trim()
+        ? offer.statusRaw.trim()
+        : typeof offer?.status === "string" && offer.status.trim()
+          ? offer.status.trim()
+          : DEFAULT_OFFER_STATUS,
+    project_id:
+      typeof offer?.projectId === "string" && offer.projectId.trim()
+        ? offer.projectId.trim()
+        : null,
   };
 };
 
@@ -193,9 +241,8 @@ const toOfferPayload = (offer) => {
 export const getOffers = async () => {
   try {
     const data = await fetchAPI("/api/offers");
-    return Array.isArray(data.data)
-      ? data.data.map(normalizeOfferRecord).filter(Boolean)
-      : [];
+    const offers = Array.isArray(data?.data) ? data.data : [];
+    return offers.map(normalizeOffer).filter(Boolean);
   } catch (error) {
     console.error("Failed to fetch offers:", error.message);
     throw error;
@@ -215,13 +262,13 @@ export const getOfferById = async (id) => {
 
   try {
     const data = await fetchAPI(`/api/offers/${id}`);
-    return normalizeOfferRecord(data.data);
+    return normalizeOffer(data.data);
   } catch (error) {
-    // Handle 404 errors gracefully
     if (error.status === 404) {
       console.warn(`Offer not found: ${id}`);
       return null;
     }
+
     console.error("Failed to fetch offer:", error.message);
     throw error;
   }
@@ -240,7 +287,7 @@ export const createOffer = async (offer) => {
       body: JSON.stringify(payload),
     });
 
-    return normalizeOfferRecord(data.data);
+    return normalizeOffer(data.data);
   } catch (error) {
     console.error("Failed to create offer:", error.message);
     throw error;
@@ -261,7 +308,7 @@ export const deleteOffer = async (id) => {
       method: "DELETE",
     });
 
-    return normalizeOfferRecord(data.data);
+    return normalizeOffer(data.data);
   } catch (error) {
     console.error("Failed to delete offer:", error.message);
     throw error;
