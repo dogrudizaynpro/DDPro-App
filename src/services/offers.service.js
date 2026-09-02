@@ -7,13 +7,6 @@
 
 import { fetchAPI } from "./api.js";
 
-const CURRENCY_SYMBOLS = {
-  TRY: "₺",
-  EUR: "€",
-  USD: "$",
-  GBP: "£",
-};
-
 const STATUS_LABELS = {
   draft: "Hazırlanıyor",
   preparing: "Hazırlanıyor",
@@ -26,70 +19,106 @@ const STATUS_LABELS = {
   cancelled: "İptal",
 };
 
-const toDisplayDate = (value) => {
-  if (!value) return "Tarih belirtilmedi";
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return String(value);
-
-  return date.toLocaleDateString("tr-TR", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
-};
-
 const toStatusLabel = (value) => {
-  if (!value) return "Belirtilmedi";
+  if (!value) {
+    return "Hazırlanıyor";
+  }
 
   const normalizedValue = String(value).trim();
   const lookupKey = normalizedValue.toLowerCase();
+
   return STATUS_LABELS[lookupKey] || normalizedValue;
 };
 
-const toAmountDisplay = (rawAmount, rawCurrency) => {
-  if (rawAmount === undefined || rawAmount === null || rawAmount === "") {
+const formatOfferAmount = (amount, currency) => {
+  if (amount === null || amount === undefined || amount === "") {
     return "Tutar belirtilmedi";
   }
 
-  const amountAsNumber = Number(rawAmount);
-  const currency = String(rawCurrency || "TRY").toUpperCase();
+  const numericAmount =
+    typeof amount === "number"
+      ? amount
+      : Number(String(amount).replace(",", "."));
 
-  if (Number.isNaN(amountAsNumber)) {
-    return String(rawAmount);
+  if (Number.isFinite(numericAmount)) {
+    if (currency) {
+      try {
+        return new Intl.NumberFormat("tr-TR", {
+          style: "currency",
+          currency,
+          maximumFractionDigits: 2,
+        }).format(numericAmount);
+      } catch {
+        return `${numericAmount.toLocaleString("tr-TR")} ${currency}`;
+      }
+    }
+
+    return numericAmount.toLocaleString("tr-TR");
   }
 
-  const symbol = CURRENCY_SYMBOLS[currency] || currency;
-  return `${amountAsNumber.toLocaleString("tr-TR")} ${symbol}`;
+  return [amount, currency].filter(Boolean).join(" ");
 };
 
-const normalizeOffer = (offer) => {
-  if (!offer || typeof offer !== "object") return null;
+const formatOfferDate = (value) => {
+  if (!value) {
+    return "Tarih belirtilmedi";
+  }
 
-  const title = offer.title || offer.name || "Adsız Teklif";
-  const amountDisplay = toAmountDisplay(
-    offer.amount ?? offer.totalAmount ?? offer.amountDisplay,
-    offer.currency
-  );
-  const createdDate = offer.created_at || offer.createdAt || offer.date;
-  const updatedDate = offer.updated_at || offer.updatedAt;
-  const statusRaw = offer.status || "Belirtilmedi";
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return date.toLocaleString("tr-TR", {
+    dateStyle: "short",
+    timeStyle: "short",
+  });
+};
+
+export const mapOfferToViewModel = (offer = {}) => {
+  const title = offer.title || offer.name || "Adsız teklif";
+  const amountValue =
+    offer.amount ?? offer.amountValue ?? offer.totalAmount ?? "";
+  const currency = offer.currency || offer.currencyCode || "";
+  const createdAt = offer.created_at || offer.createdAt || offer.date || null;
+  const updatedAt = offer.updated_at || offer.updatedAt || null;
+  const source =
+    offer.source ||
+    (offer.created_at ||
+    offer.createdAt ||
+    offer.updated_at ||
+    offer.updatedAt
+      ? "api"
+      : "local");
+  const statusRaw = offer.status || (source === "local" ? "Hazırlanıyor" : "");
 
   return {
     id: offer.id,
     title,
-    amountDisplay,
-    date: toDisplayDate(createdDate),
-    createdAt: createdDate || null,
-    updatedAt: updatedDate || null,
-    projectId: offer.project_id || offer.projectId || null,
+    name: title,
+    amount: amountValue,
+    amountValue,
+    amountDisplay:
+      offer.amountDisplay || formatOfferAmount(amountValue, currency),
+    currency,
     status: toStatusLabel(statusRaw),
-    statusRaw: String(statusRaw),
+    statusRaw,
+    date:
+      offer.date && !createdAt ? offer.date : formatOfferDate(createdAt),
+    createdAt,
+    updatedAt,
+    projectId: offer.project_id || offer.projectId || null,
     notes: offer.notes || "",
-    source: offer.created_at ? "api" : "local",
+    source,
     raw: offer,
   };
 };
+
+export const mapOffersToViewModel = (offers = []) =>
+  offers
+    .filter(Boolean)
+    .map((offer) => mapOfferToViewModel(offer));
 
 // ============================================================
 // GET ALL OFFERS
@@ -100,8 +129,7 @@ const normalizeOffer = (offer) => {
 export const getOffers = async () => {
   try {
     const data = await fetchAPI("/api/offers");
-    const offers = Array.isArray(data?.data) ? data.data : [];
-    return offers.map(normalizeOffer).filter(Boolean);
+    return mapOffersToViewModel(data.data || []);
   } catch (error) {
     console.error("Failed to fetch offers:", error.message);
     throw error;
@@ -121,7 +149,7 @@ export const getOfferById = async (id) => {
 
   try {
     const data = await fetchAPI(`/api/offers/${id}`);
-    return normalizeOffer(data.data);
+    return data.data ? mapOfferToViewModel(data.data) : null;
   } catch (error) {
     // Handle 404 errors gracefully
     if (error.status === 404) {

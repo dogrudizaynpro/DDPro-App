@@ -1,7 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { getProjects } from "./services/projects.service.js";
 import "./styles.css";
-import { getOfferById, getOffers } from "./services/offers.service.js";
+import {
+  getOfferById,
+  getOffers,
+  mapOfferToViewModel,
+  mapOffersToViewModel,
+} from "./services/offers.service.js";
 import { getResearchItems } from "./services/research.service.js";
 
 const STORAGE_KEYS = {
@@ -103,6 +108,26 @@ const systemModules = [
   },
 ];
 
+const OFFER_STATUS_TONES = {
+  Hazırlanıyor: "pending",
+  Gönderildi: "info",
+  Onaylandı: "success",
+  Reddedildi: "danger",
+};
+
+const getOfferStatusTone = (status) =>
+  OFFER_STATUS_TONES[status] || "neutral";
+
+const mergeOffers = (apiOffers, storedOffers) => {
+  const storedViewModels = mapOffersToViewModel(storedOffers);
+  const apiIds = new Set(apiOffers.map((offer) => offer.id));
+  const localOnlyOffers = storedViewModels.filter(
+    (offer) => offer.source === "local" && !apiIds.has(offer.id)
+  );
+
+  return [...apiOffers, ...localOnlyOffers];
+};
+
 const getStoredData = (key, fallback = []) => {
   try {
     const value = localStorage.getItem(key);
@@ -137,16 +162,17 @@ function App() {
   const [researchError, setResearchError] = useState(null);
 
   const [offers, setOffers] = useState(() =>
-    getStoredData(STORAGE_KEYS.offers)
+    mapOffersToViewModel(getStoredData(STORAGE_KEYS.offers))
   );
 
   const [offersLoading, setOffersLoading] = useState(true);
   const [offersError, setOffersError] = useState(null);
-  const [offersRequestId, setOffersRequestId] = useState(0);
+  const [offersFetchState, setOffersFetchState] = useState("loading");
+  const [offersReloadKey, setOffersReloadKey] = useState(0);
   const [selectedOfferId, setSelectedOfferId] = useState(null);
-  const [selectedOfferDetails, setSelectedOfferDetails] = useState(null);
-  const [offerDetailsLoading, setOfferDetailsLoading] = useState(false);
-  const [offerDetailsError, setOfferDetailsError] = useState(null);
+  const [selectedOfferDetail, setSelectedOfferDetail] = useState(null);
+  const [offerDetailLoading, setOfferDetailLoading] = useState(false);
+  const [offerDetailError, setOfferDetailError] = useState(null);
   const projectsTouchedRef = useRef(false);
   const researchTouchedRef = useRef(false);
   const offersTouchedRef = useRef(false);
@@ -226,8 +252,12 @@ function App() {
     let cancelled = false;
 
     const fetchOffersFromApi = async () => {
+      const localOffers = mapOffersToViewModel(
+        getStoredData(STORAGE_KEYS.offers)
+      );
       setOffersLoading(true);
       setOffersError(null);
+      setOffersFetchState("loading");
 
       try {
         const apiOffers = await getOffers();
@@ -238,26 +268,41 @@ function App() {
           addLog(
             "Tekliflerde yerel değişiklik algılandı, API yanıtı üzerine yazmadı."
           );
+          setOffersFetchState(apiOffers.length > 0 ? "success" : "empty");
           return;
         }
 
-        setOffers(apiOffers || []);
-        setSelectedOfferId((currentId) =>
-          apiOffers.some((offer) => offer.id === currentId)
-            ? currentId
-            : apiOffers[0]?.id || null
-        );
-        addLog(
-          apiOffers.length > 0
-            ? "Teklifler API üzerinden yüklendi."
-            : "Teklifler API boş döndü."
-        );
+        if (apiOffers && apiOffers.length > 0) {
+          setOffers(mergeOffers(apiOffers, localOffers));
+          setOffersFetchState("success");
+          addLog("Teklifler API üzerinden yüklendi.");
+        } else {
+          const localDrafts = localOffers.filter(
+            (offer) => offer.source === "local"
+          );
+
+          setOffers(localDrafts);
+          setOffersFetchState("empty");
+          addLog(
+            localDrafts.length > 0
+              ? "Teklif API boş döndü, yerel taslaklar korundu."
+              : "Teklif API boş döndü."
+          );
+        }
       } catch (error) {
         if (!cancelled) {
-          setOffersError(
-            "Teklif verilerine erişilemedi. Lütfen bağlantını kontrol edip tekrar dene."
+          console.warn(
+            "API erişilemedi, localStorage verileri kullanılıyor:",
+            error.message
           );
-          addLog("Tekliflerde API bağlantı hatası oluştu.");
+          setOffers(localOffers);
+          setOffersFetchState("error");
+          setOffersError(
+            localOffers.length > 0
+              ? "Teklif API’sine ulaşılamadı. Son kaydedilen veriler gösteriliyor."
+              : "Teklif API’sine ulaşılamadı. Lütfen tekrar deneyin."
+          );
+          addLog("Tekliflerde API bağlantı hatası, yerel veriler kullanıldı.");
         }
       } finally {
         if (!cancelled) {
@@ -271,57 +316,64 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, [offersRequestId]);
-
-  const selectedOffer = useMemo(
-    () => offers.find((offer) => offer.id === selectedOfferId) || null,
-    [offers, selectedOfferId]
-  );
+  }, [offersReloadKey]);
 
   useEffect(() => {
+    if (offers.length === 0) {
+      setSelectedOfferId(null);
+      setSelectedOfferDetail(null);
+      setOfferDetailError(null);
+      return;
+    }
+
+    if (!offers.some((offer) => offer.id === selectedOfferId)) {
+      setSelectedOfferId(offers[0].id);
+    }
+  }, [offers, selectedOfferId]);
+
+  useEffect(() => {
+    const selectedOffer = offers.find((offer) => offer.id === selectedOfferId);
+
+    if (!selectedOffer) {
+      setSelectedOfferDetail(null);
+      setOfferDetailError(null);
+      setOfferDetailLoading(false);
+      return;
+    }
+
+    if (selectedOffer.source !== "api") {
+      setSelectedOfferDetail(selectedOffer);
+      setOfferDetailError(null);
+      setOfferDetailLoading(false);
+      return;
+    }
+
     let cancelled = false;
+    setOfferDetailLoading(true);
+    setOfferDetailError(null);
 
-    const fetchOfferDetails = async () => {
-      if (!selectedOfferId) {
-        setSelectedOfferDetails(null);
-        setOfferDetailsError(null);
-        return;
-      }
-
-      if (!selectedOffer || selectedOffer.source !== "api") {
-        setSelectedOfferDetails(selectedOffer || null);
-        setOfferDetailsError(null);
-        return;
-      }
-
-      setOfferDetailsLoading(true);
-      setOfferDetailsError(null);
-
-      try {
-        const offerDetails = await getOfferById(selectedOfferId);
+    getOfferById(selectedOfferId)
+      .then((offer) => {
         if (!cancelled) {
-          setSelectedOfferDetails(offerDetails);
+          setSelectedOfferDetail(offer || selectedOffer);
         }
-      } catch (error) {
+      })
+      .catch(() => {
         if (!cancelled) {
-          setOfferDetailsError(
-            "Teklif detayı yüklenemedi. Lütfen tekrar deneyin."
-          );
-          setSelectedOfferDetails(selectedOffer);
+          setSelectedOfferDetail(selectedOffer);
+          setOfferDetailError("Teklif detayları şu anda alınamadı.");
         }
-      } finally {
+      })
+      .finally(() => {
         if (!cancelled) {
-          setOfferDetailsLoading(false);
+          setOfferDetailLoading(false);
         }
-      }
-    };
-
-    fetchOfferDetails();
+      });
 
     return () => {
       cancelled = true;
     };
-  }, [selectedOfferId, selectedOffer]);
+  }, [offers, selectedOfferId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -560,15 +612,14 @@ function App() {
     if (!offerName.trim()) return;
     offersTouchedRef.current = true;
 
-    const newOffer = {
+    const newOffer = mapOfferToViewModel({
       id: createId(),
       title: offerName.trim(),
-      amountDisplay: offerAmount.trim() || "Tutar belirtilmedi",
+      amount: offerAmount.trim() || "Tutar belirtilmedi",
       status: offerStatus,
       date: formatDate(),
-      projectId: null,
       source: "local",
-    };
+    });
 
     setOffers((currentOffers) => [
       newOffer,
@@ -576,7 +627,7 @@ function App() {
     ]);
     setSelectedOfferId(newOffer.id);
 
-    addLog(`Yeni teklif oluşturuldu: ${newOffer.name}`);
+    addLog(`Yeni teklif oluşturuldu: ${newOffer.title}`);
 
     setOfferName("");
     setOfferAmount("");
@@ -591,12 +642,12 @@ function App() {
     setOffers((currentOffers) =>
       currentOffers.filter((item) => item.id !== id)
     );
+    if (selectedOfferId === id) {
+      setSelectedOfferId(null);
+    }
 
     if (offer) {
-      addLog(`Teklif silindi: ${offer.title || offer.name}`);
-      if (selectedOfferId === id) {
-        setSelectedOfferId(null);
-      }
+      addLog(`Teklif silindi: ${offer.title}`);
     }
   };
 
@@ -927,22 +978,45 @@ function App() {
     <div className="module-page">
       <div className="module-toolbar">
         <div className="offers-toolbar-actions">
+          <span className={`offers-status-pill ${offersFetchState}`}>
+            {offersFetchState === "loading" && "API yükleniyor"}
+            {offersFetchState === "success" && "API bağlı"}
+            {offersFetchState === "empty" && "API boş veri döndü"}
+            {offersFetchState === "error" && "API bağlantı hatası"}
+          </span>
+
+          <button
+            type="button"
+            className="secondary-button"
+            disabled={offersLoading}
+            onClick={() => setOffersReloadKey((value) => value + 1)}
+          >
+            {offersLoading ? "Yenileniyor..." : "Yenile"}
+          </button>
+
           <button
             type="button"
             onClick={() => setShowOfferForm((value) => !value)}
           >
             {showOfferForm ? "Formu Kapat" : "+ Yeni Teklif"}
           </button>
-          <button
-            type="button"
-            className="secondary-button"
-            onClick={() => setOffersRequestId((current) => current + 1)}
-            disabled={offersLoading}
-          >
-            {offersLoading ? "Yenileniyor..." : "Tekrar Dene"}
-          </button>
         </div>
       </div>
+
+      {offersError && (
+        <p className="status-banner warning">
+          ⚠ {offersError}
+        </p>
+      )}
+
+      {!offersError && offersFetchState === "empty" && (
+        <p className="status-banner info">
+          ℹ API üzerinde henüz teklif bulunmuyor
+          {offers.some((offer) => offer.source === "local")
+            ? ", kayıtlı yerel taslaklar listeleniyor."
+            : "."}
+        </p>
+      )}
 
       {showOfferForm && (
         <form className="data-form" onSubmit={createOffer}>
@@ -971,133 +1045,191 @@ function App() {
           </select>
 
           <button type="submit">Teklifi Kaydet</button>
+
+          <p className="form-hint">
+            Yeni kayıtlar bu sürümde yerel taslak olarak eklenir.
+          </p>
         </form>
       )}
 
-      <div className="offers-layout">
-        <div className="offers-list">
-          {offersError && offers.length > 0 && (
-            <div className="offers-inline-error">
-              <p>⚠ {offersError}</p>
-            </div>
-          )}
-
-          {offersLoading ? (
-            <div className="offers-skeleton-list">
-              {[1, 2, 3].map((item) => (
-                <div className="offer-card offer-card-skeleton" key={item}>
-                  <span></span>
-                  <span></span>
-                  <span></span>
-                </div>
-              ))}
-            </div>
-          ) : offersError && offers.length === 0 ? (
-            <div className="offers-error-state">
-              <h3>Teklifler yüklenemedi</h3>
-              <p>{offersError}</p>
-              <button
-                type="button"
-                onClick={() => setOffersRequestId((current) => current + 1)}
-              >
-                Tekrar Dene
-              </button>
-            </div>
-          ) : offers.length === 0 ? (
-            <div className="offers-empty-state">
-              <h3>Henüz teklif bulunmuyor</h3>
-              <p>API şu an boş veri döndürüyor. İlk teklifi ekleyebilirsiniz.</p>
-            </div>
-          ) : (
-            offers.map((offer) => (
-              <button
-                type="button"
-                className={`offer-card ${
-                  selectedOfferId === offer.id ? "active" : ""
-                }`}
-                key={offer.id}
-                onClick={() => setSelectedOfferId(offer.id)}
-              >
-                <div className="offer-card-top">
-                  <h3>{offer.title || offer.name}</h3>
-                  <span className="offer-status-chip">
-                    {offer.status}
-                  </span>
-                </div>
-                <p>{offer.amountDisplay || offer.amount}</p>
-                <small>
-                  {offer.date}
-                  {offer.projectId ? ` · Proje: ${offer.projectId}` : ""}
-                </small>
-              </button>
-            ))
-          )}
+      <div className="offers-summary-grid">
+        <div className="offer-summary-card">
+          <span>Toplam Teklif</span>
+          <strong>{offers.length}</strong>
         </div>
 
-        <div className="offer-detail-panel">
-          {!selectedOffer ? (
-            <p className="empty-state">
-              Listeden bir teklif seçerek detaylarını görüntüleyin.
-            </p>
-          ) : offerDetailsLoading ? (
-            <p className="empty-state">Teklif detayı yükleniyor…</p>
-          ) : offerDetailsError ? (
-            <p className="empty-state" style={{ color: "#f59e0b" }}>
-              ⚠ {offerDetailsError}
-            </p>
-          ) : (
-            <div className="offer-detail-content">
-              <div className="offer-detail-header">
-                <h3>
-                  {selectedOfferDetails?.title ||
-                    selectedOffer.title ||
-                    selectedOffer.name}
-                </h3>
-                <span className="offer-status-chip">
-                  {selectedOfferDetails?.status || selectedOffer.status}
-                </span>
+        <div className="offer-summary-card">
+          <span>API Kayıtları</span>
+          <strong>
+            {offers.filter((offer) => offer.source === "api").length}
+          </strong>
+        </div>
+
+        <div className="offer-summary-card">
+          <span>Onaylanan</span>
+          <strong>
+            {offers.filter((offer) => offer.status === "Onaylandı").length}
+          </strong>
+        </div>
+
+        <div className="offer-summary-card">
+          <span>Yerel Taslak</span>
+          <strong>
+            {offers.filter((offer) => offer.source === "local").length}
+          </strong>
+        </div>
+      </div>
+
+      <div className="offers-layout">
+        <div className="panel">
+          <div className="panel-header">
+            <h2>Teklif Listesi</h2>
+            <span className="panel-meta">{offers.length} kayıt</span>
+          </div>
+
+          <div className="panel-content">
+            {offersLoading ? (
+              <p className="empty-state">Teklifler yükleniyor…</p>
+            ) : offers.length === 0 ? (
+              <p className="empty-state">Henüz teklif kaydı bulunmuyor.</p>
+            ) : (
+              <div className="offers-list">
+                {offers.map((offer) => (
+                  <article
+                    className={`offer-card${
+                      offer.id === selectedOfferId ? " selected" : ""
+                    }`}
+                    key={offer.id}
+                  >
+                    <div className="offer-card-top">
+                      <div>
+                        <h3>{offer.title}</h3>
+                        <p className="offer-amount">{offer.amountDisplay}</p>
+                      </div>
+
+                      <span
+                        className={`offer-status-badge ${getOfferStatusTone(
+                          offer.status
+                        )}`}
+                      >
+                        {offer.status}
+                      </span>
+                    </div>
+
+                    <div className="offer-meta-row">
+                      <span>{offer.date}</span>
+                      <span>
+                        {offer.source === "api"
+                          ? "Canlı API"
+                          : "Yerel taslak"}
+                      </span>
+                    </div>
+
+                    <div className="offer-card-actions">
+                      <button
+                        type="button"
+                        className="offer-secondary-button"
+                        onClick={() => setSelectedOfferId(offer.id)}
+                      >
+                        Detay
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => deleteOffer(offer.id)}
+                      >
+                        {offer.source === "local" ? "Sil" : "Listeden Kaldır"}
+                      </button>
+                    </div>
+                  </article>
+                ))}
               </div>
-              <div className="offer-detail-grid">
-                <div>
-                  <span>Tutar</span>
-                  <strong>
-                    {selectedOfferDetails?.amountDisplay ||
-                      selectedOffer.amountDisplay ||
-                      selectedOffer.amount}
-                  </strong>
+            )}
+          </div>
+        </div>
+
+        <div className="panel offer-detail-panel">
+          <div className="panel-header">
+            <h2>Teklif Detayı</h2>
+            {selectedOfferDetail && (
+              <span className="panel-meta">
+                {selectedOfferDetail.source === "api"
+                  ? "API detayı"
+                  : "Taslak detay"}
+              </span>
+            )}
+          </div>
+
+          <div className="panel-content">
+            {offersLoading ? (
+              <p className="empty-state">Detay alanı hazırlanıyor…</p>
+            ) : !selectedOfferDetail ? (
+              <p className="empty-state">
+                Detayları görmek için bir teklif seç.
+              </p>
+            ) : offerDetailLoading ? (
+              <p className="empty-state">Teklif detayı yükleniyor…</p>
+            ) : (
+              <div className="offer-detail-content">
+                <div className="offer-detail-header">
+                  <div>
+                    <h3>{selectedOfferDetail.title}</h3>
+                    <p>{selectedOfferDetail.amountDisplay}</p>
+                  </div>
+
+                  <span
+                    className={`offer-status-badge ${getOfferStatusTone(
+                      selectedOfferDetail.status
+                    )}`}
+                  >
+                    {selectedOfferDetail.status}
+                  </span>
                 </div>
-                <div>
-                  <span>Durum</span>
-                  <strong>
-                    {selectedOfferDetails?.status || selectedOffer.status}
-                  </strong>
+
+                {offerDetailError && (
+                  <p className="status-banner warning">{offerDetailError}</p>
+                )}
+
+                <div className="offer-detail-grid">
+                  <div className="offer-detail-item">
+                    <span>Kaynak</span>
+                    <strong>
+                      {selectedOfferDetail.source === "api"
+                        ? "Teklifler API"
+                        : "Yerel taslak"}
+                    </strong>
+                  </div>
+
+                  <div className="offer-detail-item">
+                    <span>Teklif Tarihi</span>
+                    <strong>{selectedOfferDetail.date}</strong>
+                  </div>
+
+                  <div className="offer-detail-item">
+                    <span>Para Birimi</span>
+                    <strong>
+                      {selectedOfferDetail.currency || "Belirtilmedi"}
+                    </strong>
+                  </div>
+
+                  <div className="offer-detail-item">
+                    <span>Proje Bağlantısı</span>
+                    <strong>
+                      {selectedOfferDetail.projectId || "Atanmadı"}
+                    </strong>
+                  </div>
                 </div>
-                <div>
-                  <span>Proje ID</span>
-                  <strong>
-                    {selectedOfferDetails?.projectId ||
-                      selectedOffer.projectId ||
-                      "Belirtilmedi"}
-                  </strong>
-                </div>
-                <div>
-                  <span>Oluşturulma</span>
-                  <strong>
-                    {selectedOfferDetails?.date || selectedOffer.date}
-                  </strong>
+
+                <div className="offer-detail-note">
+                  <strong>Detay görünümü hazır</strong>
+                  <p>
+                    Teklif seçildiğinde temel alanlar ve API detay sorgusu bu
+                    panelde yönetilir.
+                  </p>
                 </div>
               </div>
-              <div className="offer-detail-footer">
-                <button
-                  type="button"
-                  className="danger-button"
-                  onClick={() => deleteOffer(selectedOffer.id)}
-                >
-                  Teklifi Sil
-                </button>
-              </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
     </div>
