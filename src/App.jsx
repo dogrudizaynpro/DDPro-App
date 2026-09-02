@@ -1,24 +1,34 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { getProjects } from "./services/projects.service.js";
 import "./styles.css";
 import {
   createOffer as createOfferRequest,
   deleteOffer as deleteOfferRequest,
   getOfferById,
-  getOffers,
   mapOfferToViewModel,
-  mapOffersToViewModel,
 } from "./services/offers.service.js";
-import { getResearchItems } from "./services/research.service.js";
-
-const STORAGE_KEYS = {
-  projects: "ddpro_projects_v1",
-  research: "ddpro_research_v1",
-  offers: "ddpro_offers_v1",
-  memory: "ddpro_memory_v1",
-  logs: "ddpro_system_logs_v1",
-  integrations: "ddpro_integrations_v1",
-};
+import {
+  createProject as createProjectRequest,
+  deleteProjectById,
+  mapProjectToViewModel,
+} from "./services/projects.service.js";
+import {
+  createResearchItem as createResearchItemRequest,
+  deleteResearchItemById,
+  mapResearchItemToViewModel,
+} from "./services/research.service.js";
+import {
+  appendMemoryRecord,
+  appendSystemLog,
+  buildIntegrations,
+  createAiMessageRecord,
+  createId,
+  getApiFailureReason,
+  getModuleStateLabel,
+  isUuid,
+  loadCoreData,
+  saveCoreData,
+  syncCoreData,
+} from "./services/ddpro-core.service.js";
 
 const modules = [
   {
@@ -117,122 +127,30 @@ const OFFER_STATUS_TONES = {
   Reddedildi: "danger",
 };
 
-const getOfferStatusTone = (status) =>
-  OFFER_STATUS_TONES[status] || "neutral";
+const getOfferStatusTone = (status) => OFFER_STATUS_TONES[status] || "neutral";
 
-const mergeOffers = (apiOffers, storedOffers) => {
-  const storedViewModels = mapOffersToViewModel(storedOffers);
-  const apiIds = new Set(apiOffers.map((offer) => offer.id));
-  const localOnlyOffers = storedViewModels.filter(
-    (offer) => offer.source === "local" && !apiIds.has(offer.id)
-  );
-
-  return [...apiOffers, ...localOnlyOffers];
-};
-
-const getStoredData = (key, fallback = []) => {
-  try {
-    const value = localStorage.getItem(key);
-    return value ? JSON.parse(value) : fallback;
-  } catch {
-    return fallback;
-  }
-};
-
-const createId = () =>
-  `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-
-const isUuid = (value) =>
-  typeof value === "string" &&
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-    value
-  );
-
-const formatDate = () =>
-  new Date().toLocaleString("tr-TR", {
-    dateStyle: "short",
-    timeStyle: "short",
-  });
-
-const getApiFailureReason = (error) => {
-  if (!error) {
-    return "Bilinmeyen hata";
-  }
-
-  if (error.code === "API_CONFIGURATION_ERROR") {
-    return error.message;
-  }
-
-  if (error.status === 503) {
-    return "Backend veritabanı yapılandırması eksik veya servis hazır değil (HTTP 503)";
-  }
-
-  if (error.status === 404) {
-    return "İstenen API rotası bulunamadı (HTTP 404)";
-  }
-
-  if (error.message) {
-    return error.message;
-  }
-
-  return "Bilinmeyen hata";
+const getOfferFetchState = (apiState, offerCount, loading) => {
+  if (loading) return "loading";
+  if (apiState === "aktif") return offerCount > 0 ? "success" : "empty";
+  if (apiState === "fallback" || apiState === "hata") return "error";
+  return "empty";
 };
 
 function App() {
   const [activeModule, setActiveModule] = useState("dashboard");
-
-  const [projects, setProjects] = useState(() =>
-    getStoredData(STORAGE_KEYS.projects)
-  );
+  const [coreData, setCoreData] = useState(() => loadCoreData());
 
   const [projectsLoading, setProjectsLoading] = useState(true);
-
-  const [researchItems, setResearchItems] = useState(() =>
-    getStoredData(STORAGE_KEYS.research)
-  );
   const [researchLoading, setResearchLoading] = useState(true);
-  const [researchError, setResearchError] = useState(null);
-
-  const [offers, setOffers] = useState(() =>
-    mapOffersToViewModel(getStoredData(STORAGE_KEYS.offers))
-  );
-
   const [offersLoading, setOffersLoading] = useState(true);
+
+  const [researchError, setResearchError] = useState(null);
   const [offersError, setOffersError] = useState(null);
-  const [offersFetchState, setOffersFetchState] = useState("loading");
   const [offersReloadKey, setOffersReloadKey] = useState(0);
   const [selectedOfferId, setSelectedOfferId] = useState(null);
   const [selectedOfferDetail, setSelectedOfferDetail] = useState(null);
   const [offerDetailLoading, setOfferDetailLoading] = useState(false);
   const [offerDetailError, setOfferDetailError] = useState(null);
-  const projectsTouchedRef = useRef(false);
-  const researchTouchedRef = useRef(false);
-  const offersTouchedRef = useRef(false);
-
-  const [memoryItems, setMemoryItems] = useState(() =>
-    getStoredData(STORAGE_KEYS.memory)
-  );
-
-  const [systemLogs, setSystemLogs] = useState(() =>
-    getStoredData(STORAGE_KEYS.logs)
-  );
-
-  const [integrations, setIntegrations] = useState(() =>
-    getStoredData(STORAGE_KEYS.integrations, [
-      {
-        id: "ddpro-core",
-        name: "DDPro Core",
-        status: "Aktif",
-        description: "Merkezi uygulama ve veri yönetim katmanı.",
-      },
-      {
-        id: "local-storage",
-        name: "Local Storage",
-        status: "Aktif",
-        description: "Tarayıcı içi kalıcı kayıt sistemi.",
-      },
-    ])
-  );
 
   const [showProjectForm, setShowProjectForm] = useState(false);
   const [showResearchForm, setShowResearchForm] = useState(false);
@@ -245,110 +163,158 @@ function App() {
 
   const [researchName, setResearchName] = useState("");
   const [researchNote, setResearchNote] = useState("");
+  const [researchProjectId, setResearchProjectId] = useState("");
+  const [researchProduct, setResearchProduct] = useState("");
+  const [researchMaterial, setResearchMaterial] = useState("");
+  const [researchSupplier, setResearchSupplier] = useState("");
+  const [researchPrice, setResearchPrice] = useState("");
 
   const [offerName, setOfferName] = useState("");
   const [offerAmount, setOfferAmount] = useState("");
   const [offerStatus, setOfferStatus] = useState("Hazırlanıyor");
+  const [offerProjectId, setOfferProjectId] = useState("");
 
   const [memoryTitle, setMemoryTitle] = useState("");
   const [memoryContent, setMemoryContent] = useState("");
+  const [memoryCategory, setMemoryCategory] = useState("genel");
+  const [memoryProjectId, setMemoryProjectId] = useState("");
 
   const [aiInput, setAiInput] = useState("");
+  const [aiProjectId, setAiProjectId] = useState("");
 
-  const [aiMessages, setAiMessages] = useState([
-    {
-      id: "welcome",
-      role: "assistant",
-      text:
-        "DDPro AI çalışma alanı hazır. Proje, teklif, araştırma veya sistem analiziyle ilgili bir çalışma başlatabilirsin.",
-      date: formatDate(),
-    },
-  ]);
+  const coreDataRef = useRef(coreData);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.projects, JSON.stringify(projects));
-  }, [projects]);
+    coreDataRef.current = coreData;
+    saveCoreData(coreData);
+  }, [coreData]);
 
-  useEffect(() => {
-    localStorage.setItem(
-      STORAGE_KEYS.research,
-      JSON.stringify(researchItems)
-    );
-  }, [researchItems]);
+  const projects = coreData.projects;
+  const researchItems = coreData.researchItems;
+  const offers = coreData.offers;
+  const memoryItems = coreData.memoryItems;
+  const systemLogs = coreData.systemLogs;
+  const aiMessages = coreData.aiMessages;
+  const apiStatus = coreData.apiStatus;
 
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.offers, JSON.stringify(offers));
-  }, [offers]);
+  const integrations = useMemo(() => buildIntegrations(apiStatus), [apiStatus]);
+
+  const addLog = (message, options = {}) => {
+    setCoreData((currentData) => ({
+      ...currentData,
+      systemLogs: appendSystemLog(currentData.systemLogs, message, options),
+    }));
+  };
 
   useEffect(() => {
     let cancelled = false;
 
-    const fetchOffersFromApi = async () => {
-      const localOffers = getStoredData(STORAGE_KEYS.offers);
-      const localOfferViewModels = mapOffersToViewModel(localOffers);
+    const syncData = async () => {
+      setProjectsLoading(true);
+      setResearchLoading(true);
       setOffersLoading(true);
+      setResearchError(null);
       setOffersError(null);
-      setOffersFetchState("loading");
 
       try {
-        const apiOffers = await getOffers();
+        const { data, report } = await syncCoreData(coreDataRef.current);
 
         if (cancelled) return;
 
-        if (offersTouchedRef.current) {
-          addLog(
-            "Tekliflerde yerel değişiklik algılandı, API yanıtı üzerine yazmadı."
+        setCoreData((currentData) => {
+          let logs = currentData.systemLogs;
+
+          if (report.projects.state === "aktif") {
+            logs = appendSystemLog(logs, "Projeler API bağlantısı başarılı.", {
+              module: "projects",
+              state: "aktif",
+            });
+          } else {
+            logs = appendSystemLog(
+              logs,
+              `Projelerde API bağlantı hatası: ${report.projects.reason}. Fallback kullanıldı.`,
+              { module: "projects", state: "fallback", level: "warning" }
+            );
+          }
+
+          if (report.research.state === "aktif") {
+            logs = appendSystemLog(logs, "Araştırmalar API bağlantısı başarılı.", {
+              module: "research",
+              state: "aktif",
+            });
+          } else {
+            logs = appendSystemLog(
+              logs,
+              `Araştırmalarda API bağlantı hatası: ${report.research.reason}. Fallback kullanıldı.`,
+              { module: "research", state: "fallback", level: "warning" }
+            );
+          }
+
+          if (report.offers.state === "aktif") {
+            logs = appendSystemLog(logs, "Teklifler API bağlantısı başarılı.", {
+              module: "offers",
+              state: "aktif",
+            });
+          } else {
+            logs = appendSystemLog(
+              logs,
+              `Tekliflerde API bağlantı hatası: ${report.offers.reason}. Fallback kullanıldı.`,
+              { module: "offers", state: "fallback", level: "warning" }
+            );
+          }
+
+          if (report.health.state === "aktif") {
+            logs = appendSystemLog(logs, "Merkezi API sağlık kontrolü başarılı.", {
+              module: "core",
+              state: "aktif",
+            });
+          } else {
+            logs = appendSystemLog(
+              logs,
+              `Merkezi API sağlık kontrolü başarısız: ${report.health.reason}`,
+              { module: "core", state: "hata", level: "warning" }
+            );
+          }
+
+          return {
+            ...data,
+            aiMessages: data.aiMessages?.length ? data.aiMessages : currentData.aiMessages,
+            systemLogs: logs,
+          };
+        });
+
+        if (report.research.state !== "aktif") {
+          setResearchError(
+            `Araştırma API erişimi başarısız (${report.research.reason}). Güvenli fallback verisi gösteriliyor.`
           );
-          setOffersFetchState(apiOffers.length > 0 ? "success" : "empty");
-          return;
         }
 
-        if (apiOffers && apiOffers.length > 0) {
-          setOffers(mergeOffers(apiOffers, localOffers));
-          setOffersFetchState("success");
-          addLog("Teklifler API üzerinden yüklendi.");
-        } else {
-          const localDrafts = localOfferViewModels.filter(
-            (offer) => offer.source === "local"
-          );
-
-          setOffers(localDrafts);
-          setOffersFetchState("empty");
-          addLog(
-            localDrafts.length > 0
-              ? "Teklif API boş döndü, yerel taslaklar korundu."
-              : "Teklif API boş döndü."
+        if (report.offers.state !== "aktif") {
+          setOffersError(
+            `Teklif API erişimi başarısız (${report.offers.reason}). Güvenli fallback verisi gösteriliyor.`
           );
         }
       } catch (error) {
+        if (cancelled) return;
+
         const reason = getApiFailureReason(error);
-        if (!cancelled) {
-          console.warn(
-            "API erişilemedi, localStorage verileri kullanılıyor:",
-            error.message
-          );
-          setOffers(localOfferViewModels);
-          setSelectedOfferId((currentId) =>
-            localOfferViewModels.some((offer) => offer.id === currentId)
-              ? currentId
-              : localOfferViewModels[0]?.id || null
-          );
-          setOffersFetchState("error");
-          setOffersError(
-            localOfferViewModels.length > 0
-              ? `Teklif API’sine ulaşılamadı (${reason}). Son kaydedilen veriler gösteriliyor.`
-              : `Teklif API’sine ulaşılamadı (${reason}). Lütfen tekrar deneyin.`
-          );
-          addLog(`Tekliflerde API bağlantı hatası: ${reason}. Yerel veriler kullanıldı.`);
-        }
+        setResearchError(`Veri senkronizasyonu başarısız (${reason}).`);
+        setOffersError(`Veri senkronizasyonu başarısız (${reason}).`);
+        addLog(`DDPro Core merkezi senkronizasyon hatası: ${reason}`, {
+          module: "core",
+          state: "hata",
+          level: "warning",
+        });
       } finally {
         if (!cancelled) {
+          setProjectsLoading(false);
+          setResearchLoading(false);
           setOffersLoading(false);
         }
       }
     };
 
-    fetchOffersFromApi();
+    syncData();
 
     return () => {
       cancelled = true;
@@ -398,7 +364,7 @@ function App() {
       .catch(() => {
         if (!cancelled) {
           setSelectedOfferDetail(selectedOffer);
-          setOfferDetailError("Teklif detayları şu anda alınamadı.");
+          setOfferDetailError("Teklif detayları şu anda API üzerinden alınamadı.");
         }
       })
       .finally(() => {
@@ -412,142 +378,11 @@ function App() {
     };
   }, [offers, selectedOfferId]);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    const fetchResearchFromApi = async () => {
-      const localResearchItems = getStoredData(STORAGE_KEYS.research);
-      setResearchLoading(true);
-      setResearchError(null);
-
-      try {
-        const apiResearchItems = await getResearchItems();
-
-        if (cancelled) return;
-
-        if (researchTouchedRef.current) {
-          addLog(
-            "Araştırmalarda yerel değişiklik algılandı, API yanıtı üzerine yazmadı."
-          );
-          return;
-        }
-
-        if (apiResearchItems && apiResearchItems.length > 0) {
-          setResearchItems(apiResearchItems);
-          addLog("Araştırmalar API üzerinden yüklendi.");
-        } else {
-          setResearchItems(localResearchItems);
-          addLog("Araştırmalar API boş döndü, yerel veriler kullanıldı.");
-        }
-      } catch (error) {
-        const reason = getApiFailureReason(error);
-        if (!cancelled) {
-          setResearchItems(localResearchItems);
-          setResearchError(
-            `Araştırma API erişimi başarısız (${reason}). Yerel araştırma verileri gösteriliyor.`
-          );
-          addLog(`Araştırmalar API bağlantı hatası: ${reason}. Yerel veriler kullanıldı.`);
-        }
-      } finally {
-        if (!cancelled) {
-          setResearchLoading(false);
-        }
-      }
-    };
-
-    fetchResearchFromApi();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  useEffect(() => {
-    localStorage.setItem(
-      STORAGE_KEYS.memory,
-      JSON.stringify(memoryItems)
-    );
-  }, [memoryItems]);
-
-  useEffect(() => {
-    localStorage.setItem(
-      STORAGE_KEYS.logs,
-      JSON.stringify(systemLogs)
-    );
-  }, [systemLogs]);
-
-  useEffect(() => {
-    localStorage.setItem(
-      STORAGE_KEYS.integrations,
-      JSON.stringify(integrations)
-    );
-  }, [integrations]);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const fetchProjectsFromApi = async () => {
-      const localProjects = getStoredData(STORAGE_KEYS.projects);
-      setProjectsLoading(true);
-
-      try {
-        const apiProjects = await getProjects();
-
-        if (cancelled) return;
-
-        if (projectsTouchedRef.current) {
-          addLog(
-            "Projelerde yerel değişiklik algılandı, API yanıtı üzerine yazmadı."
-          );
-          return;
-        }
-
-        if (apiProjects && apiProjects.length > 0) {
-          setProjects(apiProjects);
-          addLog("Projeler API üzerinden yüklendi.");
-        } else {
-          setProjects(localProjects);
-          addLog("Projeler API boş döndü, yerel veriler kullanıldı.");
-        }
-      } catch (error) {
-        const reason = getApiFailureReason(error);
-        if (!cancelled) {
-          setProjects(localProjects);
-          addLog(`Projelerde API bağlantı hatası: ${reason}. Yerel veriler kullanıldı.`);
-        }
-      } finally {
-        if (!cancelled) {
-          setProjectsLoading(false);
-        }
-      }
-    };
-
-    fetchProjectsFromApi();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const addLog = (message) => {
-    const newLog = {
-      id: createId(),
-      message,
-      date: formatDate(),
-    };
-
-    setSystemLogs((currentLogs) =>
-      [newLog, ...currentLogs].slice(0, 50)
-    );
-  };
-
   const dashboardStats = useMemo(
     () => [
       {
         label: "AKTİF PROJELER",
-        value: projects.filter(
-          (project) => project.status === "Aktif"
-        ).length,
+        value: projects.filter((project) => project.status === "Aktif").length,
       },
       {
         label: "ARAŞTIRMALAR",
@@ -565,26 +400,63 @@ function App() {
     [projects, researchItems, offers, systemLogs]
   );
 
-  const createProject = (event) => {
+  const createProject = async (event) => {
     event.preventDefault();
 
     if (!projectName.trim()) return;
-    projectsTouchedRef.current = true;
 
-    const newProject = {
+    const timestamp = new Date().toISOString();
+
+    const localProject = mapProjectToViewModel({
       id: createId(),
       name: projectName.trim(),
-      type: projectType.trim() || "Genel Proje",
+      projectType: projectType.trim() || "Genel Proje",
       status: projectStatus,
-      date: formatDate(),
-    };
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      source: "local",
+    });
 
-    setProjects((currentProjects) => [
-      newProject,
-      ...currentProjects,
-    ]);
+    try {
+      const createdProject = await createProjectRequest(localProject);
+      const nextProject = createdProject || localProject;
 
-    addLog(`Yeni proje oluşturuldu: ${newProject.name}`);
+      setCoreData((currentData) => ({
+        ...currentData,
+        projects: [nextProject, ...currentData.projects],
+        memoryItems: appendMemoryRecord(currentData.memoryItems, {
+          title: `Proje kaydı: ${nextProject.name}`,
+          content: `Proje oluşturuldu ve merkezi veri katmanına kaydedildi. Durum: ${nextProject.status}.`,
+          category: "proje",
+          sourceModule: "projects",
+          projectId: nextProject.id,
+        }),
+        systemLogs: appendSystemLog(
+          currentData.systemLogs,
+          `Yeni proje oluşturuldu: ${nextProject.name}`,
+          { module: "projects", state: "aktif" }
+        ),
+      }));
+    } catch (error) {
+      const reason = getApiFailureReason(error);
+
+      setCoreData((currentData) => ({
+        ...currentData,
+        projects: [localProject, ...currentData.projects],
+        memoryItems: appendMemoryRecord(currentData.memoryItems, {
+          title: `Proje fallback kaydı: ${localProject.name}`,
+          content: `API bağlantısı başarısız olduğu için proje fallback olarak yerel güvenli kayda alındı. Sebep: ${reason}`,
+          category: "proje",
+          sourceModule: "projects",
+          projectId: localProject.id,
+        }),
+        systemLogs: appendSystemLog(
+          currentData.systemLogs,
+          `Proje API bağlantısı başarısız (${reason}), fallback kayıt oluşturuldu: ${localProject.name}`,
+          { module: "projects", state: "fallback", level: "warning" }
+        ),
+      }));
+    }
 
     setProjectName("");
     setProjectType("");
@@ -592,56 +464,159 @@ function App() {
     setShowProjectForm(false);
   };
 
-  const deleteProject = (id) => {
+  const deleteProject = async (id) => {
     const project = projects.find((item) => item.id === id);
-    projectsTouchedRef.current = true;
 
-    setProjects((currentProjects) =>
-      currentProjects.filter((item) => item.id !== id)
-    );
+    if (!project) return;
 
-    if (project) {
-      addLog(`Proje silindi: ${project.name}`);
+    if (!isUuid(id)) {
+      setCoreData((currentData) => ({
+        ...currentData,
+        projects: currentData.projects.filter((item) => item.id !== id),
+        systemLogs: appendSystemLog(currentData.systemLogs, `Yerel proje silindi: ${project.name}`, {
+          module: "projects",
+          state: "fallback",
+        }),
+      }));
+      return;
+    }
+
+    try {
+      await deleteProjectById(id);
+
+      setCoreData((currentData) => ({
+        ...currentData,
+        projects: currentData.projects.filter((item) => item.id !== id),
+        systemLogs: appendSystemLog(currentData.systemLogs, `Proje silindi: ${project.name}`, {
+          module: "projects",
+          state: "aktif",
+        }),
+      }));
+    } catch (error) {
+      const reason = getApiFailureReason(error);
+      setCoreData((currentData) => ({
+        ...currentData,
+        projects: currentData.projects.filter((item) => item.id !== id),
+        systemLogs: appendSystemLog(
+          currentData.systemLogs,
+          `Proje silme API hatası (${reason}), kayıt merkezi listeden kaldırıldı: ${project.name}`,
+          { module: "projects", state: "fallback", level: "warning" }
+        ),
+      }));
     }
   };
 
-  const createResearch = (event) => {
+  const createResearch = async (event) => {
     event.preventDefault();
 
     if (!researchName.trim()) return;
-    researchTouchedRef.current = true;
 
-    const newResearch = {
+    const timestamp = new Date().toISOString();
+
+    const localResearch = mapResearchItemToViewModel({
       id: createId(),
       name: researchName.trim(),
       note: researchNote.trim() || "Not eklenmedi.",
-      date: formatDate(),
-    };
+      status: "Kaydedildi",
+      projectId: researchProjectId || null,
+      product: researchProduct.trim(),
+      material: researchMaterial.trim(),
+      supplier: researchSupplier.trim(),
+      price: researchPrice.trim(),
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      source: "local",
+    });
 
-    setResearchItems((currentItems) => [
-      newResearch,
-      ...currentItems,
-    ]);
+    try {
+      const createdResearch = await createResearchItemRequest(localResearch);
+      const nextResearch = createdResearch || localResearch;
 
-    addLog(`Yeni araştırma kaydı oluşturuldu: ${newResearch.name}`);
+      setCoreData((currentData) => ({
+        ...currentData,
+        researchItems: [nextResearch, ...currentData.researchItems],
+        memoryItems: appendMemoryRecord(currentData.memoryItems, {
+          title: `Araştırma kaydı: ${nextResearch.name}`,
+          content: `Araştırma merkezi veri katmanına işlendi. Ürün: ${localResearch.product || "-"}, Malzeme: ${localResearch.material || "-"}, Tedarikçi: ${localResearch.supplier || "-"}, Fiyat: ${localResearch.price || "-"}.`,
+          category: "araştırma",
+          sourceModule: "research",
+          projectId: nextResearch.projectId || null,
+        }),
+        systemLogs: appendSystemLog(
+          currentData.systemLogs,
+          `Araştırma kaydedildi: ${nextResearch.name}`,
+          { module: "research", state: "aktif" }
+        ),
+      }));
+    } catch (error) {
+      const reason = getApiFailureReason(error);
+
+      setCoreData((currentData) => ({
+        ...currentData,
+        researchItems: [localResearch, ...currentData.researchItems],
+        memoryItems: appendMemoryRecord(currentData.memoryItems, {
+          title: `Araştırma fallback kaydı: ${localResearch.name}`,
+          content: `Araştırma API erişimi başarısız olduğu için kayıt fallback ile saklandı. Sebep: ${reason}`,
+          category: "araştırma",
+          sourceModule: "research",
+          projectId: localResearch.projectId || null,
+        }),
+        systemLogs: appendSystemLog(
+          currentData.systemLogs,
+          `Araştırma API bağlantı hatası (${reason}), fallback kayıt oluşturuldu: ${localResearch.name}`,
+          { module: "research", state: "fallback", level: "warning" }
+        ),
+      }));
+    }
 
     setResearchName("");
     setResearchNote("");
+    setResearchProjectId("");
+    setResearchProduct("");
+    setResearchMaterial("");
+    setResearchSupplier("");
+    setResearchPrice("");
     setShowResearchForm(false);
   };
 
-  const deleteResearch = (id) => {
-    const item = researchItems.find(
-      (research) => research.id === id
-    );
-    researchTouchedRef.current = true;
+  const deleteResearch = async (id) => {
+    const item = researchItems.find((research) => research.id === id);
 
-    setResearchItems((currentItems) =>
-      currentItems.filter((research) => research.id !== id)
-    );
+    if (!item) return;
 
-    if (item) {
-      addLog(`Araştırma kaydı silindi: ${item.name}`);
+    if (!isUuid(id)) {
+      setCoreData((currentData) => ({
+        ...currentData,
+        researchItems: currentData.researchItems.filter((research) => research.id !== id),
+        systemLogs: appendSystemLog(currentData.systemLogs, `Yerel araştırma silindi: ${item.name}`, {
+          module: "research",
+          state: "fallback",
+        }),
+      }));
+      return;
+    }
+
+    try {
+      await deleteResearchItemById(id);
+      setCoreData((currentData) => ({
+        ...currentData,
+        researchItems: currentData.researchItems.filter((research) => research.id !== id),
+        systemLogs: appendSystemLog(currentData.systemLogs, `Araştırma silindi: ${item.name}`, {
+          module: "research",
+          state: "aktif",
+        }),
+      }));
+    } catch (error) {
+      const reason = getApiFailureReason(error);
+      setCoreData((currentData) => ({
+        ...currentData,
+        researchItems: currentData.researchItems.filter((research) => research.id !== id),
+        systemLogs: appendSystemLog(
+          currentData.systemLogs,
+          `Araştırma silme API hatası (${reason}), kayıt merkezden kaldırıldı: ${item.name}`,
+          { module: "research", state: "fallback", level: "warning" }
+        ),
+      }));
     }
   };
 
@@ -649,110 +624,133 @@ function App() {
     event.preventDefault();
 
     if (!offerName.trim()) return;
-    offersTouchedRef.current = true;
 
-    const newOffer = mapOfferToViewModel({
+    const localOffer = mapOfferToViewModel({
       id: createId(),
       title: offerName.trim(),
       amount: offerAmount.trim() || "Tutar belirtilmedi",
       status: offerStatus,
       statusRaw: offerStatus,
-      date: formatDate(),
+      projectId: offerProjectId || null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
       source: "local",
     });
 
     setOffersError(null);
 
     try {
-      const createdOffer = await createOfferRequest(newOffer);
-      const nextOffer = createdOffer || newOffer;
+      const createdOffer = await createOfferRequest(localOffer);
+      const nextOffer = createdOffer || localOffer;
 
-      setOffers((currentOffers) => [
-        nextOffer,
-        ...currentOffers,
-      ]);
+      setCoreData((currentData) => ({
+        ...currentData,
+        offers: [nextOffer, ...currentData.offers],
+        memoryItems: appendMemoryRecord(currentData.memoryItems, {
+          title: `Teklif kaydı: ${nextOffer.title}`,
+          content: `Teklif merkezi kaydı oluşturuldu. Durum: ${nextOffer.status}. Tutar: ${nextOffer.amountDisplay}.`,
+          category: "teklif",
+          sourceModule: "offers",
+          projectId: nextOffer.projectId || null,
+        }),
+        systemLogs: appendSystemLog(currentData.systemLogs, `Yeni teklif oluşturuldu: ${nextOffer.title}`, {
+          module: "offers",
+          state: "aktif",
+        }),
+      }));
       setSelectedOfferId(nextOffer.id);
-      addLog(`Yeni teklif API üzerinden oluşturuldu: ${newOffer.title}`);
     } catch (error) {
-      console.warn(
-        "Teklif API'ye kaydedilemedi, yerel kayıt oluşturuluyor:",
-        error.message
-      );
+      const reason = getApiFailureReason(error);
 
-      setOffers((currentOffers) => [
-        newOffer,
-        ...currentOffers,
-      ]);
-      setSelectedOfferId(newOffer.id);
-      setOffersError("Teklif API'ye kaydedilemedi. Yerel kayıt oluşturuldu.");
-      addLog(`Yeni teklif yerel olarak oluşturuldu: ${newOffer.title}`);
+      setCoreData((currentData) => ({
+        ...currentData,
+        offers: [localOffer, ...currentData.offers],
+        memoryItems: appendMemoryRecord(currentData.memoryItems, {
+          title: `Teklif fallback kaydı: ${localOffer.title}`,
+          content: `Teklif API'ye kaydedilemedi. Güvenli fallback aktif edildi. Sebep: ${reason}`,
+          category: "teklif",
+          sourceModule: "offers",
+          projectId: localOffer.projectId || null,
+        }),
+        systemLogs: appendSystemLog(
+          currentData.systemLogs,
+          `Teklif API kaydı başarısız (${reason}), fallback kayıt oluşturuldu: ${localOffer.title}`,
+          { module: "offers", state: "fallback", level: "warning" }
+        ),
+      }));
+
+      setSelectedOfferId(localOffer.id);
+      setOffersError("Teklif API'ye kaydedilemedi. Güvenli fallback kaydı oluşturuldu.");
     }
 
     setOfferName("");
     setOfferAmount("");
     setOfferStatus("Hazırlanıyor");
+    setOfferProjectId("");
     setShowOfferForm(false);
   };
 
   const deleteOffer = async (id) => {
     const offer = offers.find((item) => item.id === id);
-    offersTouchedRef.current = true;
+
+    if (!offer) return;
 
     if (!isUuid(id)) {
       setOffersError(null);
-      setOffers((currentOffers) =>
-        currentOffers.filter((item) => item.id !== id)
-      );
+      setCoreData((currentData) => ({
+        ...currentData,
+        offers: currentData.offers.filter((item) => item.id !== id),
+        systemLogs: appendSystemLog(
+          currentData.systemLogs,
+          `Yerel teklif silindi: ${offer.title || offer.name}`,
+          {
+            module: "offers",
+            state: "fallback",
+          }
+        ),
+      }));
+
       if (selectedOfferId === id) {
         setSelectedOfferId(null);
       }
       setSelectedOfferDetail(null);
-
-      if (offer) {
-        addLog(`Yerel teklif silindi: ${offer.title || offer.name}`);
-      }
-
       return;
     }
 
     try {
       await deleteOfferRequest(id);
       setOffersError(null);
-      setOffers((currentOffers) =>
-        currentOffers.filter((item) => item.id !== id)
-      );
+
+      setCoreData((currentData) => ({
+        ...currentData,
+        offers: currentData.offers.filter((item) => item.id !== id),
+        systemLogs: appendSystemLog(
+          currentData.systemLogs,
+          `Teklif API üzerinden silindi: ${offer.title || offer.name}`,
+          { module: "offers", state: "aktif" }
+        ),
+      }));
+
       if (selectedOfferId === id) {
         setSelectedOfferId(null);
       }
       setSelectedOfferDetail(null);
-
-      if (offer) {
-        addLog(`Teklif API üzerinden silindi: ${offer.title || offer.name}`);
-      }
     } catch (error) {
-      console.warn("Teklif API üzerinden silinemedi:", error.message);
-
-      if (error.status === 404) {
-        setOffers((currentOffers) =>
-          currentOffers.filter((item) => item.id !== id)
-        );
-        if (selectedOfferId === id) {
-          setSelectedOfferId(null);
-        }
-        setSelectedOfferDetail(null);
-
-        if (offer) {
-          addLog(`Teklif yerelde temizlendi: ${offer.title || offer.name}`);
-        }
-
-        return;
-      }
-
+      const reason = getApiFailureReason(error);
       setOffersError("Teklif silme işlemi API üzerinde tamamlanamadı.");
 
-      if (offer) {
-        addLog(`Teklif silme hatası: ${offer.title || offer.name}`);
-      }
+      setCoreData((currentData) => ({
+        ...currentData,
+        systemLogs: appendSystemLog(
+          currentData.systemLogs,
+          `Teklif silme hatası (${reason}): ${offer.title || offer.name}`,
+          {
+            module: "offers",
+            state: "hata",
+            level: "warning",
+          }
+        ),
+      }));
     }
   };
 
@@ -761,59 +759,47 @@ function App() {
 
     if (!memoryTitle.trim()) return;
 
-    const newMemory = {
+    const newMemoryPayload = {
       id: createId(),
       title: memoryTitle.trim(),
       content: memoryContent.trim() || "İçerik eklenmedi.",
-      date: formatDate(),
+      category: memoryCategory || "genel",
+      sourceModule: "systems",
+      projectId: memoryProjectId || null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     };
 
-    setMemoryItems((currentItems) => [
-      newMemory,
-      ...currentItems,
-    ]);
-
-    addLog(`Merkezi hafızaya kayıt eklendi: ${newMemory.title}`);
+    setCoreData((currentData) => ({
+      ...currentData,
+      memoryItems: appendMemoryRecord(currentData.memoryItems, newMemoryPayload),
+      systemLogs: appendSystemLog(
+        currentData.systemLogs,
+        `Merkezi hafızaya kayıt eklendi: ${newMemoryPayload.title}`,
+        { module: "memory", state: "aktif" }
+      ),
+    }));
 
     setMemoryTitle("");
     setMemoryContent("");
+    setMemoryCategory("genel");
+    setMemoryProjectId("");
     setShowMemoryForm(false);
   };
 
   const deleteMemory = (id) => {
     const memory = memoryItems.find((item) => item.id === id);
 
-    setMemoryItems((currentItems) =>
-      currentItems.filter((item) => item.id !== id)
-    );
-
-    if (memory) {
-      addLog(`Hafıza kaydı silindi: ${memory.title}`);
-    }
-  };
-
-  const toggleIntegration = (id) => {
-    const integration = integrations.find((item) => item.id === id);
-
-    if (!integration) return;
-
-    const nextStatus =
-      integration.status === "Aktif" ? "Pasif" : "Aktif";
-
-    setIntegrations((currentItems) =>
-      currentItems.map((item) =>
-        item.id === id
-          ? {
-              ...item,
-              status: nextStatus,
-            }
-          : item
-      )
-    );
-
-    addLog(
-      `${integration.name} entegrasyon durumu değiştirildi: ${nextStatus}`
-    );
+    setCoreData((currentData) => ({
+      ...currentData,
+      memoryItems: currentData.memoryItems.filter((item) => item.id !== id),
+      systemLogs: memory
+        ? appendSystemLog(currentData.systemLogs, `Hafıza kaydı silindi: ${memory.title}`, {
+            module: "memory",
+            state: "aktif",
+          })
+        : currentData.systemLogs,
+    }));
   };
 
   const sendAiMessage = (event) => {
@@ -823,33 +809,46 @@ function App() {
 
     if (!message) return;
 
-    const userMessage = {
-      id: createId(),
+    const selectedProject = projects.find((project) => project.id === aiProjectId);
+
+    const userMessage = createAiMessageRecord({
       role: "user",
       text: message,
-      date: formatDate(),
-    };
+      projectId: aiProjectId || null,
+      source: "local",
+    });
 
-    const assistantMessage = {
-      id: createId(),
+    const assistantMessage = createAiMessageRecord({
       role: "assistant",
+      projectId: aiProjectId || null,
+      source: "local",
       text:
         `Mesaj alındı: "${message}". ` +
-        "DDPro AI çalışma alanı bu mesajı kayıt altına aldı. " +
-        "Gelişmiş AI/API entegrasyonu sonraki altyapı aşamasında bu alana bağlanabilir.",
-      date: formatDate(),
-    };
+        `Merkezi bağlam: ${projects.length} proje, ${researchItems.length} araştırma, ${offers.length} teklif, ${memoryItems.length} hafıza kaydı. ` +
+        `${selectedProject ? `Seçili proje: ${selectedProject.name}. ` : ""}` +
+        "Gerçek AI endpoint hazır olduğunda aynı servis katmanına bağlanacak şekilde kayıt oluşturuldu.",
+    });
 
-    setAiMessages((currentMessages) => [
-      ...currentMessages,
-      userMessage,
-      assistantMessage,
-    ]);
-
-    addLog(`DDPro AI mesajı gönderildi: ${message}`);
+    setCoreData((currentData) => ({
+      ...currentData,
+      aiMessages: [...currentData.aiMessages, userMessage, assistantMessage],
+      memoryItems: appendMemoryRecord(currentData.memoryItems, {
+        title: `AI konuşma kaydı: ${message.slice(0, 48)}`,
+        content: `DDPro AI konuşması merkezi kayda alındı.`,
+        category: "ai",
+        sourceModule: "ai",
+        projectId: aiProjectId || null,
+      }),
+      systemLogs: appendSystemLog(currentData.systemLogs, `DDPro AI mesajı kaydedildi.`, {
+        module: "ai",
+        state: "aktif",
+      }),
+    }));
 
     setAiInput("");
   };
+
+  const offersFetchState = getOfferFetchState(apiStatus.offers, offers.length, offersLoading);
 
   const renderDashboard = () => (
     <div className="dashboard-module">
@@ -870,9 +869,7 @@ function App() {
 
           <div className="panel-content">
             {systemLogs.length === 0 ? (
-              <p className="empty-state">
-                Henüz sistem kaydı bulunmuyor.
-              </p>
+              <p className="empty-state">Henüz sistem kaydı bulunmuyor.</p>
             ) : (
               <div className="log-list">
                 {systemLogs.slice(0, 8).map((log) => (
@@ -894,19 +891,19 @@ function App() {
           <div className="panel-content">
             <div className="quick-status">
               <span>Proje Sistemi</span>
-              <strong>Hazır</strong>
+              <strong>{getModuleStateLabel(apiStatus.projects)}</strong>
             </div>
             <div className="quick-status">
               <span>Araştırma Sistemi</span>
-              <strong>Hazır</strong>
+              <strong>{getModuleStateLabel(apiStatus.research)}</strong>
             </div>
             <div className="quick-status">
               <span>Teklif Sistemi</span>
-              <strong>Hazır</strong>
+              <strong>{getModuleStateLabel(apiStatus.offers)}</strong>
             </div>
             <div className="quick-status">
               <span>Merkezi Hafıza</span>
-              <strong>Hazır</strong>
+              <strong>{memoryItems.length > 0 ? "Aktif" : "Pasif"}</strong>
             </div>
           </div>
         </div>
@@ -917,10 +914,7 @@ function App() {
   const renderProjects = () => (
     <div className="module-page">
       <div className="module-toolbar">
-        <button
-          type="button"
-          onClick={() => setShowProjectForm((value) => !value)}
-        >
+        <button type="button" onClick={() => setShowProjectForm((value) => !value)}>
           {showProjectForm ? "Formu Kapat" : "+ Yeni Proje"}
         </button>
       </div>
@@ -941,10 +935,7 @@ function App() {
             onChange={(event) => setProjectType(event.target.value)}
           />
 
-          <select
-            value={projectStatus}
-            onChange={(event) => setProjectStatus(event.target.value)}
-          >
+          <select value={projectStatus} onChange={(event) => setProjectStatus(event.target.value)}>
             <option>Aktif</option>
             <option>Beklemede</option>
             <option>Tamamlandı</option>
@@ -970,10 +961,7 @@ function App() {
                 </small>
               </div>
 
-              <button
-                type="button"
-                onClick={() => deleteProject(project.id)}
-              >
+              <button type="button" onClick={() => deleteProject(project.id)}>
                 Sil
               </button>
             </div>
@@ -986,10 +974,7 @@ function App() {
   const renderResearch = () => (
     <div className="module-page">
       <div className="module-toolbar">
-        <button
-          type="button"
-          onClick={() => setShowResearchForm((value) => !value)}
-        >
+        <button type="button" onClick={() => setShowResearchForm((value) => !value)}>
           {showResearchForm ? "Formu Kapat" : "+ Yeni Araştırma"}
         </button>
       </div>
@@ -1001,6 +986,46 @@ function App() {
             placeholder="Araştırma başlığı"
             value={researchName}
             onChange={(event) => setResearchName(event.target.value)}
+          />
+
+          <select
+            value={researchProjectId}
+            onChange={(event) => setResearchProjectId(event.target.value)}
+          >
+            <option value="">Projeye bağla (opsiyonel)</option>
+            {projects.map((project) => (
+              <option key={project.id} value={project.id}>
+                {project.name}
+              </option>
+            ))}
+          </select>
+
+          <input
+            type="text"
+            placeholder="Ürün"
+            value={researchProduct}
+            onChange={(event) => setResearchProduct(event.target.value)}
+          />
+
+          <input
+            type="text"
+            placeholder="Malzeme"
+            value={researchMaterial}
+            onChange={(event) => setResearchMaterial(event.target.value)}
+          />
+
+          <input
+            type="text"
+            placeholder="Tedarikçi"
+            value={researchSupplier}
+            onChange={(event) => setResearchSupplier(event.target.value)}
+          />
+
+          <input
+            type="text"
+            placeholder="Fiyat"
+            value={researchPrice}
+            onChange={(event) => setResearchPrice(event.target.value)}
           />
 
           <textarea
@@ -1023,22 +1048,20 @@ function App() {
         {researchLoading ? (
           <p className="empty-state">Araştırmalar yükleniyor…</p>
         ) : researchItems.length === 0 ? (
-          <p className="empty-state">
-            Henüz araştırma kaydı bulunmuyor.
-          </p>
+          <p className="empty-state">Henüz araştırma kaydı bulunmuyor.</p>
         ) : (
           researchItems.map((item) => (
             <div className="data-card" key={item.id}>
               <div>
                 <h3>{item.name}</h3>
                 <p>{item.note}</p>
-                <small>{item.date}</small>
+                <small>
+                  {item.date}
+                  {item.projectId ? ` · Proje: ${item.projectId}` : ""}
+                </small>
               </div>
 
-              <button
-                type="button"
-                onClick={() => deleteResearch(item.id)}
-              >
+              <button type="button" onClick={() => deleteResearch(item.id)}>
                 Sil
               </button>
             </div>
@@ -1050,19 +1073,26 @@ function App() {
 
   const renderAI = () => (
     <div className="module-page ai-module">
+      <div className="module-toolbar" style={{ marginBottom: 0 }}>
+        <select value={aiProjectId} onChange={(event) => setAiProjectId(event.target.value)}>
+          <option value="">AI bağlam projesi (opsiyonel)</option>
+          {projects.map((project) => (
+            <option key={project.id} value={project.id}>
+              {project.name}
+            </option>
+          ))}
+        </select>
+      </div>
+
       <div className="ai-chat">
         {aiMessages.map((message) => (
-          <div
-            key={message.id}
-            className={`ai-message ${message.role}`}
-          >
-            <strong>
-              {message.role === "assistant"
-                ? "DDPro AI"
-                : "Sen"}
-            </strong>
+          <div key={message.id} className={`ai-message ${message.role}`}>
+            <strong>{message.role === "assistant" ? "DDPro AI" : "Sen"}</strong>
             <p>{message.text}</p>
-            <small>{message.date}</small>
+            <small>
+              {message.date}
+              {message.projectId ? ` · Proje: ${message.projectId}` : ""}
+            </small>
           </div>
         ))}
       </div>
@@ -1099,28 +1129,16 @@ function App() {
             {offersLoading ? "Yenileniyor..." : "Yenile"}
           </button>
 
-          <button
-            type="button"
-            onClick={() => setShowOfferForm((value) => !value)}
-          >
+          <button type="button" onClick={() => setShowOfferForm((value) => !value)}>
             {showOfferForm ? "Formu Kapat" : "+ Yeni Teklif"}
           </button>
         </div>
       </div>
 
-      {offersError && (
-        <p className="status-banner warning">
-          ⚠ {offersError}
-        </p>
-      )}
+      {offersError && <p className="status-banner warning">⚠ {offersError}</p>}
 
       {!offersError && offersFetchState === "empty" && (
-        <p className="status-banner info">
-          ℹ API üzerinde henüz teklif bulunmuyor
-          {offers.some((offer) => offer.source === "local")
-            ? ", kayıtlı yerel taslaklar listeleniyor."
-            : "."}
-        </p>
+        <p className="status-banner info">ℹ API üzerinde henüz teklif bulunmuyor.</p>
       )}
 
       {showOfferForm && (
@@ -1139,21 +1157,23 @@ function App() {
             onChange={(event) => setOfferAmount(event.target.value)}
           />
 
-          <select
-            value={offerStatus}
-            onChange={(event) => setOfferStatus(event.target.value)}
-          >
+          <select value={offerStatus} onChange={(event) => setOfferStatus(event.target.value)}>
             <option>Hazırlanıyor</option>
             <option>Gönderildi</option>
             <option>Onaylandı</option>
             <option>Reddedildi</option>
           </select>
 
-          <button type="submit">Teklifi Kaydet</button>
+          <select value={offerProjectId} onChange={(event) => setOfferProjectId(event.target.value)}>
+            <option value="">Projeye bağla (opsiyonel)</option>
+            {projects.map((project) => (
+              <option key={project.id} value={project.id}>
+                {project.name}
+              </option>
+            ))}
+          </select>
 
-          <p className="form-hint">
-            Yeni kayıtlar bu sürümde yerel taslak olarak eklenir.
-          </p>
+          <button type="submit">Teklifi Kaydet</button>
         </form>
       )}
 
@@ -1165,23 +1185,17 @@ function App() {
 
         <div className="offer-summary-card">
           <span>API Kayıtları</span>
-          <strong>
-            {offers.filter((offer) => offer.source === "api").length}
-          </strong>
+          <strong>{offers.filter((offer) => offer.source === "api").length}</strong>
         </div>
 
         <div className="offer-summary-card">
           <span>Onaylanan</span>
-          <strong>
-            {offers.filter((offer) => offer.status === "Onaylandı").length}
-          </strong>
+          <strong>{offers.filter((offer) => offer.status === "Onaylandı").length}</strong>
         </div>
 
         <div className="offer-summary-card">
-          <span>Yerel Taslak</span>
-          <strong>
-            {offers.filter((offer) => offer.source === "local").length}
-          </strong>
+          <span>Fallback Kayıt</span>
+          <strong>{offers.filter((offer) => offer.source === "local").length}</strong>
         </div>
       </div>
 
@@ -1201,9 +1215,7 @@ function App() {
               <div className="offers-list">
                 {offers.map((offer) => (
                   <article
-                    className={`offer-card${
-                      offer.id === selectedOfferId ? " selected" : ""
-                    }`}
+                    className={`offer-card${offer.id === selectedOfferId ? " selected" : ""}`}
                     key={offer.id}
                   >
                     <div className="offer-card-top">
@@ -1212,22 +1224,14 @@ function App() {
                         <p className="offer-amount">{offer.amountDisplay}</p>
                       </div>
 
-                      <span
-                        className={`offer-status-badge ${getOfferStatusTone(
-                          offer.status
-                        )}`}
-                      >
+                      <span className={`offer-status-badge ${getOfferStatusTone(offer.status)}`}>
                         {offer.status}
                       </span>
                     </div>
 
                     <div className="offer-meta-row">
                       <span>{offer.date}</span>
-                      <span>
-                        {offer.source === "api"
-                          ? "Canlı API"
-                          : "Yerel taslak"}
-                      </span>
+                      <span>{offer.source === "api" ? "Canlı API" : "Fallback kayıt"}</span>
                     </div>
 
                     <div className="offer-card-actions">
@@ -1239,10 +1243,7 @@ function App() {
                         Detay
                       </button>
 
-                      <button
-                        type="button"
-                        onClick={() => deleteOffer(offer.id)}
-                      >
+                      <button type="button" onClick={() => deleteOffer(offer.id)}>
                         {offer.source === "local" ? "Sil" : "Listeden Kaldır"}
                       </button>
                     </div>
@@ -1258,9 +1259,7 @@ function App() {
             <h2>Teklif Detayı</h2>
             {selectedOfferDetail && (
               <span className="panel-meta">
-                {selectedOfferDetail.source === "api"
-                  ? "API detayı"
-                  : "Taslak detay"}
+                {selectedOfferDetail.source === "api" ? "API detayı" : "Fallback detay"}
               </span>
             )}
           </div>
@@ -1269,9 +1268,7 @@ function App() {
             {offersLoading ? (
               <p className="empty-state">Detay alanı hazırlanıyor…</p>
             ) : !selectedOfferDetail ? (
-              <p className="empty-state">
-                Detayları görmek için bir teklif seç.
-              </p>
+              <p className="empty-state">Detayları görmek için bir teklif seç.</p>
             ) : offerDetailLoading ? (
               <p className="empty-state">Teklif detayı yükleniyor…</p>
             ) : (
@@ -1283,25 +1280,19 @@ function App() {
                   </div>
 
                   <span
-                    className={`offer-status-badge ${getOfferStatusTone(
-                      selectedOfferDetail.status
-                    )}`}
+                    className={`offer-status-badge ${getOfferStatusTone(selectedOfferDetail.status)}`}
                   >
                     {selectedOfferDetail.status}
                   </span>
                 </div>
 
-                {offerDetailError && (
-                  <p className="status-banner warning">{offerDetailError}</p>
-                )}
+                {offerDetailError && <p className="status-banner warning">{offerDetailError}</p>}
 
                 <div className="offer-detail-grid">
                   <div className="offer-detail-item">
                     <span>Kaynak</span>
                     <strong>
-                      {selectedOfferDetail.source === "api"
-                        ? "Teklifler API"
-                        : "Yerel taslak"}
+                      {selectedOfferDetail.source === "api" ? "Teklifler API" : "Fallback kayıt"}
                     </strong>
                   </div>
 
@@ -1312,25 +1303,13 @@ function App() {
 
                   <div className="offer-detail-item">
                     <span>Para Birimi</span>
-                    <strong>
-                      {selectedOfferDetail.currency || "Belirtilmedi"}
-                    </strong>
+                    <strong>{selectedOfferDetail.currency || "Belirtilmedi"}</strong>
                   </div>
 
                   <div className="offer-detail-item">
                     <span>Proje Bağlantısı</span>
-                    <strong>
-                      {selectedOfferDetail.projectId || "Atanmadı"}
-                    </strong>
+                    <strong>{selectedOfferDetail.projectId || "Atanmadı"}</strong>
                   </div>
-                </div>
-
-                <div className="offer-detail-note">
-                  <strong>Detay görünümü hazır</strong>
-                  <p>
-                    Teklif seçildiğinde temel alanlar ve API detay sorgusu bu
-                    panelde yönetilir.
-                  </p>
                 </div>
               </div>
             )}
@@ -1355,10 +1334,7 @@ function App() {
         <div className="panel-header">
           <h2>Merkezi Hafıza</h2>
 
-          <button
-            type="button"
-            onClick={() => setShowMemoryForm((value) => !value)}
-          >
+          <button type="button" onClick={() => setShowMemoryForm((value) => !value)}>
             {showMemoryForm ? "Kapat" : "+ Yeni Kayıt"}
           </button>
         </div>
@@ -1372,6 +1348,29 @@ function App() {
               onChange={(event) => setMemoryTitle(event.target.value)}
             />
 
+            <select
+              value={memoryCategory}
+              onChange={(event) => setMemoryCategory(event.target.value)}
+            >
+              <option value="genel">Genel</option>
+              <option value="proje">Proje</option>
+              <option value="araştırma">Araştırma</option>
+              <option value="teklif">Teklif</option>
+              <option value="ai">AI</option>
+            </select>
+
+            <select
+              value={memoryProjectId}
+              onChange={(event) => setMemoryProjectId(event.target.value)}
+            >
+              <option value="">Projeye bağla (opsiyonel)</option>
+              {projects.map((project) => (
+                <option key={project.id} value={project.id}>
+                  {project.name}
+                </option>
+              ))}
+            </select>
+
             <textarea
               placeholder="Hafıza içeriği"
               value={memoryContent}
@@ -1384,22 +1383,20 @@ function App() {
 
         <div className="data-list">
           {memoryItems.length === 0 ? (
-            <p className="empty-state">
-              Merkezi hafızada henüz kayıt bulunmuyor.
-            </p>
+            <p className="empty-state">Merkezi hafızada henüz kayıt bulunmuyor.</p>
           ) : (
             memoryItems.map((item) => (
               <div className="data-card" key={item.id}>
                 <div>
                   <h3>{item.title}</h3>
                   <p>{item.content}</p>
-                  <small>{item.date}</small>
+                  <small>
+                    {item.date} · {item.category}
+                    {item.projectId ? ` · Proje: ${item.projectId}` : ""}
+                  </small>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => deleteMemory(item.id)}
-                >
+                <button type="button" onClick={() => deleteMemory(item.id)}>
                   Sil
                 </button>
               </div>
@@ -1411,6 +1408,14 @@ function App() {
       <div className="panel">
         <div className="panel-header">
           <h2>Entegrasyonlar</h2>
+
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={() => setOffersReloadKey((value) => value + 1)}
+          >
+            Durumu Yenile
+          </button>
         </div>
 
         <div className="data-list">
@@ -1421,13 +1426,6 @@ function App() {
                 <p>{item.description}</p>
                 <small>Durum: {item.status}</small>
               </div>
-
-              <button
-                type="button"
-                onClick={() => toggleIntegration(item.id)}
-              >
-                {item.status === "Aktif" ? "Pasifleştir" : "Aktifleştir"}
-              </button>
             </div>
           ))}
         </div>
@@ -1439,28 +1437,22 @@ function App() {
     switch (activeModule) {
       case "projects":
         return renderProjects();
-
       case "research":
         return renderResearch();
-
       case "ai":
         return renderAI();
-
       case "offers":
         return renderOffers();
-
       case "systems":
         return renderSystems();
-
       case "dashboard":
       default:
         return renderDashboard();
     }
   };
 
-  const currentModule =
-    modules.find((module) => module.id === activeModule) ||
-    modules[0];
+  const currentModule = modules.find((module) => module.id === activeModule) || modules[0];
+  const coreStatus = integrations.find((item) => item.id === "ddpro-core")?.status || "pasif";
 
   return (
     <div className="ddpro-app">
@@ -1476,29 +1468,23 @@ function App() {
 
         <div className="header-status">
           <span className="status-dot"></span>
-          Sistem Aktif
+          Sistem {getModuleStateLabel(coreStatus)}
         </div>
       </header>
 
       <div className="app-layout">
         <aside className="sidebar">
-          <div className="sidebar-title">
-            ANA MODÜLLER
-          </div>
+          <div className="sidebar-title">ANA MODÜLLER</div>
 
           <nav className="module-nav">
             {modules.map((module) => (
               <button
                 key={module.id}
                 type="button"
-                className={`module-button ${
-                  activeModule === module.id ? "active" : ""
-                }`}
+                className={`module-button ${activeModule === module.id ? "active" : ""}`}
                 onClick={() => setActiveModule(module.id)}
               >
-                <span className="module-icon">
-                  {module.icon}
-                </span>
+                <span className="module-icon">{module.icon}</span>
 
                 <span className="module-text">
                   <strong>{module.title}</strong>
@@ -1511,7 +1497,7 @@ function App() {
           <div className="sidebar-footer">
             <div className="sidebar-system">
               <span className="status-dot"></span>
-              DDPro Core v1.0
+              DDPro Core v1.0 · {getModuleStateLabel(coreStatus)}
             </div>
           </div>
         </aside>
@@ -1524,9 +1510,7 @@ function App() {
             </div>
           </section>
 
-          <section className="content-body">
-            {renderModule()}
-          </section>
+          <section className="content-body">{renderModule()}</section>
         </main>
       </div>
     </div>

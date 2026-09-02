@@ -41,6 +41,27 @@ export const mapResearchItemToViewModel = (item = {}) => {
           : "Not eklenmedi.";
   const createdAt = item.created_at || item.createdAt || item.date;
   const updatedAt = item.updated_at || item.updatedAt || null;
+  const projectId = item.project_id || item.projectId || null;
+  const product =
+    typeof item.product === "string" && item.product.trim()
+      ? item.product.trim()
+      : "";
+  const material =
+    typeof item.material === "string" && item.material.trim()
+      ? item.material.trim()
+      : "";
+  const supplier =
+    typeof item.supplier === "string" && item.supplier.trim()
+      ? item.supplier.trim()
+      : "";
+  const price =
+    typeof item.price === "string" && item.price.trim()
+      ? item.price.trim()
+      : "";
+
+  const source =
+    item.source ||
+    (item.created_at || item.updated_at ? "api" : "local");
 
   return {
     id: item.id,
@@ -50,13 +71,59 @@ export const mapResearchItemToViewModel = (item = {}) => {
     date: formatResearchDate(createdAt),
     createdAt,
     updatedAt,
-    source: "api",
+    projectId,
+    product,
+    material,
+    supplier,
+    price,
+    source,
     raw: item,
   };
 };
 
 export const mapResearchItemsToViewModel = (items = []) =>
   items.filter(Boolean).map((item) => mapResearchItemToViewModel(item));
+
+const toResearchPayload = (item = {}) => {
+  const name =
+    typeof item?.name === "string" && item.name.trim()
+      ? item.name.trim()
+      : typeof item?.title === "string" && item.title.trim()
+        ? item.title.trim()
+        : "";
+
+  if (!name) {
+    throw new Error("Research name is required");
+  }
+
+  return {
+    name,
+    note:
+      typeof item?.note === "string" && item.note.trim()
+        ? item.note.trim()
+        : "Not eklenmedi.",
+    project_id:
+      typeof item?.projectId === "string" && item.projectId.trim()
+        ? item.projectId.trim()
+        : null,
+    product:
+      typeof item?.product === "string" && item.product.trim()
+        ? item.product.trim()
+        : null,
+    material:
+      typeof item?.material === "string" && item.material.trim()
+        ? item.material.trim()
+        : null,
+    supplier:
+      typeof item?.supplier === "string" && item.supplier.trim()
+        ? item.supplier.trim()
+        : null,
+    price:
+      typeof item?.price === "string" && item.price.trim()
+        ? item.price.trim()
+        : null,
+  };
+};
 
 // ============================================================
 // GET ALL RESEARCH ITEMS
@@ -95,6 +162,47 @@ export const getResearchItemById = async (id) => {
       return null;
     }
     console.error("Failed to fetch research item:", error.message);
+    throw error;
+  }
+};
+
+// ============================================================
+// CREATE RESEARCH ITEM
+// ============================================================
+
+export const createResearchItem = async (item) => {
+  const payload = toResearchPayload(item);
+
+  try {
+    const data = await fetchAPI("/api/research", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+
+    return data.data ? mapResearchItemToViewModel(data.data) : null;
+  } catch (error) {
+    console.error("Failed to create research item:", error.message);
+    throw error;
+  }
+};
+
+// ============================================================
+// DELETE RESEARCH ITEM
+// ============================================================
+
+export const deleteResearchItemById = async (id) => {
+  if (!id) {
+    throw new Error("Research item ID is required");
+  }
+
+  try {
+    const data = await fetchAPI(`/api/research/${id}`, {
+      method: "DELETE",
+    });
+
+    return data.data ? mapResearchItemToViewModel(data.data) : null;
+  } catch (error) {
+    console.error("Failed to delete research item:", error.message);
     throw error;
   }
 };

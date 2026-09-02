@@ -4,14 +4,8 @@
 // Centralized API configuration and constants
 // ============================================================
 
-// Backend API Base URL
-// Uses Vite environment variable or defaults to localhost
-// Configure via .env.local:
-//   VITE_API_URL=http://localhost:3001
-//   VITE_API_URL=https://api.example.com (production)
-
-export const API_BASE_URL =
-  import.meta.env.VITE_API_URL || "http://localhost:3001";
+import { API_BASE_URL } from "../services/api.js";
+export { API_BASE_URL };
 
 // HTTP Status Codes
 export const HTTP_STATUS = {
@@ -47,6 +41,6 @@ export const API_ERRORS = {
 // Production:
 //   VITE_API_URL=https://api.ddpro.com
 //
-// If VITE_API_URL is not set, the API defaults to:
-//   http://localhost:3001
+// Production ortamında VITE_API_URL zorunludur.
+// local geliştirmede API service localhost fallback uygular.
 // ============================================================
