@@ -119,6 +119,12 @@ const getStoredData = (key, fallback = []) => {
 const createId = () =>
   `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 
+const isUuid = (value) =>
+  typeof value === "string" &&
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    value
+  );
+
 const formatDate = () =>
   new Date().toLocaleString("tr-TR", {
     dateStyle: "short",
@@ -552,6 +558,19 @@ function App() {
     const offer = offers.find((item) => item.id === id);
     offersTouchedRef.current = true;
 
+    if (!isUuid(id)) {
+      setOffersError(null);
+      setOffers((currentOffers) =>
+        currentOffers.filter((item) => item.id !== id)
+      );
+
+      if (offer) {
+        addLog(`Yerel teklif silindi: ${offer.name}`);
+      }
+
+      return;
+    }
+
     try {
       await deleteOfferRequest(id);
       setOffersError(null);
@@ -569,6 +588,12 @@ function App() {
         setOffers((currentOffers) =>
           currentOffers.filter((item) => item.id !== id)
         );
+
+        if (offer) {
+          addLog(`Teklif yerelde temizlendi: ${offer.name}`);
+        }
+
+        return;
       }
 
       setOffersError("Teklif silme işlemi API üzerinde tamamlanamadı.");
