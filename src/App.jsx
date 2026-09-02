@@ -48,8 +48,8 @@ const modules = [
   {
     id: "ai",
     icon: "✦",
-    title: "DDPro AI",
-    short: "Yapay Zeka Sistemi",
+    title: "AI Araştırma Merkezi",
+    short: "DDPRO AI Komuta",
     description:
       "Araştırma, analiz ve operasyon süreçlerinde yapay zeka destekli merkezi çalışma alanı.",
   },
@@ -64,8 +64,8 @@ const modules = [
   {
     id: "systems",
     icon: "⚙",
-    title: "Sistemler",
-    short: "Altyapı Merkezi",
+    title: "Veri & Hafıza",
+    short: "Entegrasyonlar + Ayarlar",
     description:
       "DDPro altyapısı, entegrasyonlar, kayıtlar ve merkezi sistem bileşenlerini yönet.",
   },
@@ -107,6 +107,12 @@ const systemModules = [
     title: "Entegrasyon Sistemi",
     description:
       "Harici servisler ve gelecekteki API bağlantıları için merkezi entegrasyon altyapısı.",
+  },
+  {
+    id: "settings-system",
+    title: "Sistem Ayarları",
+    description:
+      "Operasyon paneli davranışları, canlı veri güncellemeleri ve kontrol katmanlarının yönetimi.",
   },
 ];
 
@@ -796,6 +802,58 @@ function App() {
 
     if (!message) return;
 
+    const normalizedMessage = message.toLocaleLowerCase("tr-TR");
+    let targetModule = null;
+    let commandSummary = "";
+
+    if (normalizedMessage.includes("proje")) {
+      targetModule = "projects";
+      commandSummary = "Proje yönetimi modülü açıldı.";
+    } else if (
+      normalizedMessage.includes("araştırma") ||
+      normalizedMessage.includes("tedarik")
+    ) {
+      targetModule = "research";
+      commandSummary = "Tedarik & Araştırma modülü açıldı.";
+    } else if (normalizedMessage.includes("teklif")) {
+      targetModule = "offers";
+      commandSummary = "Teklif Merkezi modülü açıldı.";
+    } else if (
+      normalizedMessage.includes("sistem") ||
+      normalizedMessage.includes("hafıza") ||
+      normalizedMessage.includes("entegrasyon") ||
+      normalizedMessage.includes("ayar")
+    ) {
+      targetModule = "systems";
+      commandSummary = "Veri & Hafıza modülü açıldı.";
+    } else if (
+      normalizedMessage.includes("ai") ||
+      normalizedMessage.includes("komuta")
+    ) {
+      targetModule = "ai";
+      commandSummary = "AI Araştırma Merkezi odaklandı.";
+    } else if (
+      normalizedMessage.includes("genel") ||
+      normalizedMessage.includes("dashboard")
+    ) {
+      targetModule = "dashboard";
+      commandSummary = "Genel Bakış ekranı açıldı.";
+    }
+
+    if (
+      normalizedMessage.includes("yenile") &&
+      normalizedMessage.includes("teklif")
+    ) {
+      setOffersReloadKey((value) => value + 1);
+      commandSummary = commandSummary
+        ? `${commandSummary} Teklif API yenilemesi tetiklendi.`
+        : "Teklif API yenilemesi tetiklendi.";
+    }
+
+    if (targetModule) {
+      setActiveModule(targetModule);
+    }
+
     const userMessage = {
       id: createId(),
       role: "user",
@@ -803,13 +861,27 @@ function App() {
       date: formatDate(),
     };
 
+    const assistantSummary = [
+      commandSummary || "Komut işlendi ve sistem verileri güncellendi.",
+      `Canlı veriler: ${projects.length} proje, ${researchItems.length} araştırma, ${offers.length} teklif, ${memoryItems.length} hafıza kaydı.`,
+      `Entegrasyonlar: ${
+        integrations.filter((item) => item.status === "Aktif").length
+      } aktif / ${integrations.length} toplam.`,
+      `Teklif API durumu: ${
+        offersFetchState === "loading"
+          ? "Yükleniyor"
+          : offersFetchState === "success"
+            ? "Bağlı"
+            : offersFetchState === "empty"
+              ? "Boş veri"
+              : "Bağlantı hatası"
+      }.`,
+    ].join(" ");
+
     const assistantMessage = {
       id: createId(),
       role: "assistant",
-      text:
-        `Mesaj alındı: "${message}". ` +
-        "DDPro AI çalışma alanı bu mesajı kayıt altına aldı. " +
-        "Gelişmiş AI/API entegrasyonu sonraki altyapı aşamasında bu alana bağlanabilir.",
+      text: assistantSummary,
       date: formatDate(),
     };
 
@@ -819,8 +891,7 @@ function App() {
       assistantMessage,
     ]);
 
-    addLog(`DDPro AI mesajı gönderildi: ${message}`);
-
+    addLog(`DDPro AI komutu işlendi: ${message}`);
     setAiInput("");
   };
 
@@ -838,7 +909,7 @@ function App() {
       <div className="dashboard-grid">
         <div className="panel">
           <div className="panel-header">
-            <h2>Son Sistem Hareketleri</h2>
+            <h2>Aktif Operasyon Akışı</h2>
           </div>
 
           <div className="panel-content">
@@ -861,25 +932,36 @@ function App() {
 
         <div className="panel">
           <div className="panel-header">
-            <h2>Hızlı Durum</h2>
+            <h2>Sistem Kontrol Durumu</h2>
           </div>
 
           <div className="panel-content">
             <div className="quick-status">
               <span>Proje Sistemi</span>
-              <strong>Hazır</strong>
+              <strong>{projectsLoading ? "Yükleniyor" : "Hazır"}</strong>
             </div>
             <div className="quick-status">
-              <span>Araştırma Sistemi</span>
-              <strong>Hazır</strong>
+              <span>Tedarik & Araştırma</span>
+              <strong>{researchLoading ? "Yükleniyor" : "Hazır"}</strong>
             </div>
             <div className="quick-status">
-              <span>Teklif Sistemi</span>
-              <strong>Hazır</strong>
+              <span>Teklif API</span>
+              <strong>
+                {offersFetchState === "loading"
+                  ? "Yükleniyor"
+                  : offersFetchState === "success"
+                    ? "Bağlı"
+                    : offersFetchState === "empty"
+                      ? "Boş"
+                      : "Hata"}
+              </strong>
             </div>
             <div className="quick-status">
-              <span>Merkezi Hafıza</span>
-              <strong>Hazır</strong>
+              <span>Entegrasyonlar</span>
+              <strong>
+                {integrations.filter((item) => item.status === "Aktif").length} /
+                {integrations.length} Aktif
+              </strong>
             </div>
           </div>
         </div>
@@ -987,7 +1069,7 @@ function App() {
       )}
 
       {researchError && (
-        <p className="empty-state" style={{ color: "#f59e0b" }}>
+        <p className="status-banner warning">
           ⚠ {researchError}
         </p>
       )}
@@ -1023,6 +1105,19 @@ function App() {
 
   const renderAI = () => (
     <div className="module-page ai-module">
+      <div className="panel">
+        <div className="panel-header">
+          <h2>AI Araştırma Merkezi</h2>
+        </div>
+        <div className="panel-content">
+          <p className="status-banner info">
+            DDPRO AI Komuta Merkezi, projeler, teklifler, araştırmalar ve sistem
+            durumlarından gelen canlı verilerle çalışır. Komutlarda modül adı
+            veya “teklif yenile” ifadesini kullanabilirsin.
+          </p>
+        </div>
+      </div>
+
       <div className="ai-chat">
         {aiMessages.map((message) => (
           <div
@@ -1326,7 +1421,7 @@ function App() {
 
       <div className="panel memory-panel">
         <div className="panel-header">
-          <h2>Merkezi Hafıza</h2>
+          <h2>Veri & Hafıza</h2>
 
           <button
             type="button"
@@ -1405,7 +1500,91 @@ function App() {
           ))}
         </div>
       </div>
+
+      <div className="panel">
+        <div className="panel-header">
+          <h2>Sistem Ayarları</h2>
+        </div>
+
+        <div className="panel-content">
+          <div className="quick-status">
+            <span>Canlı Teklif API Senkronu</span>
+            <strong>
+              {offersFetchState === "error" ? "Kontrol Gerekli" : "Aktif"}
+            </strong>
+          </div>
+          <div className="quick-status">
+            <span>Operasyon Kayıt Motoru</span>
+            <strong>Aktif</strong>
+          </div>
+          <div className="quick-status">
+            <span>Merkezi Hafıza Kayıtları</span>
+            <strong>{memoryItems.length} kayıt</strong>
+          </div>
+        </div>
+      </div>
     </div>
+  );
+
+  const renderCommandCenter = () => (
+    <aside className="command-center">
+      <div className="panel command-panel">
+        <div className="panel-header">
+          <h2>DDPRO AI Komuta Merkezi</h2>
+        </div>
+
+        <div className="panel-content command-panel-content">
+          <div className="command-stats">
+            {dashboardStats.map((stat) => (
+              <div key={stat.label} className="command-stat-card">
+                <span>{stat.label}</span>
+                <strong>{stat.value}</strong>
+              </div>
+            ))}
+          </div>
+
+          <div className="command-shortcuts">
+            {modules.map((module) => (
+              <button
+                key={module.id}
+                type="button"
+                className={activeModule === module.id ? "active" : ""}
+                onClick={() => setActiveModule(module.id)}
+              >
+                <span>{module.icon}</span>
+                {module.title}
+              </button>
+            ))}
+          </div>
+
+          <div className="ai-chat compact">
+            {aiMessages.slice(-6).map((message) => (
+              <div
+                key={message.id}
+                className={`ai-message ${message.role}`}
+              >
+                <strong>
+                  {message.role === "assistant"
+                    ? "DDPro AI"
+                    : "Operatör"}
+                </strong>
+                <p>{message.text}</p>
+                <small>{message.date}</small>
+              </div>
+            ))}
+          </div>
+
+          <form className="ai-form compact" onSubmit={sendAiMessage}>
+            <textarea
+              placeholder="Komut yaz: proje, teklif, araştırma, sistem..."
+              value={aiInput}
+              onChange={(event) => setAiInput(event.target.value)}
+            />
+            <button type="submit">Çalıştır</button>
+          </form>
+        </div>
+      </div>
+    </aside>
   );
 
   const renderModule = () => {
@@ -1443,13 +1622,28 @@ function App() {
 
           <div className="brand-content">
             <strong>DOĞRU DİZAYN PRO</strong>
-            <span>DDPro Dijital Yönetim Sistemi</span>
+            <span>AI KOMUTA MERKEZİ · ENDÜSTRİYEL OPERASYON PANELİ</span>
           </div>
         </div>
 
-        <div className="header-status">
-          <span className="status-dot"></span>
-          Sistem Aktif
+        <div className="header-controls">
+          <div className="header-chip">
+            <span className="status-dot"></span>
+            Sistem Aktif
+          </div>
+          <div className="header-chip">
+            API:
+            {offersFetchState === "loading"
+              ? "Yükleniyor"
+              : offersFetchState === "success"
+                ? "Bağlı"
+                : offersFetchState === "empty"
+                  ? "Boş Veri"
+                  : "Hata"}
+          </div>
+          <div className="header-chip">
+            Aktif Modül: {currentModule.title}
+          </div>
         </div>
       </header>
 
@@ -1489,18 +1683,22 @@ function App() {
           </div>
         </aside>
 
-        <main className="main-content">
-          <section className="content-header">
-            <div>
-              <h1>{currentModule.title}</h1>
-              <p>{currentModule.description}</p>
-            </div>
-          </section>
+        <div className="main-grid">
+          <main className="main-content">
+            <section className="content-header">
+              <div>
+                <h1>{currentModule.title}</h1>
+                <p>{currentModule.description}</p>
+              </div>
+            </section>
 
-          <section className="content-body">
-            {renderModule()}
-          </section>
-        </main>
+            <section className="content-body">
+              {renderModule()}
+            </section>
+          </main>
+
+          {renderCommandCenter()}
+        </div>
       </div>
     </div>
   );
