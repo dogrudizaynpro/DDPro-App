@@ -625,6 +625,7 @@ function App() {
       newOffer,
       ...currentOffers,
     ]);
+    setSelectedOfferId(newOffer.id);
 
     addLog(`Yeni teklif oluşturuldu: ${newOffer.title}`);
 
@@ -641,6 +642,9 @@ function App() {
     setOffers((currentOffers) =>
       currentOffers.filter((item) => item.id !== id)
     );
+    if (selectedOfferId === id) {
+      setSelectedOfferId(null);
+    }
 
     if (offer) {
       addLog(`Teklif silindi: ${offer.title}`);
@@ -983,9 +987,11 @@ function App() {
 
           <button
             type="button"
+            className="secondary-button"
+            disabled={offersLoading}
             onClick={() => setOffersReloadKey((value) => value + 1)}
           >
-            Yenile
+            {offersLoading ? "Yenileniyor..." : "Yenile"}
           </button>
 
           <button

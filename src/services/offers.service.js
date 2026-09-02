@@ -7,6 +7,29 @@
 
 import { fetchAPI } from "./api.js";
 
+const STATUS_LABELS = {
+  draft: "Hazırlanıyor",
+  preparing: "Hazırlanıyor",
+  pending: "Beklemede",
+  sent: "Gönderildi",
+  submitted: "Gönderildi",
+  approved: "Onaylandı",
+  accepted: "Onaylandı",
+  rejected: "Reddedildi",
+  cancelled: "İptal",
+};
+
+const toStatusLabel = (value) => {
+  if (!value) {
+    return "Hazırlanıyor";
+  }
+
+  const normalizedValue = String(value).trim();
+  const lookupKey = normalizedValue.toLowerCase();
+
+  return STATUS_LABELS[lookupKey] || normalizedValue;
+};
+
 const formatOfferAmount = (amount, currency) => {
   if (amount === null || amount === undefined || amount === "") {
     return "Tutar belirtilmedi";
@@ -55,11 +78,20 @@ const formatOfferDate = (value) => {
 
 export const mapOfferToViewModel = (offer = {}) => {
   const title = offer.title || offer.name || "Adsız teklif";
-  const amountValue = offer.amount ?? offer.amountValue ?? "";
+  const amountValue =
+    offer.amount ?? offer.amountValue ?? offer.totalAmount ?? "";
   const currency = offer.currency || offer.currencyCode || "";
-  const createdAt = offer.created_at || offer.createdAt || null;
+  const createdAt = offer.created_at || offer.createdAt || offer.date || null;
+  const updatedAt = offer.updated_at || offer.updatedAt || null;
   const source =
-    offer.source || (createdAt || offer.project_id || offer.projectId ? "api" : "local");
+    offer.source ||
+    (offer.created_at ||
+    offer.createdAt ||
+    offer.updated_at ||
+    offer.updatedAt
+      ? "api"
+      : "local");
+  const statusRaw = offer.status || (source === "local" ? "Hazırlanıyor" : "");
 
   return {
     id: offer.id,
@@ -70,12 +102,16 @@ export const mapOfferToViewModel = (offer = {}) => {
     amountDisplay:
       offer.amountDisplay || formatOfferAmount(amountValue, currency),
     currency,
-    status: offer.status || "Hazırlanıyor",
+    status: toStatusLabel(statusRaw),
+    statusRaw,
     date:
       offer.date && !createdAt ? offer.date : formatOfferDate(createdAt),
     createdAt,
+    updatedAt,
     projectId: offer.project_id || offer.projectId || null,
+    notes: offer.notes || "",
     source,
+    raw: offer,
   };
 };
 
