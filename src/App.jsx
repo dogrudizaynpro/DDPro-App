@@ -1,6 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { getProjects } from "./services/projects.service.js";
 import "./styles.css";
+import { getRuntimeDataLayer } from "./services/api.js";
+import {
+  getCentralStoreKey,
+  getInitialAppState,
+  isPersistentStorageAvailable,
+  persistAppState,
+} from "./services/centralStore.service.js";
 import {
   createOffer as createOfferRequest,
   deleteOffer as deleteOfferRequest,
@@ -10,15 +17,6 @@ import {
   mapOffersToViewModel,
 } from "./services/offers.service.js";
 import { getResearchItems } from "./services/research.service.js";
-
-const STORAGE_KEYS = {
-  projects: "ddpro_projects_v1",
-  research: "ddpro_research_v1",
-  offers: "ddpro_offers_v1",
-  memory: "ddpro_memory_v1",
-  logs: "ddpro_system_logs_v1",
-  integrations: "ddpro_integrations_v1",
-};
 
 const modules = [
   {
@@ -71,45 +69,6 @@ const modules = [
   },
 ];
 
-const systemModules = [
-  {
-    id: "project-system",
-    title: "Proje Sistemi",
-    description:
-      "Projelerin oluşturulması, merkezi takibi ve operasyon kayıtlarının yönetimi.",
-  },
-  {
-    id: "research-system",
-    title: "Araştırma Sistemi",
-    description:
-      "Ürün, malzeme, fiyat ve tedarikçi araştırmalarının merkezi havuzda toplanması.",
-  },
-  {
-    id: "offer-system",
-    title: "Teklif Sistemi",
-    description:
-      "Teklif oluşturma, kayıt, takip ve proje süreçleriyle ilişkilendirme altyapısı.",
-  },
-  {
-    id: "ai-system",
-    title: "DDPro AI Sistemi",
-    description:
-      "Yapay zeka destekli analiz, araştırma ve karar süreçlerinin merkezi çalışma alanı.",
-  },
-  {
-    id: "memory-system",
-    title: "Merkezi Hafıza",
-    description:
-      "Önemli notların, kararların ve sistem bilgisinin kalıcı olarak merkezi hafızada tutulması.",
-  },
-  {
-    id: "integration-system",
-    title: "Entegrasyon Sistemi",
-    description:
-      "Harici servisler ve gelecekteki API bağlantıları için merkezi entegrasyon altyapısı.",
-  },
-];
-
 const OFFER_STATUS_TONES = {
   Hazırlanıyor: "pending",
   Gönderildi: "info",
@@ -130,13 +89,13 @@ const mergeOffers = (apiOffers, storedOffers) => {
   return [...apiOffers, ...localOnlyOffers];
 };
 
-const getStoredData = (key, fallback = []) => {
-  try {
-    const value = localStorage.getItem(key);
-    return value ? JSON.parse(value) : fallback;
-  } catch {
-    return fallback;
-  }
+const mergeRecords = (primaryRecords = [], secondaryRecords = []) => {
+  const primaryIds = new Set(primaryRecords.map((record) => record?.id));
+  const secondaryOnlyRecords = secondaryRecords.filter(
+    (record) => record?.id && !primaryIds.has(record.id)
+  );
+
+  return [...primaryRecords, ...secondaryOnlyRecords];
 };
 
 const createId = () =>
@@ -179,22 +138,29 @@ const getApiFailureReason = (error) => {
 };
 
 function App() {
+  const initialSnapshotRef = useRef(null);
+  if (!initialSnapshotRef.current) {
+    initialSnapshotRef.current = getInitialAppState();
+  }
+
+  const initialSnapshot = initialSnapshotRef.current;
+  const runtimeDataLayer = getRuntimeDataLayer();
+  const persistentStorageActive = isPersistentStorageAvailable();
+  const storeKey = getCentralStoreKey();
   const [activeModule, setActiveModule] = useState("dashboard");
 
-  const [projects, setProjects] = useState(() =>
-    getStoredData(STORAGE_KEYS.projects)
-  );
+  const [projects, setProjects] = useState(() => initialSnapshot.projects);
 
   const [projectsLoading, setProjectsLoading] = useState(true);
 
-  const [researchItems, setResearchItems] = useState(() =>
-    getStoredData(STORAGE_KEYS.research)
+  const [researchItems, setResearchItems] = useState(
+    () => initialSnapshot.researchItems
   );
   const [researchLoading, setResearchLoading] = useState(true);
   const [researchError, setResearchError] = useState(null);
 
   const [offers, setOffers] = useState(() =>
-    mapOffersToViewModel(getStoredData(STORAGE_KEYS.offers))
+    mapOffersToViewModel(initialSnapshot.offers)
   );
 
   const [offersLoading, setOffersLoading] = useState(true);
@@ -208,31 +174,13 @@ function App() {
   const projectsTouchedRef = useRef(false);
   const researchTouchedRef = useRef(false);
   const offersTouchedRef = useRef(false);
+  const dataLayerInitializedRef = useRef(false);
 
-  const [memoryItems, setMemoryItems] = useState(() =>
-    getStoredData(STORAGE_KEYS.memory)
+  const [memoryItems, setMemoryItems] = useState(
+    () => initialSnapshot.memoryItems
   );
 
-  const [systemLogs, setSystemLogs] = useState(() =>
-    getStoredData(STORAGE_KEYS.logs)
-  );
-
-  const [integrations, setIntegrations] = useState(() =>
-    getStoredData(STORAGE_KEYS.integrations, [
-      {
-        id: "ddpro-core",
-        name: "DDPro Core",
-        status: "Aktif",
-        description: "Merkezi uygulama ve veri yönetim katmanı.",
-      },
-      {
-        id: "local-storage",
-        name: "Local Storage",
-        status: "Aktif",
-        description: "Tarayıcı içi kalıcı kayıt sistemi.",
-      },
-    ])
-  );
+  const [systemLogs, setSystemLogs] = useState(() => initialSnapshot.systemLogs);
 
   const [showProjectForm, setShowProjectForm] = useState(false);
   const [showResearchForm, setShowResearchForm] = useState(false);
@@ -245,46 +193,76 @@ function App() {
 
   const [researchName, setResearchName] = useState("");
   const [researchNote, setResearchNote] = useState("");
+  const [researchProjectId, setResearchProjectId] = useState("");
 
   const [offerName, setOfferName] = useState("");
   const [offerAmount, setOfferAmount] = useState("");
   const [offerStatus, setOfferStatus] = useState("Hazırlanıyor");
+  const [offerProjectId, setOfferProjectId] = useState("");
 
   const [memoryTitle, setMemoryTitle] = useState("");
   const [memoryContent, setMemoryContent] = useState("");
+  const [memoryProjectId, setMemoryProjectId] = useState("");
 
   const [aiInput, setAiInput] = useState("");
 
-  const [aiMessages, setAiMessages] = useState([
-    {
-      id: "welcome",
-      role: "assistant",
-      text:
-        "DDPro AI çalışma alanı hazır. Proje, teklif, araştırma veya sistem analiziyle ilgili bir çalışma başlatabilirsin.",
-      date: formatDate(),
-    },
-  ]);
+  const [aiMessages, setAiMessages] = useState(() => initialSnapshot.aiMessages);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.projects, JSON.stringify(projects));
-  }, [projects]);
+    persistAppState({
+      projects,
+      researchItems,
+      offers,
+      memoryItems,
+      systemLogs,
+      aiMessages,
+    });
+  }, [projects, researchItems, offers, memoryItems, systemLogs, aiMessages]);
 
   useEffect(() => {
-    localStorage.setItem(
-      STORAGE_KEYS.research,
-      JSON.stringify(researchItems)
-    );
-  }, [researchItems]);
+    if (dataLayerInitializedRef.current) {
+      return;
+    }
+
+    dataLayerInitializedRef.current = true;
+
+    if (runtimeDataLayer.mode !== "api") {
+      setProjectsLoading(false);
+      setResearchLoading(false);
+      setOffersLoading(false);
+      setOffersFetchState("local");
+      setOffersError(null);
+      setResearchError(null);
+      setSystemLogs((currentLogs) => {
+        if (
+          currentLogs.some(
+            (log) => log.message === "Kalıcı yerel veri katmanı etkinleştirildi."
+          )
+        ) {
+          return currentLogs;
+        }
+
+        return [
+          {
+            id: createId(),
+            message: "Kalıcı yerel veri katmanı etkinleştirildi.",
+            date: formatDate(),
+          },
+          ...currentLogs,
+        ].slice(0, 50);
+      });
+    }
+  }, [runtimeDataLayer.mode]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.offers, JSON.stringify(offers));
-  }, [offers]);
+    if (runtimeDataLayer.mode !== "api") {
+      return undefined;
+    }
 
-  useEffect(() => {
     let cancelled = false;
 
     const fetchOffersFromApi = async () => {
-      const localOffers = getStoredData(STORAGE_KEYS.offers);
+      const localOffers = initialSnapshot.offers;
       const localOfferViewModels = mapOffersToViewModel(localOffers);
       setOffersLoading(true);
       setOffersError(null);
@@ -339,7 +317,9 @@ function App() {
               ? `Teklif API’sine ulaşılamadı (${reason}). Son kaydedilen veriler gösteriliyor.`
               : `Teklif API’sine ulaşılamadı (${reason}). Lütfen tekrar deneyin.`
           );
-          addLog(`Tekliflerde API bağlantı hatası: ${reason}. Yerel veriler kullanıldı.`);
+          addLog(
+            `Tekliflerde API bağlantı hatası: ${reason}. Yerel veriler kullanıldı.`
+          );
         }
       } finally {
         if (!cancelled) {
@@ -353,7 +333,7 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, [offersReloadKey]);
+  }, [initialSnapshot.offers, offersReloadKey, runtimeDataLayer.mode]);
 
   useEffect(() => {
     if (offers.length === 0) {
@@ -378,7 +358,10 @@ function App() {
       return;
     }
 
-    if (selectedOffer.source !== "api") {
+    if (
+      runtimeDataLayer.mode !== "api" ||
+      selectedOffer.source !== "api"
+    ) {
       setSelectedOfferDetail(selectedOffer);
       setOfferDetailError(null);
       setOfferDetailLoading(false);
@@ -410,13 +393,17 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, [offers, selectedOfferId]);
+  }, [offers, selectedOfferId, runtimeDataLayer.mode]);
 
   useEffect(() => {
+    if (runtimeDataLayer.mode !== "api") {
+      return undefined;
+    }
+
     let cancelled = false;
 
     const fetchResearchFromApi = async () => {
-      const localResearchItems = getStoredData(STORAGE_KEYS.research);
+      const localResearchItems = initialSnapshot.researchItems;
       setResearchLoading(true);
       setResearchError(null);
 
@@ -433,7 +420,7 @@ function App() {
         }
 
         if (apiResearchItems && apiResearchItems.length > 0) {
-          setResearchItems(apiResearchItems);
+          setResearchItems(mergeRecords(apiResearchItems, localResearchItems));
           addLog("Araştırmalar API üzerinden yüklendi.");
         } else {
           setResearchItems(localResearchItems);
@@ -460,34 +447,17 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [initialSnapshot.researchItems, runtimeDataLayer.mode]);
 
   useEffect(() => {
-    localStorage.setItem(
-      STORAGE_KEYS.memory,
-      JSON.stringify(memoryItems)
-    );
-  }, [memoryItems]);
+    if (runtimeDataLayer.mode !== "api") {
+      return undefined;
+    }
 
-  useEffect(() => {
-    localStorage.setItem(
-      STORAGE_KEYS.logs,
-      JSON.stringify(systemLogs)
-    );
-  }, [systemLogs]);
-
-  useEffect(() => {
-    localStorage.setItem(
-      STORAGE_KEYS.integrations,
-      JSON.stringify(integrations)
-    );
-  }, [integrations]);
-
-  useEffect(() => {
     let cancelled = false;
 
     const fetchProjectsFromApi = async () => {
-      const localProjects = getStoredData(STORAGE_KEYS.projects);
+      const localProjects = initialSnapshot.projects;
       setProjectsLoading(true);
 
       try {
@@ -503,7 +473,7 @@ function App() {
         }
 
         if (apiProjects && apiProjects.length > 0) {
-          setProjects(apiProjects);
+          setProjects(mergeRecords(apiProjects, localProjects));
           addLog("Projeler API üzerinden yüklendi.");
         } else {
           setProjects(localProjects);
@@ -527,7 +497,7 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [initialSnapshot.projects, runtimeDataLayer.mode]);
 
   const addLog = (message) => {
     const newLog = {
@@ -565,6 +535,119 @@ function App() {
     [projects, researchItems, offers, systemLogs]
   );
 
+  const projectOptions = useMemo(
+    () =>
+      projects.map((project) => ({
+        id: project.id,
+        name: project.name,
+      })),
+    [projects]
+  );
+
+  const getProjectNameById = (projectId) =>
+    projects.find((project) => project.id === projectId)?.name || "Bağlı değil";
+
+  const systemsOverview = useMemo(
+    () => [
+      {
+        id: "project-system",
+        title: "Proje Sistemi",
+        description:
+          "Projelerin oluşturulması, merkezi takibi ve operasyon kayıtlarının yönetimi.",
+        status: projectsLoading ? "Yükleniyor" : "Aktif",
+        detail: `${projects.length} proje kaydı`,
+      },
+      {
+        id: "research-system",
+        title: "Araştırma Sistemi",
+        description:
+          "Ürün, malzeme, fiyat ve tedarikçi araştırmalarının merkezi havuzda toplanması.",
+        status: researchLoading ? "Yükleniyor" : "Aktif",
+        detail: `${researchItems.length} araştırma kaydı`,
+      },
+      {
+        id: "offer-system",
+        title: "Teklif Sistemi",
+        description:
+          "Teklif oluşturma, kayıt, takip ve proje süreçleriyle ilişkilendirme altyapısı.",
+        status: offersLoading ? "Yükleniyor" : "Aktif",
+        detail: `${offers.length} teklif kaydı`,
+      },
+      {
+        id: "ai-system",
+        title: "DDPro AI Sistemi",
+        description:
+          "Yapay zeka destekli analiz, araştırma ve karar süreçlerinin merkezi çalışma alanı.",
+        status: "Aktif",
+        detail: `${aiMessages.length} mesaj işlendi`,
+      },
+      {
+        id: "memory-system",
+        title: "Merkezi Hafıza",
+        description:
+          "Önemli notların, kararların ve sistem bilgisinin kalıcı olarak merkezi hafızada tutulması.",
+        status: persistentStorageActive ? "Aktif" : "Pasif",
+        detail: `${memoryItems.length} hafıza kaydı`,
+      },
+      {
+        id: "integration-system",
+        title: "Entegrasyon Sistemi",
+        description:
+          "Harici servisler ve gelecekteki API bağlantıları için merkezi entegrasyon altyapısı.",
+        status: runtimeDataLayer.mode === "api" ? "Aktif" : "Yerel Mod",
+        detail:
+          runtimeDataLayer.mode === "api"
+            ? runtimeDataLayer.apiBaseUrl
+            : "GitHub Pages için kalıcı tarayıcı deposu",
+      },
+    ],
+    [
+      aiMessages.length,
+      memoryItems.length,
+      offers.length,
+      offersLoading,
+      persistentStorageActive,
+      projects.length,
+      projectsLoading,
+      researchItems.length,
+      researchLoading,
+      runtimeDataLayer.apiBaseUrl,
+      runtimeDataLayer.mode,
+    ]
+  );
+
+  const integrations = useMemo(
+    () => [
+      {
+        id: "ddpro-core",
+        name: "DDPro Core",
+        status: "Aktif",
+        description:
+          runtimeDataLayer.mode === "api"
+            ? "Merkezi veri katmanı canlı API ve kalıcı tarayıcı deposunu birlikte yönetiyor."
+            : "Merkezi veri katmanı GitHub Pages üretiminde kalıcı tarayıcı deposu ile çalışıyor.",
+      },
+      {
+        id: "local-storage",
+        name: "Local Storage",
+        status: persistentStorageActive ? "Aktif" : "Pasif",
+        description: persistentStorageActive
+          ? `Kalıcı kayıtlar ortak ${storeKey} anahtarı altında tutuluyor.`
+          : "Tarayıcı depolaması bu oturumda kullanılamıyor.",
+      },
+      {
+        id: "data-source",
+        name: runtimeDataLayer.label,
+        status: runtimeDataLayer.mode === "api" ? "Aktif" : "Yerel Mod",
+        description:
+          runtimeDataLayer.mode === "api"
+            ? runtimeDataLayer.apiBaseUrl
+            : runtimeDataLayer.message,
+      },
+    ],
+    [persistentStorageActive, runtimeDataLayer, storeKey]
+  );
+
   const createProject = (event) => {
     event.preventDefault();
 
@@ -577,6 +660,8 @@ function App() {
       type: projectType.trim() || "Genel Proje",
       status: projectStatus,
       date: formatDate(),
+      createdAt: new Date().toISOString(),
+      source: "local",
     };
 
     setProjects((currentProjects) => [
@@ -595,9 +680,42 @@ function App() {
   const deleteProject = (id) => {
     const project = projects.find((item) => item.id === id);
     projectsTouchedRef.current = true;
+    researchTouchedRef.current = true;
+    offersTouchedRef.current = true;
 
     setProjects((currentProjects) =>
       currentProjects.filter((item) => item.id !== id)
+    );
+    setResearchItems((currentItems) =>
+      currentItems.map((item) =>
+        item.projectId === id
+          ? {
+              ...item,
+              projectId: null,
+            }
+          : item
+      )
+    );
+    setOffers((currentOffers) =>
+      currentOffers.map((item) =>
+        item.projectId === id
+          ? mapOfferToViewModel({
+              ...item,
+              projectId: null,
+              project_id: null,
+            })
+          : item
+      )
+    );
+    setMemoryItems((currentItems) =>
+      currentItems.map((item) =>
+        item.projectId === id
+          ? {
+              ...item,
+              projectId: null,
+            }
+          : item
+      )
     );
 
     if (project) {
@@ -616,6 +734,9 @@ function App() {
       name: researchName.trim(),
       note: researchNote.trim() || "Not eklenmedi.",
       date: formatDate(),
+      createdAt: new Date().toISOString(),
+      projectId: researchProjectId || null,
+      source: "local",
     };
 
     setResearchItems((currentItems) => [
@@ -627,6 +748,7 @@ function App() {
 
     setResearchName("");
     setResearchNote("");
+    setResearchProjectId("");
     setShowResearchForm(false);
   };
 
@@ -658,39 +780,52 @@ function App() {
       status: offerStatus,
       statusRaw: offerStatus,
       date: formatDate(),
+      createdAt: new Date().toISOString(),
+      projectId: offerProjectId || null,
+      project_id: offerProjectId || null,
       source: "local",
     });
 
     setOffersError(null);
 
-    try {
-      const createdOffer = await createOfferRequest(newOffer);
-      const nextOffer = createdOffer || newOffer;
+    if (runtimeDataLayer.mode === "api") {
+      try {
+        const createdOffer = await createOfferRequest(newOffer);
+        const nextOffer = createdOffer || newOffer;
 
-      setOffers((currentOffers) => [
-        nextOffer,
-        ...currentOffers,
-      ]);
-      setSelectedOfferId(nextOffer.id);
-      addLog(`Yeni teklif API üzerinden oluşturuldu: ${newOffer.title}`);
-    } catch (error) {
-      console.warn(
-        "Teklif API'ye kaydedilemedi, yerel kayıt oluşturuluyor:",
-        error.message
-      );
+        setOffers((currentOffers) => [
+          nextOffer,
+          ...currentOffers,
+        ]);
+        setSelectedOfferId(nextOffer.id);
+        addLog(`Yeni teklif API üzerinden oluşturuldu: ${newOffer.title}`);
+      } catch (error) {
+        console.warn(
+          "Teklif API'ye kaydedilemedi, yerel kayıt oluşturuluyor:",
+          error.message
+        );
 
+        setOffers((currentOffers) => [
+          newOffer,
+          ...currentOffers,
+        ]);
+        setSelectedOfferId(newOffer.id);
+        setOffersError("Teklif API'ye kaydedilemedi. Yerel kayıt oluşturuldu.");
+        addLog(`Yeni teklif yerel olarak oluşturuldu: ${newOffer.title}`);
+      }
+    } else {
       setOffers((currentOffers) => [
         newOffer,
         ...currentOffers,
       ]);
       setSelectedOfferId(newOffer.id);
-      setOffersError("Teklif API'ye kaydedilemedi. Yerel kayıt oluşturuldu.");
-      addLog(`Yeni teklif yerel olarak oluşturuldu: ${newOffer.title}`);
+      addLog(`Yeni teklif oluşturuldu: ${newOffer.title}`);
     }
 
     setOfferName("");
     setOfferAmount("");
     setOfferStatus("Hazırlanıyor");
+    setOfferProjectId("");
     setShowOfferForm(false);
   };
 
@@ -766,6 +901,8 @@ function App() {
       title: memoryTitle.trim(),
       content: memoryContent.trim() || "İçerik eklenmedi.",
       date: formatDate(),
+      createdAt: new Date().toISOString(),
+      projectId: memoryProjectId || null,
     };
 
     setMemoryItems((currentItems) => [
@@ -777,6 +914,7 @@ function App() {
 
     setMemoryTitle("");
     setMemoryContent("");
+    setMemoryProjectId("");
     setShowMemoryForm(false);
   };
 
@@ -792,30 +930,6 @@ function App() {
     }
   };
 
-  const toggleIntegration = (id) => {
-    const integration = integrations.find((item) => item.id === id);
-
-    if (!integration) return;
-
-    const nextStatus =
-      integration.status === "Aktif" ? "Pasif" : "Aktif";
-
-    setIntegrations((currentItems) =>
-      currentItems.map((item) =>
-        item.id === id
-          ? {
-              ...item,
-              status: nextStatus,
-            }
-          : item
-      )
-    );
-
-    addLog(
-      `${integration.name} entegrasyon durumu değiştirildi: ${nextStatus}`
-    );
-  };
-
   const sendAiMessage = (event) => {
     event.preventDefault();
 
@@ -828,6 +942,7 @@ function App() {
       role: "user",
       text: message,
       date: formatDate(),
+      createdAt: new Date().toISOString(),
     };
 
     const assistantMessage = {
@@ -835,9 +950,12 @@ function App() {
       role: "assistant",
       text:
         `Mesaj alındı: "${message}". ` +
-        "DDPro AI çalışma alanı bu mesajı kayıt altına aldı. " +
-        "Gelişmiş AI/API entegrasyonu sonraki altyapı aşamasında bu alana bağlanabilir.",
+        "DDPro AI çalışma alanı bu mesajı kayıt altına aldı ve merkezi sistem kayıtlarına işledi. " +
+        (runtimeDataLayer.mode === "api"
+          ? "Harici servis entegrasyonu tanımlandığında bu akış canlı API üzerinden genişletilebilir."
+          : "GitHub Pages üretiminde bu akış kalıcı yerel veri katmanı üzerinden sürdürülüyor."),
       date: formatDate(),
+      createdAt: new Date().toISOString(),
     };
 
     setAiMessages((currentMessages) => [
@@ -894,19 +1012,21 @@ function App() {
           <div className="panel-content">
             <div className="quick-status">
               <span>Proje Sistemi</span>
-              <strong>Hazır</strong>
+              <strong>{projectsLoading ? "Yükleniyor" : `${projects.length} kayıt`}</strong>
             </div>
             <div className="quick-status">
               <span>Araştırma Sistemi</span>
-              <strong>Hazır</strong>
+              <strong>
+                {researchLoading ? "Yükleniyor" : `${researchItems.length} kayıt`}
+              </strong>
             </div>
             <div className="quick-status">
               <span>Teklif Sistemi</span>
-              <strong>Hazır</strong>
+              <strong>{offersLoading ? "Yükleniyor" : `${offers.length} kayıt`}</strong>
             </div>
             <div className="quick-status">
-              <span>Merkezi Hafıza</span>
-              <strong>Hazır</strong>
+              <span>Veri Katmanı</span>
+              <strong>{runtimeDataLayer.label}</strong>
             </div>
           </div>
         </div>
@@ -1009,6 +1129,18 @@ function App() {
             onChange={(event) => setResearchNote(event.target.value)}
           />
 
+          <select
+            value={researchProjectId}
+            onChange={(event) => setResearchProjectId(event.target.value)}
+          >
+            <option value="">Projeye bağla (opsiyonel)</option>
+            {projectOptions.map((project) => (
+              <option key={project.id} value={project.id}>
+                {project.name}
+              </option>
+            ))}
+          </select>
+
           <button type="submit">Araştırmayı Kaydet</button>
         </form>
       )}
@@ -1032,7 +1164,12 @@ function App() {
               <div>
                 <h3>{item.name}</h3>
                 <p>{item.note}</p>
-                <small>{item.date}</small>
+                <small>
+                  {item.date}
+                  {item.projectId
+                    ? ` · ${getProjectNameById(item.projectId)}`
+                    : ""}
+                </small>
               </div>
 
               <button
@@ -1088,15 +1225,24 @@ function App() {
             {offersFetchState === "success" && "API bağlı"}
             {offersFetchState === "empty" && "API boş veri döndü"}
             {offersFetchState === "error" && "API bağlantı hatası"}
+            {offersFetchState === "local" && "Kalıcı yerel veri"}
           </span>
 
           <button
             type="button"
             className="secondary-button"
             disabled={offersLoading}
-            onClick={() => setOffersReloadKey((value) => value + 1)}
+            onClick={() => {
+              if (runtimeDataLayer.mode === "api") {
+                setOffersReloadKey((value) => value + 1);
+              }
+            }}
           >
-            {offersLoading ? "Yenileniyor..." : "Yenile"}
+            {offersLoading
+              ? "Yenileniyor..."
+              : runtimeDataLayer.mode === "api"
+                ? "Yenile"
+                : "Kalıcı veri aktif"}
           </button>
 
           <button
@@ -1120,6 +1266,12 @@ function App() {
           {offers.some((offer) => offer.source === "local")
             ? ", kayıtlı yerel taslaklar listeleniyor."
             : "."}
+        </p>
+      )}
+
+      {!offersError && offersFetchState === "local" && (
+        <p className="status-banner info">
+          ℹ GitHub Pages üretiminde teklifler kalıcı yerel veri katmanında saklanıyor.
         </p>
       )}
 
@@ -1149,10 +1301,24 @@ function App() {
             <option>Reddedildi</option>
           </select>
 
+          <select
+            value={offerProjectId}
+            onChange={(event) => setOfferProjectId(event.target.value)}
+          >
+            <option value="">Projeye bağla (opsiyonel)</option>
+            {projectOptions.map((project) => (
+              <option key={project.id} value={project.id}>
+                {project.name}
+              </option>
+            ))}
+          </select>
+
           <button type="submit">Teklifi Kaydet</button>
 
           <p className="form-hint">
-            Yeni kayıtlar bu sürümde yerel taslak olarak eklenir.
+            {runtimeDataLayer.mode === "api"
+              ? "Yeni kayıtlar öncelikle API'ye kaydedilir; gerekirse kalıcı yerel veri korunur."
+              : "Yeni kayıtlar kalıcı yerel veri katmanına kaydedilir ve yenilemede korunur."}
           </p>
         </form>
       )}
@@ -1164,9 +1330,11 @@ function App() {
         </div>
 
         <div className="offer-summary-card">
-          <span>API Kayıtları</span>
+          <span>{runtimeDataLayer.mode === "api" ? "API Kayıtları" : "Bağlı Projeler"}</span>
           <strong>
-            {offers.filter((offer) => offer.source === "api").length}
+            {runtimeDataLayer.mode === "api"
+              ? offers.filter((offer) => offer.source === "api").length
+              : offers.filter((offer) => offer.projectId).length}
           </strong>
         </div>
 
@@ -1178,7 +1346,7 @@ function App() {
         </div>
 
         <div className="offer-summary-card">
-          <span>Yerel Taslak</span>
+          <span>{runtimeDataLayer.mode === "api" ? "Yerel Taslak" : "Kalıcı Yerel"}</span>
           <strong>
             {offers.filter((offer) => offer.source === "local").length}
           </strong>
@@ -1226,7 +1394,9 @@ function App() {
                       <span>
                         {offer.source === "api"
                           ? "Canlı API"
-                          : "Yerel taslak"}
+                          : offer.projectId
+                            ? getProjectNameById(offer.projectId)
+                            : "Kalıcı yerel kayıt"}
                       </span>
                     </div>
 
@@ -1320,16 +1490,18 @@ function App() {
                   <div className="offer-detail-item">
                     <span>Proje Bağlantısı</span>
                     <strong>
-                      {selectedOfferDetail.projectId || "Atanmadı"}
+                      {selectedOfferDetail.projectId
+                        ? getProjectNameById(selectedOfferDetail.projectId)
+                        : "Atanmadı"}
                     </strong>
                   </div>
                 </div>
 
                 <div className="offer-detail-note">
-                  <strong>Detay görünümü hazır</strong>
+                  <strong>Detay görünümü aktif</strong>
                   <p>
-                    Teklif seçildiğinde temel alanlar ve API detay sorgusu bu
-                    panelde yönetilir.
+                    Teklif seçildiğinde temel alanlar, proje bağlantısı ve veri
+                    kaynağı bu panelde yönetilir.
                   </p>
                 </div>
               </div>
@@ -1343,10 +1515,14 @@ function App() {
   const renderSystems = () => (
     <div className="module-page">
       <div className="systems-grid">
-        {systemModules.map((system) => (
+        {systemsOverview.map((system) => (
           <div className="system-card" key={system.id}>
             <h3>{system.title}</h3>
             <p>{system.description}</p>
+            <small>
+              Durum: {system.status}
+              {system.detail ? ` · ${system.detail}` : ""}
+            </small>
           </div>
         ))}
       </div>
@@ -1378,6 +1554,18 @@ function App() {
               onChange={(event) => setMemoryContent(event.target.value)}
             />
 
+            <select
+              value={memoryProjectId}
+              onChange={(event) => setMemoryProjectId(event.target.value)}
+            >
+              <option value="">Projeye bağla (opsiyonel)</option>
+              {projectOptions.map((project) => (
+                <option key={project.id} value={project.id}>
+                  {project.name}
+                </option>
+              ))}
+            </select>
+
             <button type="submit">Hafızaya Kaydet</button>
           </form>
         )}
@@ -1393,7 +1581,12 @@ function App() {
                 <div>
                   <h3>{item.title}</h3>
                   <p>{item.content}</p>
-                  <small>{item.date}</small>
+                  <small>
+                    {item.date}
+                    {item.projectId
+                      ? ` · ${getProjectNameById(item.projectId)}`
+                      : ""}
+                  </small>
                 </div>
 
                 <button
@@ -1421,13 +1614,6 @@ function App() {
                 <p>{item.description}</p>
                 <small>Durum: {item.status}</small>
               </div>
-
-              <button
-                type="button"
-                onClick={() => toggleIntegration(item.id)}
-              >
-                {item.status === "Aktif" ? "Pasifleştir" : "Aktifleştir"}
-              </button>
             </div>
           ))}
         </div>

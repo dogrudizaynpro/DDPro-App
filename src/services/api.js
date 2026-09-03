@@ -11,42 +11,56 @@ const trimTrailingSlash = (value = "") => value.replace(/\/+$/, "");
 const isLocalHost = (hostname = "") =>
   ["localhost", "127.0.0.1", "::1"].includes(hostname);
 
-const resolveApiBaseUrl = () => {
-  const envUrl = trimTrailingSlash(
-    String(import.meta.env.VITE_API_URL || "").trim()
-  );
+const getHostname = () =>
+  typeof window !== "undefined" ? window.location.hostname : "";
 
-  if (envUrl) {
-    return envUrl;
+const getEnvApiUrl = () =>
+  trimTrailingSlash(String(import.meta.env.VITE_API_URL || "").trim());
+
+const resolveRuntimeDataLayer = () => {
+  const hostname = getHostname();
+  const envUrl = getEnvApiUrl();
+  const isLocalRuntime = isLocalHost(hostname);
+  const isInvalidProductionLocalhostUrl =
+    !!envUrl &&
+    !isLocalRuntime &&
+    /localhost|127\.0\.0\.1|::1/i.test(envUrl);
+
+  if (envUrl && !isInvalidProductionLocalhostUrl) {
+    return {
+      mode: "api",
+      label: "Canlı API",
+      apiBaseUrl: envUrl,
+      message: "Canlı API veri akışı aktif.",
+    };
   }
 
-  if (
-    typeof window !== "undefined" &&
-    isLocalHost(window.location.hostname)
-  ) {
-    return DEFAULT_LOCAL_API_URL;
+  if (isLocalRuntime) {
+    return {
+      mode: "api",
+      label: "Yerel API",
+      apiBaseUrl: DEFAULT_LOCAL_API_URL,
+      message: "Yerel geliştirme API bağlantısı aktif.",
+    };
   }
 
-  return "";
+  return {
+    mode: "persistent-local",
+    label: "Kalıcı Yerel Veri",
+    apiBaseUrl: "",
+    message: isInvalidProductionLocalhostUrl
+      ? "Production ortamında localhost API adresi geçersiz olduğu için kalıcı yerel veri katmanı kullanılıyor."
+      : "Static production ortamında canlı backend tanımlı olmadığı için kalıcı yerel veri katmanı kullanılıyor.",
+  };
 };
 
-const API_BASE_URL = resolveApiBaseUrl();
+const RUNTIME_DATA_LAYER = resolveRuntimeDataLayer();
+const API_BASE_URL = RUNTIME_DATA_LAYER.apiBaseUrl;
 
-const API_CONFIGURATION_ERROR = (() => {
-  if (!API_BASE_URL) {
-    return "API adresi tanımlı değil. Production ortamında VITE_API_URL değişkenini yayınlanan backend adresiyle ayarlayın.";
-  }
-
-  if (
-    typeof window !== "undefined" &&
-    !isLocalHost(window.location.hostname) &&
-    /localhost|127\.0\.0\.1|::1/i.test(API_BASE_URL)
-  ) {
-    return "API adresi localhost olarak ayarlı. GitHub Pages ortamında localhost API erişilemez; VITE_API_URL değerini canlı backend adresiyle güncelleyin.";
-  }
-
-  return "";
-})();
+const API_CONFIGURATION_ERROR =
+  RUNTIME_DATA_LAYER.mode === "api"
+    ? ""
+    : "Bu oturumda uzak API kullanılmıyor.";
 
 // ============================================================
 // FETCH WRAPPER
@@ -105,5 +119,7 @@ export const fetchAPI = async (endpoint, options = {}) => {
 // ============================================================
 // EXPORTS
 // ============================================================
+
+export const getRuntimeDataLayer = () => RUNTIME_DATA_LAYER;
 
 export { API_BASE_URL };

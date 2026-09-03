@@ -31,13 +31,6 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Validate API URL
-        run: |
-          if [ -z "${{ vars.VITE_API_URL }}" ]; then
-            echo "Repository variable VITE_API_URL is required for GitHub Pages API access."
-            exit 1
-          fi
-
       - name: Build DDPro
         run: npm run build
         env:
