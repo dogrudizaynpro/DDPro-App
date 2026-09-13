@@ -187,28 +187,37 @@ export const deleteProject = async (req, res, next) => {
     }
 
     const supabase = getSupabaseClient();
-    const { data, error } = await supabase
+    const { data: existingProject, error: lookupError } = await supabase
+      .from("projects")
+      .select("*")
+      .eq("id", id)
+      .maybeSingle();
+
+    if (lookupError) {
+      console.error("Error looking up project:", lookupError.message);
+      return next(lookupError);
+    }
+
+    if (!existingProject) {
+      return res.status(404).json({
+        status: "error",
+        message: "Project not found",
+      });
+    }
+
+    const { error } = await supabase
       .from("projects")
       .delete()
-      .eq("id", id)
-      .select("*")
-      .single();
+      .eq("id", id);
 
     if (error) {
-      if (error.code === "PGRST116") {
-        return res.status(404).json({
-          status: "error",
-          message: "Project not found",
-        });
-      }
-
       console.error("Error deleting project:", error.message);
       return next(error);
     }
 
     res.status(200).json({
       status: "success",
-      data,
+      data: existingProject,
     });
   } catch (error) {
     console.error("Unexpected error in deleteProject:", error.message);

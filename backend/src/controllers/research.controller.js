@@ -187,28 +187,37 @@ export const deleteResearchItem = async (req, res, next) => {
     }
 
     const supabase = getSupabaseClient();
-    const { data, error } = await supabase
+    const { data: existingResearchItem, error: lookupError } = await supabase
+      .from("research_items")
+      .select("*")
+      .eq("id", id)
+      .maybeSingle();
+
+    if (lookupError) {
+      console.error("Error looking up research item:", lookupError.message);
+      return next(lookupError);
+    }
+
+    if (!existingResearchItem) {
+      return res.status(404).json({
+        status: "error",
+        message: "Research item not found",
+      });
+    }
+
+    const { error } = await supabase
       .from("research_items")
       .delete()
-      .eq("id", id)
-      .select("*")
-      .single();
+      .eq("id", id);
 
     if (error) {
-      if (error.code === "PGRST116") {
-        return res.status(404).json({
-          status: "error",
-          message: "Research item not found",
-        });
-      }
-
       console.error("Error deleting research item:", error.message);
       return next(error);
     }
 
     res.status(200).json({
       status: "success",
-      data,
+      data: existingResearchItem,
     });
   } catch (error) {
     console.error("Unexpected error in deleteResearchItem:", error.message);

@@ -462,10 +462,18 @@ function App() {
   }, []);
 
   useEffect(() => {
+    if (!CAN_USE_LOCAL_FALLBACK) {
+      return;
+    }
+
     localStorage.setItem(STORAGE_KEYS.projects, JSON.stringify(projects));
   }, [projects]);
 
   useEffect(() => {
+    if (!CAN_USE_LOCAL_FALLBACK) {
+      return;
+    }
+
     localStorage.setItem(
       STORAGE_KEYS.procurement,
       JSON.stringify(procurementItems)
@@ -473,6 +481,10 @@ function App() {
   }, [procurementItems]);
 
   useEffect(() => {
+    if (!CAN_USE_LOCAL_FALLBACK) {
+      return;
+    }
+
     localStorage.setItem(STORAGE_KEYS.offers, JSON.stringify(offers));
   }, [offers]);
 
