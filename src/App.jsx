@@ -535,9 +535,6 @@ function App() {
                 ? currentId
                 : localOfferViewModels[0]?.id || null
             );
-          } else {
-            setOffers([]);
-            setSelectedOfferId(null);
           }
           setOffersFetchState("error");
           setOffersError(
@@ -655,7 +652,9 @@ function App() {
       } catch (error) {
         const reason = getApiFailureReason(error);
         if (!cancelled) {
-          setProcurementItems(localProcurementItems);
+          if (shouldUseLocalApiFallback) {
+            setProcurementItems(localProcurementItems);
+          }
           setProcurementError(
             shouldUseLocalApiFallback
               ? `Tedarik API erişimi başarısız (${reason}). Yerel tedarik verileri gösteriliyor.`
@@ -738,8 +737,9 @@ function App() {
       } catch (error) {
         const reason = getApiFailureReason(error);
         if (!cancelled) {
-          setProjects(localProjects);
-          if (!shouldUseLocalApiFallback) {
+          if (shouldUseLocalApiFallback) {
+            setProjects(localProjects);
+          } else {
             setProjectsError(
               `Projeler API’sine ulaşılamadı (${reason}). Production fallback devre dışı bırakıldı.`
             );

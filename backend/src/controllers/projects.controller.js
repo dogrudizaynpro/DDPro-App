@@ -183,24 +183,23 @@ export const deleteProject = async (req, res, next) => {
       .from("projects")
       .delete()
       .eq("id", id)
-      .select("*")
-      .single();
+      .select("*");
 
     if (error) {
-      if (error.code === "PGRST116") {
-        return res.status(404).json({
-          status: "error",
-          message: "Project not found",
-        });
-      }
-
       console.error("Error deleting project:", error.message);
       return next(error);
     }
 
+    if (!data || data.length === 0) {
+      return res.status(404).json({
+        status: "error",
+        message: "Project not found",
+      });
+    }
+
     res.status(200).json({
       status: "success",
-      data,
+      data: data[0],
     });
   } catch (error) {
     console.error("Unexpected error in deleteProject:", error.message);

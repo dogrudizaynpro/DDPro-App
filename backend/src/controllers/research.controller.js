@@ -173,24 +173,23 @@ export const deleteResearchItem = async (req, res, next) => {
       .from("research_items")
       .delete()
       .eq("id", id)
-      .select("*")
-      .single();
+      .select("*");
 
     if (error) {
-      if (error.code === "PGRST116") {
-        return res.status(404).json({
-          status: "error",
-          message: "Research item not found",
-        });
-      }
-
       console.error("Error deleting research item:", error.message);
       return next(error);
     }
 
+    if (!data || data.length === 0) {
+      return res.status(404).json({
+        status: "error",
+        message: "Research item not found",
+      });
+    }
+
     res.status(200).json({
       status: "success",
-      data,
+      data: data[0],
     });
   } catch (error) {
     console.error("Unexpected error in deleteResearchItem:", error.message);
