@@ -204,7 +204,8 @@ textarea {
 }
 
 .nav-item:hover,
-.nav-item.active {
+.nav-item.active,
+.nav-item:active {
   border-color: rgba(76, 147, 255, 0.24);
   background: rgba(12, 28, 50, 0.88);
   color: #f2f7ff;
@@ -382,6 +383,7 @@ textarea {
 
 .pipeline-card,
 .recent-card {
+  transition: 0.2s ease;
   width: 100%;
   padding: 18px;
   color: inherit;
@@ -392,6 +394,16 @@ textarea {
 .recent-card span {
   color: #8ca0ba;
   font-size: 12px;
+}
+
+.pipeline-card:hover,
+.pipeline-card:active,
+.recent-card:hover,
+.recent-card:active,
+.link-button:hover,
+.link-button:active {
+  border-color: rgba(76, 147, 255, 0.24);
+  background: rgba(13, 28, 48, 0.92);
 }
 
 .pipeline-card strong,
@@ -504,7 +516,8 @@ textarea {
 }
 
 .record-card:hover,
-.record-card.selected {
+.record-card.selected,
+.record-card:active {
   border-color: rgba(76, 147, 255, 0.24);
   background: rgba(13, 28, 48, 0.92);
 }

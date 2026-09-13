@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { getOffers } from "./services/offers.service.js";
 import { getProjects } from "./services/projects.service.js";
 import { getResearchItems } from "./services/research.service.js";
@@ -820,6 +820,26 @@ const MODULE_CONFIGS = {
   },
 };
 
+const getRecordLabel = (moduleId, record = {}) => {
+  const config = MODULE_CONFIGS[moduleId];
+  const fields = [
+    config?.primaryField,
+    "name",
+    "title",
+    "itemName",
+    "materialName",
+    "ddpCode",
+    "systemCode",
+    "analysisCode",
+    "offerCode",
+    "projectCode",
+    "customerCode",
+    "id",
+  ];
+
+  return fields.map((field) => record?.[field]).find(Boolean) || "Kayıt";
+};
+
 const getRelationLabel = (moduleId, value, records) => {
   if (!value) {
     return "Bağlı değil";
@@ -1168,6 +1188,19 @@ function App() {
     ])
   );
   const [aiInput, setAiInput] = useState("");
+  const isMountedRef = useRef(true);
+  const requestIdsRef = useRef(
+    ENTITY_MODULES.reduce((accumulator, moduleId) => {
+      accumulator[moduleId] = 0;
+      return accumulator;
+    }, {})
+  );
+  const localChangeVersionRef = useRef(
+    ENTITY_MODULES.reduce((accumulator, moduleId) => {
+      accumulator[moduleId] = 0;
+      return accumulator;
+    }, {})
+  );
 
   const appendLog = (message, moduleId = activeModule) => {
     setSystemLogs((currentLogs) => [
@@ -1182,6 +1215,18 @@ function App() {
   };
 
   useEffect(() => {
+    isMountedRef.current = true;
+
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
     const nextState = ENTITY_MODULES.reduce((accumulator, moduleId) => {
       accumulator[moduleId] = records[moduleId] || [];
       return accumulator;
@@ -1191,14 +1236,26 @@ function App() {
   }, [records]);
 
   useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
     window.localStorage.setItem(STORAGE_KEYS.logs, JSON.stringify(systemLogs));
   }, [systemLogs]);
 
   useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
     window.localStorage.setItem(STORAGE_KEYS.ai, JSON.stringify(aiMessages));
   }, [aiMessages]);
 
   useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
     const currentHash = window.location.hash || "#dashboard";
     const module = findModuleByHash(currentHash);
     if (module.id !== activeModule) {
@@ -1215,6 +1272,10 @@ function App() {
   }, [activeModule]);
 
   useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
     const module = MODULES.find((item) => item.id === activeModule);
     if (module && window.location.hash !== module.hash) {
       window.history.replaceState(null, "", module.hash);
@@ -1234,17 +1295,39 @@ function App() {
       return;
     }
 
-    setLoadState((current) => ({
-      ...current,
-      [moduleId]: {
-        ...current[moduleId],
-        loading: true,
-        error: "",
-      },
-    }));
+    const requestId = (requestIdsRef.current[moduleId] || 0) + 1;
+    requestIdsRef.current[moduleId] = requestId;
+    const localChangeVersion = localChangeVersionRef.current[moduleId] || 0;
+
+    if (isMountedRef.current) {
+      setLoadState((current) => ({
+        ...current,
+        [moduleId]: {
+          ...current[moduleId],
+          loading: true,
+          error: "",
+        },
+      }));
+    }
 
     try {
       const remoteData = await loader();
+
+      if (!isMountedRef.current || requestIdsRef.current[moduleId] !== requestId) {
+        return;
+      }
+
+      if (localChangeVersionRef.current[moduleId] !== localChangeVersion) {
+        setLoadState((current) => ({
+          ...current,
+          [moduleId]: {
+            ...current[moduleId],
+            loading: false,
+          },
+        }));
+        return;
+      }
+
       setRecords((current) => ({
         ...current,
         [moduleId]: mergeRemoteRecords(current[moduleId] || [], remoteData || [], moduleId),
@@ -1259,6 +1342,10 @@ function App() {
       }));
       appendLog(`${MODULE_CONFIGS[moduleId].plural} API üzerinden yenilendi.`, moduleId);
     } catch (error) {
+      if (!isMountedRef.current || requestIdsRef.current[moduleId] !== requestId) {
+        return;
+      }
+
       setLoadState((current) => ({
         ...current,
         [moduleId]: {
@@ -1504,6 +1591,8 @@ function App() {
       (item) => item.id === editorState.recordId
     );
     const record = buildModuleRecord(editorState.moduleId, editorState.draft, existingRecord);
+    localChangeVersionRef.current[editorState.moduleId] =
+      (localChangeVersionRef.current[editorState.moduleId] || 0) + 1;
 
     setRecords((current) => {
       const nextModuleRecords = existingRecord
@@ -1527,8 +1616,8 @@ function App() {
 
     appendLog(
       existingRecord
-        ? `${config.singular} güncellendi: ${record.name || record.title}`
-        : `${config.singular} oluşturuldu: ${record.name || record.title}`,
+        ? `${config.singular} güncellendi: ${getRecordLabel(editorState.moduleId, record)}`
+        : `${config.singular} oluşturuldu: ${getRecordLabel(editorState.moduleId, record)}`,
       editorState.moduleId
     );
 
@@ -1541,6 +1630,9 @@ function App() {
     if (!record) {
       return;
     }
+
+    localChangeVersionRef.current[moduleId] =
+      (localChangeVersionRef.current[moduleId] || 0) + 1;
 
     setRecords((current) => {
       const nextRecords = {
@@ -1558,7 +1650,7 @@ function App() {
     }));
 
     appendLog(
-      `${MODULE_CONFIGS[moduleId].singular} silindi: ${record.name || record.title}`,
+      `${MODULE_CONFIGS[moduleId].singular} silindi: ${getRecordLabel(moduleId, record)}`,
       moduleId
     );
 
@@ -1572,6 +1664,13 @@ function App() {
       return;
     }
 
+    setFilters((current) => ({
+      ...current,
+      [moduleId]: {
+        search: "",
+        status: "all",
+      },
+    }));
     setActiveModule(moduleId);
     setSelectedIds((current) => ({
       ...current,
