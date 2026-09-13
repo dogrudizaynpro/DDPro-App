@@ -1186,7 +1186,7 @@ function App() {
     const current = customerMap.get(id);
     if (!current) return;
 
-    const hasRelations = projects.some((item) => item.customerId === id) || offers.some((item) => item.customerId === id);
+    const hasRelations = projectDrafts.some((item) => item.customerId === id) || offerDrafts.some((item) => item.customerId === id);
 
     if (hasRelations) {
       setCustomerFormError('Bu müşteri proje veya teklif kayıtlarında kullanıldığı için silinemez. Önce ilişkileri kaldırın.');
@@ -1368,6 +1368,7 @@ function App() {
       id: createLocalId('project'),
       source: 'local',
       copiedFromId: record.id,
+      offerIds: [],
       status: 'Taslak',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -1384,6 +1385,8 @@ function App() {
       source: 'local',
       copiedFromId: record.id,
       projectId: '',
+      customerId: record.customerInheritedFromProject ? '' : record.customerId,
+      customerInheritedFromProject: false,
       status: 'Taslak',
       items: record.items.length ? record.items : [createOfferItem()],
       createdAt: new Date().toISOString(),
@@ -1943,7 +1946,7 @@ function App() {
         {renderToolbar(
           <div className="toolbar-search-grid">
             <input type="search" aria-label="Teklif ara" placeholder="Teklif ara" value={offerSearch} onChange={(event) => setOfferSearch(event.target.value)} />
-            <StatusPill live tone={offersFetchState === 'success' ? 'success' : offersFetchState === 'loading' ? 'info' : offersFetchState === 'empty' ? 'neutral' : 'warning'}>
+            <StatusPill tone={offersFetchState === 'success' ? 'success' : offersFetchState === 'loading' ? 'info' : offersFetchState === 'empty' ? 'neutral' : 'warning'}>
               {offersFetchState === 'success' ? 'API bağlı' : offersFetchState === 'loading' ? 'API yükleniyor' : offersFetchState === 'empty' ? 'API boş veri' : 'API hatası'}
             </StatusPill>
           </div>,
@@ -1951,6 +1954,9 @@ function App() {
             {showOfferForm ? 'Formu Kapat' : '+ Yeni Teklif'}
           </button>
         )}
+        <div className="sr-only" role="status" aria-live="polite">
+          {offersFetchState === 'success' ? 'Teklif API bağlantısı hazır' : offersFetchState === 'loading' ? 'Teklif API bağlantısı yükleniyor' : offersFetchState === 'empty' ? 'Teklif API boş veri döndü' : 'Teklif API bağlantı hatası var'}
+        </div>
 
         {offersError ? <p className="status-banner warning">⚠ {offersError}</p> : null}
 
@@ -2077,7 +2083,7 @@ function App() {
         {renderToolbar(
           <div className="toolbar-search-grid">
             <input type="search" aria-label="Proje ara" placeholder="Proje ara" value={projectSearch} onChange={(event) => setProjectSearch(event.target.value)} />
-            <StatusPill live tone={projectsFetchState === 'success' ? 'success' : projectsFetchState === 'loading' ? 'info' : projectsFetchState === 'empty' ? 'neutral' : 'warning'}>
+            <StatusPill tone={projectsFetchState === 'success' ? 'success' : projectsFetchState === 'loading' ? 'info' : projectsFetchState === 'empty' ? 'neutral' : 'warning'}>
               {projectsFetchState === 'success' ? 'API proje listesi hazır' : projectsFetchState === 'loading' ? 'API yükleniyor' : projectsFetchState === 'empty' ? 'API boş veri' : 'API hatası'}
             </StatusPill>
           </div>,
@@ -2085,6 +2091,9 @@ function App() {
             {showProjectForm ? 'Formu Kapat' : '+ Yeni Proje'}
           </button>
         )}
+        <div className="sr-only" role="status" aria-live="polite">
+          {projectsFetchState === 'success' ? 'Proje API listesi hazır' : projectsFetchState === 'loading' ? 'Proje API yükleniyor' : projectsFetchState === 'empty' ? 'Proje API boş veri döndü' : 'Proje API bağlantı hatası var'}
+        </div>
 
         {projectsError ? <p className="status-banner warning">⚠ {projectsError}</p> : null}
 
@@ -2265,7 +2274,7 @@ function App() {
   const renderResearch = () => (
     <div className="module-page">
       {renderToolbar(
-        <StatusPill live tone={researchError ? 'warning' : 'info'}>{researchError ? 'API hatası, yerel kayıtlar gösteriliyor' : 'Araştırma kayıtları senkronize ediliyor'}</StatusPill>,
+        <StatusPill tone={researchError ? 'warning' : 'info'}>{researchError ? 'API hatası, yerel kayıtlar gösteriliyor' : 'Araştırma kayıtları senkronize ediliyor'}</StatusPill>,
         <button type="button" onClick={() => { setShowResearchForm((value) => !value); setResearchForm(emptyResearchForm()); }}>
           {showResearchForm ? 'Formu Kapat' : '+ Yeni Araştırma'}
         </button>
