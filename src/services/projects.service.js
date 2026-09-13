@@ -120,3 +120,63 @@ export const getProjectById = async (id) => {
     throw error;
   }
 };
+
+const toProjectPayload = (project = {}) => {
+  const name =
+    typeof project?.name === "string" && project.name.trim()
+      ? project.name.trim()
+      : typeof project?.title === "string" && project.title.trim()
+        ? project.title.trim()
+        : "";
+
+  if (!name) {
+    throw new Error("Project name is required");
+  }
+
+  return {
+    name,
+    project_type:
+      typeof project?.type === "string" && project.type.trim()
+        ? project.type.trim()
+        : typeof project?.projectType === "string" && project.projectType.trim()
+          ? project.projectType.trim()
+          : "Genel Proje",
+    status:
+      typeof project?.status === "string" && project.status.trim()
+        ? project.status.trim()
+        : "Aktif",
+  };
+};
+
+export const createProject = async (project) => {
+  const payload = toProjectPayload(project);
+
+  try {
+    const data = await fetchAPI("/api/projects", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+
+    return data.data ? mapProjectToViewModel(data.data) : null;
+  } catch (error) {
+    console.error("Failed to create project:", error.message);
+    throw error;
+  }
+};
+
+export const deleteProject = async (id) => {
+  if (!id) {
+    throw new Error("Project ID is required");
+  }
+
+  try {
+    const data = await fetchAPI(`/api/projects/${id}`, {
+      method: "DELETE",
+    });
+
+    return data.data ? mapProjectToViewModel(data.data) : null;
+  } catch (error) {
+    console.error("Failed to delete project:", error.message);
+    throw error;
+  }
+};

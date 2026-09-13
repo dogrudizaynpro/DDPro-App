@@ -1,5 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { getProjects } from "./services/projects.service.js";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import {
+  createProject as createProjectRequest,
+  deleteProject as deleteProjectRequest,
+  getProjects,
+} from "./services/projects.service.js";
 import "./styles.css";
 import {
   createOffer as createOfferRequest,
@@ -9,28 +13,53 @@ import {
   mapOfferToViewModel,
   mapOffersToViewModel,
 } from "./services/offers.service.js";
-import { getResearchItems } from "./services/research.service.js";
+import {
+  CAN_USE_LOCAL_FALLBACK,
+  getApiHealth,
+} from "./services/api.js";
+import {
+  createResearchItem as createProcurementRequest,
+  deleteResearchItem as deleteProcurementRequest,
+  getResearchItems as getProcurementItems,
+} from "./services/research.service.js";
+
+const ProjectsModule = lazy(() => import("./modules/ProjectsModule.jsx"));
+const ProcurementModule = lazy(() => import("./modules/ProcurementModule.jsx"));
+const OffersModule = lazy(() => import("./modules/OffersModule.jsx"));
+const SystemsModule = lazy(() => import("./modules/SystemsModule.jsx"));
+const AIModule = lazy(() => import("./modules/AIModule.jsx"));
+const SkeletonModule = lazy(() => import("./modules/SkeletonModule.jsx"));
 
 const STORAGE_KEYS = {
   projects: "ddpro_projects_v1",
-  research: "ddpro_research_v1",
+  procurement: "ddpro_research_v1",
   offers: "ddpro_offers_v1",
   memory: "ddpro_memory_v1",
   logs: "ddpro_system_logs_v1",
   integrations: "ddpro_integrations_v1",
+  products: "ddpro_products_v1",
+  systems: "ddpro_system_inventory_v1",
+  priceAnalysis: "ddpro_price_analysis_v1",
+  materialAnalysis: "ddpro_material_analysis_v1",
+  customers: "ddpro_customers_v1",
+  documents: "ddpro_documents_v1",
+  finance: "ddpro_finance_v1",
+  reports: "ddpro_reports_v1",
 };
 
 const modules = [
   {
     id: "dashboard",
-    icon: "◉",
-    title: "Genel Bakış",
-    short: "Sistem Merkezi",
+    path: "/dashboard",
+    icon: "⌂",
+    title: "Dashboard",
+    short: "Ana Ekran",
     description:
-      "Tüm DDPro operasyonlarını, kayıtları ve sistem hareketlerini tek merkezden takip et.",
+      "DDPro operasyonlarının merkezi görünümü.",
   },
   {
     id: "projects",
+    path: "/projeler",
     icon: "▣",
     title: "Projeler",
     short: "Proje Yönetimi",
@@ -38,77 +67,143 @@ const modules = [
       "Aktif projelerini oluştur, yönet, düzenle ve tüm süreçlerini merkezi olarak takip et.",
   },
   {
-    id: "research",
-    icon: "⌕",
-    title: "Tedarik & Araştırma",
-    short: "Araştırma Merkezi",
+    id: "products",
+    path: "/urunler",
+    icon: "◈",
+    title: "Ürünler",
+    short: "Ürün Yönetimi",
     description:
-      "Ürün, malzeme, fiyat ve tedarikçi araştırmalarını merkezi araştırma havuzunda topla.",
+      "Ürün veri yapısı ve ürün kartlarının yönetim alanı.",
   },
   {
-    id: "ai",
-    icon: "✦",
-    title: "DDPro AI",
-    short: "Yapay Zeka Sistemi",
+    id: "systems",
+    path: "/sistemler",
+    icon: "⚙",
+    title: "Sistemler",
+    short: "Sistem Yönetimi",
     description:
-      "Araştırma, analiz ve operasyon süreçlerinde yapay zeka destekli merkezi çalışma alanı.",
+      "Sistem bileşenleri, entegrasyonlar ve sistem kayıtları.",
+  },
+  {
+    id: "price-analysis",
+    path: "/fiyat-analizi",
+    icon: "₺",
+    title: "Fiyat Analizi",
+    short: "Fiyat Merkezi",
+    description:
+      "Fiyat analiz kayıtları ve karşılaştırma ekranları.",
+  },
+  {
+    id: "material-analysis",
+    path: "/malzeme-analizi",
+    icon: "⛁",
+    title: "Malzeme Analizi",
+    short: "Maliyet Merkezi",
+    description:
+      "Malzeme maliyet analizlerini bağımsız olarak yönet.",
   },
   {
     id: "offers",
+    path: "/teklifler",
     icon: "€",
-    title: "Teklif Merkezi",
+    title: "Teklifler",
     short: "Teklif Sistemi",
     description:
       "Tekliflerini oluştur, kayıt altına al, takip et ve proje süreçleriyle ilişkilendir.",
   },
   {
-    id: "systems",
-    icon: "⚙",
-    title: "Sistemler",
-    short: "Altyapı Merkezi",
+    id: "crm",
+    path: "/musteriler-crm",
+    icon: "☰",
+    title: "Müşteriler / CRM",
+    short: "CRM Yönetimi",
     description:
-      "DDPro altyapısı, entegrasyonlar, kayıtlar ve merkezi sistem bileşenlerini yönet.",
+      "Müşteri ilişkileri ve CRM kayıtları için merkezi çalışma alanı.",
+  },
+  {
+    id: "procurement",
+    path: "/tedarik",
+    icon: "⌕",
+    title: "Tedarik",
+    short: "Tedarik Yönetimi",
+    description:
+      "Tedarik araştırmaları ve kayıtları için operasyon ekranı.",
+  },
+  {
+    id: "documents",
+    path: "/belgeler",
+    icon: "☷",
+    title: "Belgeler",
+    short: "Belge Yönetimi",
+    description:
+      "Belge arşivi ve doküman takibi için temel iskelet ekranı.",
+  },
+  {
+    id: "ai-assistant",
+    path: "/ai-asistan",
+    icon: "✦",
+    title: "AI Asistan",
+    short: "Yapay Zeka",
+    description:
+      "DDPro AI çalışma alanı ve asistan konuşma akışı.",
+  },
+  {
+    id: "finance",
+    path: "/finans-maliyet",
+    icon: "⟐",
+    title: "Finans / Maliyet",
+    short: "Finans Yönetimi",
+    description:
+      "Finansal özetler, maliyet kırılımları ve bütçe takibi.",
+  },
+  {
+    id: "reports",
+    path: "/raporlar",
+    icon: "☲",
+    title: "Raporlar",
+    short: "Rapor Merkezi",
+    description:
+      "Operasyonel ve yönetsel rapor ekranları için temel yapı.",
+  },
+  {
+    id: "settings",
+    path: "/ayarlar",
+    icon: "⚚",
+    title: "Ayarlar",
+    short: "Yapılandırma",
+    description:
+      "Uygulama tercihleri ve sistem ayarları yönetimi.",
   },
 ];
 
-const systemModules = [
-  {
-    id: "project-system",
-    title: "Proje Sistemi",
-    description:
-      "Projelerin oluşturulması, merkezi takibi ve operasyon kayıtlarının yönetimi.",
-  },
-  {
-    id: "research-system",
-    title: "Araştırma Sistemi",
-    description:
-      "Ürün, malzeme, fiyat ve tedarikçi araştırmalarının merkezi havuzda toplanması.",
-  },
-  {
-    id: "offer-system",
-    title: "Teklif Sistemi",
-    description:
-      "Teklif oluşturma, kayıt, takip ve proje süreçleriyle ilişkilendirme altyapısı.",
-  },
-  {
-    id: "ai-system",
-    title: "DDPro AI Sistemi",
-    description:
-      "Yapay zeka destekli analiz, araştırma ve karar süreçlerinin merkezi çalışma alanı.",
-  },
-  {
-    id: "memory-system",
-    title: "Merkezi Hafıza",
-    description:
-      "Önemli notların, kararların ve sistem bilgisinin kalıcı olarak merkezi hafızada tutulması.",
-  },
-  {
-    id: "integration-system",
-    title: "Entegrasyon Sistemi",
-    description:
-      "Harici servisler ve gelecekteki API bağlantıları için merkezi entegrasyon altyapısı.",
-  },
-];
+const moduleRouteMap = Object.fromEntries(
+  modules.map((module) => [module.id, module.path])
+);
+
+const routeModuleMap = Object.fromEntries(
+  modules.map((module) => [module.path, module.id])
+);
+const moduleIds = new Set(modules.map((module) => module.id));
+
+const normalizeModulePath = (pathValue) => {
+  const sanitizedPath = (pathValue || "").trim();
+  const normalizedBasePath = sanitizedPath.replace(/\/+$/, "");
+
+  if (!normalizedBasePath) {
+    return "/dashboard";
+  }
+
+  return normalizedBasePath.startsWith("/")
+    ? normalizedBasePath
+    : `/${normalizedBasePath}`;
+};
+
+const resolveModuleFromHash = (hashValue) => {
+  const rawPath = (hashValue || "").replace(/^#/, "").trim();
+  const pathOnly = rawPath.match(/^[^?#]*/)?.[0] || "";
+  const normalizedPath = normalizeModulePath(pathOnly);
+  return routeModuleMap[normalizedPath] || "dashboard";
+};
 
 const OFFER_STATUS_TONES = {
   Hazırlanıyor: "pending",
@@ -120,6 +215,18 @@ const OFFER_STATUS_TONES = {
 const getOfferStatusTone = (status) =>
   OFFER_STATUS_TONES[status] || "neutral";
 
+const getOfferCacheSignature = (offer) =>
+  [
+    offer?.id,
+    offer?.title,
+    offer?.amountDisplay,
+    offer?.status,
+    offer?.date,
+    offer?.source,
+    offer?.currency,
+    offer?.projectId,
+  ].join("::");
+
 const mergeOffers = (apiOffers, storedOffers) => {
   const storedViewModels = mapOffersToViewModel(storedOffers);
   const apiIds = new Set(apiOffers.map((offer) => offer.id));
@@ -130,13 +237,41 @@ const mergeOffers = (apiOffers, storedOffers) => {
   return [...apiOffers, ...localOnlyOffers];
 };
 
-const getStoredData = (key, fallback = []) => {
+const EMPTY_ITEMS = Object.freeze([]);
+const LOCAL_ONLY_MODULE_MESSAGE =
+  "Bu modül production API'ye bağlı değil. Bu sürümde yalnızca arayüz ve tarayıcı içi kayıt alanı hazır.";
+
+const getStoredData = (key, fallback = EMPTY_ITEMS) => {
   try {
     const value = localStorage.getItem(key);
     return value ? JSON.parse(value) : fallback;
   } catch {
     return fallback;
   }
+};
+
+const useStoredDataState = (key, fallback = EMPTY_ITEMS) => {
+  const [value, setValue] = useState(() => getStoredData(key, fallback));
+
+  useEffect(() => {
+    localStorage.setItem(key, JSON.stringify(value));
+  }, [key, value]);
+
+  useEffect(() => {
+    const syncStoredValue = (event) => {
+      if (event.key === null || event.key === key) {
+        setValue(getStoredData(key, fallback));
+      }
+    };
+
+    window.addEventListener("storage", syncStoredValue);
+
+    return () => {
+      window.removeEventListener("storage", syncStoredValue);
+    };
+  }, [key, fallback]);
+
+  return [value, setValue];
 };
 
 const createId = () =>
@@ -153,6 +288,9 @@ const formatDate = () =>
     dateStyle: "short",
     timeStyle: "short",
   });
+
+const getInitialItems = (key, fallback = EMPTY_ITEMS) =>
+  CAN_USE_LOCAL_FALLBACK ? getStoredData(key, fallback) : fallback;
 
 const getApiFailureReason = (error) => {
   if (!error) {
@@ -178,23 +316,34 @@ const getApiFailureReason = (error) => {
   return "Bilinmeyen hata";
 };
 
-function App() {
-  const [activeModule, setActiveModule] = useState("dashboard");
+const getApiStatusCode = (error) =>
+  error?.status || error?.statusCode || error?.data?.statusCode || null;
 
-  const [projects, setProjects] = useState(() =>
-    getStoredData(STORAGE_KEYS.projects)
+function App() {
+  const [activeModule, setActiveModule] = useState(() =>
+    resolveModuleFromHash(window.location.hash)
   );
+
+  const [apiHealthState, setApiHealthState] = useState({
+    status: "loading",
+    message: "",
+  });
+
+  const [projects, setProjects] = useState(() => getInitialItems(STORAGE_KEYS.projects));
 
   const [projectsLoading, setProjectsLoading] = useState(true);
+  const [projectsError, setProjectsError] = useState(null);
+  const [projectsFetchState, setProjectsFetchState] = useState("loading");
 
-  const [researchItems, setResearchItems] = useState(() =>
-    getStoredData(STORAGE_KEYS.research)
+  const [procurementItems, setProcurementItems] = useState(() =>
+    getInitialItems(STORAGE_KEYS.procurement)
   );
-  const [researchLoading, setResearchLoading] = useState(true);
-  const [researchError, setResearchError] = useState(null);
+  const [procurementLoading, setProcurementLoading] = useState(true);
+  const [procurementError, setProcurementError] = useState(null);
+  const [procurementFetchState, setProcurementFetchState] = useState("loading");
 
   const [offers, setOffers] = useState(() =>
-    mapOffersToViewModel(getStoredData(STORAGE_KEYS.offers))
+    mapOffersToViewModel(getInitialItems(STORAGE_KEYS.offers))
   );
 
   const [offersLoading, setOffersLoading] = useState(true);
@@ -206,8 +355,9 @@ function App() {
   const [offerDetailLoading, setOfferDetailLoading] = useState(false);
   const [offerDetailError, setOfferDetailError] = useState(null);
   const projectsTouchedRef = useRef(false);
-  const researchTouchedRef = useRef(false);
+  const procurementTouchedRef = useRef(false);
   const offersTouchedRef = useRef(false);
+  const offerDetailsCacheRef = useRef(new Map());
 
   const [memoryItems, setMemoryItems] = useState(() =>
     getStoredData(STORAGE_KEYS.memory)
@@ -233,9 +383,17 @@ function App() {
       },
     ])
   );
+  const [products] = useStoredDataState(STORAGE_KEYS.products);
+  const [systemInventory] = useStoredDataState(STORAGE_KEYS.systems);
+  const [priceAnalysisItems] = useStoredDataState(STORAGE_KEYS.priceAnalysis);
+  const [materialAnalysisItems] = useStoredDataState(STORAGE_KEYS.materialAnalysis);
+  const [customerItems] = useStoredDataState(STORAGE_KEYS.customers);
+  const [documentItems] = useStoredDataState(STORAGE_KEYS.documents);
+  const [financeItems] = useStoredDataState(STORAGE_KEYS.finance);
+  const [reportItems] = useStoredDataState(STORAGE_KEYS.reports);
 
   const [showProjectForm, setShowProjectForm] = useState(false);
-  const [showResearchForm, setShowResearchForm] = useState(false);
+  const [showProcurementForm, setShowProcurementForm] = useState(false);
   const [showOfferForm, setShowOfferForm] = useState(false);
   const [showMemoryForm, setShowMemoryForm] = useState(false);
 
@@ -243,8 +401,8 @@ function App() {
   const [projectType, setProjectType] = useState("");
   const [projectStatus, setProjectStatus] = useState("Aktif");
 
-  const [researchName, setResearchName] = useState("");
-  const [researchNote, setResearchNote] = useState("");
+  const [procurementName, setProcurementName] = useState("");
+  const [procurementNote, setProcurementNote] = useState("");
 
   const [offerName, setOfferName] = useState("");
   const [offerAmount, setOfferAmount] = useState("");
@@ -266,17 +424,91 @@ function App() {
   ]);
 
   useEffect(() => {
+    const syncModuleFromHash = () => {
+      const nextModule = resolveModuleFromHash(window.location.hash);
+      setActiveModule((currentModule) =>
+        currentModule === nextModule ? currentModule : nextModule
+      );
+    };
+
+    syncModuleFromHash();
+    window.addEventListener("hashchange", syncModuleFromHash);
+
+    return () => {
+      window.removeEventListener("hashchange", syncModuleFromHash);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!moduleIds.has(activeModule)) {
+      setActiveModule("dashboard");
+      return;
+    }
+
+    const rawHash = window.location.hash.replace(/^#/, "");
+    const hashPath = rawHash.match(/^[^?#]*/)?.[0] || "";
+    const hashPathSuffix = rawHash.slice(hashPath.length);
+    const normalizedHashPath = normalizeModulePath(hashPath);
+    const expectedPath = moduleRouteMap[activeModule] || "/dashboard";
+
+    if (normalizedHashPath !== expectedPath) {
+      window.location.hash = `${expectedPath}${hashPathSuffix}`;
+    }
+  }, [activeModule]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    getApiHealth()
+      .then((data) => {
+        if (cancelled) return;
+        const databaseReady =
+          data?.status === "ok" && data?.database?.ready === true;
+        setApiHealthState({
+          status: databaseReady ? "success" : "warning",
+          message: databaseReady
+            ? ""
+            : "Production backend yanıt veriyor ancak veritabanı hazır değil.",
+        });
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        const reason = getApiFailureReason(error);
+        setApiHealthState({
+          status: "error",
+          message: `Production API health kontrolü başarısız: ${reason}`,
+        });
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!CAN_USE_LOCAL_FALLBACK) {
+      return;
+    }
+
     localStorage.setItem(STORAGE_KEYS.projects, JSON.stringify(projects));
   }, [projects]);
 
   useEffect(() => {
+    if (!CAN_USE_LOCAL_FALLBACK) {
+      return;
+    }
+
     localStorage.setItem(
-      STORAGE_KEYS.research,
-      JSON.stringify(researchItems)
+      STORAGE_KEYS.procurement,
+      JSON.stringify(procurementItems)
     );
-  }, [researchItems]);
+  }, [procurementItems]);
 
   useEffect(() => {
+    if (!CAN_USE_LOCAL_FALLBACK) {
+      return;
+    }
+
     localStorage.setItem(STORAGE_KEYS.offers, JSON.stringify(offers));
   }, [offers]);
 
@@ -295,6 +527,8 @@ function App() {
 
         if (cancelled) return;
 
+        offerDetailsCacheRef.current.clear();
+
         if (offersTouchedRef.current) {
           addLog(
             "Tekliflerde yerel değişiklik algılandı, API yanıtı üzerine yazmadı."
@@ -304,7 +538,11 @@ function App() {
         }
 
         if (apiOffers && apiOffers.length > 0) {
-          setOffers(mergeOffers(apiOffers, localOffers));
+          setOffers(
+            CAN_USE_LOCAL_FALLBACK
+              ? mergeOffers(apiOffers, localOffers)
+              : apiOffers
+          );
           setOffersFetchState("success");
           addLog("Teklifler API üzerinden yüklendi.");
         } else {
@@ -312,10 +550,10 @@ function App() {
             (offer) => offer.source === "local"
           );
 
-          setOffers(localDrafts);
+          setOffers(CAN_USE_LOCAL_FALLBACK ? localDrafts : EMPTY_ITEMS);
           setOffersFetchState("empty");
           addLog(
-            localDrafts.length > 0
+            CAN_USE_LOCAL_FALLBACK && localDrafts.length > 0
               ? "Teklif API boş döndü, yerel taslaklar korundu."
               : "Teklif API boş döndü."
           );
@@ -323,23 +561,27 @@ function App() {
       } catch (error) {
         const reason = getApiFailureReason(error);
         if (!cancelled) {
-          console.warn(
-            "API erişilemedi, localStorage verileri kullanılıyor:",
-            error.message
-          );
-          setOffers(localOfferViewModels);
+          console.warn("Teklif API erişimi başarısız:", error.message);
+          setOffers(CAN_USE_LOCAL_FALLBACK ? localOfferViewModels : EMPTY_ITEMS);
           setSelectedOfferId((currentId) =>
+            CAN_USE_LOCAL_FALLBACK &&
             localOfferViewModels.some((offer) => offer.id === currentId)
               ? currentId
-              : localOfferViewModels[0]?.id || null
+              : CAN_USE_LOCAL_FALLBACK
+                ? localOfferViewModels[0]?.id || null
+                : null
           );
           setOffersFetchState("error");
           setOffersError(
-            localOfferViewModels.length > 0
+            CAN_USE_LOCAL_FALLBACK && localOfferViewModels.length > 0
               ? `Teklif API’sine ulaşılamadı (${reason}). Son kaydedilen veriler gösteriliyor.`
-              : `Teklif API’sine ulaşılamadı (${reason}). Lütfen tekrar deneyin.`
+              : `Teklif API’sine ulaşılamadı (${reason}). Production ortamında yerel fallback kapalı olduğu için canlı veri gösterilemiyor.`
           );
-          addLog(`Tekliflerde API bağlantı hatası: ${reason}. Yerel veriler kullanıldı.`);
+          addLog(
+            CAN_USE_LOCAL_FALLBACK
+              ? `Tekliflerde API bağlantı hatası: ${reason}. Yerel veriler kullanıldı.`
+              : `Tekliflerde production API bağlantı hatası: ${reason}.`
+          );
         }
       } finally {
         if (!cancelled) {
@@ -385,6 +627,19 @@ function App() {
       return;
     }
 
+    const cachedOfferEntry = offerDetailsCacheRef.current.get(selectedOfferId);
+    const selectedOfferSignature = getOfferCacheSignature(selectedOffer);
+    const cacheMatchesSelectedOffer =
+      cachedOfferEntry &&
+      cachedOfferEntry.signature === selectedOfferSignature;
+
+    if (cacheMatchesSelectedOffer) {
+      setSelectedOfferDetail(cachedOfferEntry.detail);
+      setOfferDetailError(null);
+      setOfferDetailLoading(false);
+      return;
+    }
+
     let cancelled = false;
     setOfferDetailLoading(true);
     setOfferDetailError(null);
@@ -392,7 +647,12 @@ function App() {
     getOfferById(selectedOfferId)
       .then((offer) => {
         if (!cancelled) {
-          setSelectedOfferDetail(offer || selectedOffer);
+          const nextDetail = offer || selectedOffer;
+          offerDetailsCacheRef.current.set(selectedOfferId, {
+            detail: nextDetail,
+            signature: selectedOfferSignature,
+          });
+          setSelectedOfferDetail(nextDetail);
         }
       })
       .catch(() => {
@@ -415,47 +675,65 @@ function App() {
   useEffect(() => {
     let cancelled = false;
 
-    const fetchResearchFromApi = async () => {
-      const localResearchItems = getStoredData(STORAGE_KEYS.research);
-      setResearchLoading(true);
-      setResearchError(null);
+    const fetchProcurementFromApi = async () => {
+      const localProcurementItems = getInitialItems(STORAGE_KEYS.procurement);
+      setProcurementLoading(true);
+      setProcurementError(null);
+      setProcurementFetchState("loading");
 
       try {
-        const apiResearchItems = await getResearchItems();
+        const apiProcurementItems = await getProcurementItems();
 
         if (cancelled) return;
 
-        if (researchTouchedRef.current) {
+        if (procurementTouchedRef.current) {
           addLog(
-            "Araştırmalarda yerel değişiklik algılandı, API yanıtı üzerine yazmadı."
+            "Tedarik kayıtlarında yerel değişiklik algılandı, API yanıtı üzerine yazmadı."
           );
-          return;
-        }
-
-        if (apiResearchItems && apiResearchItems.length > 0) {
-          setResearchItems(apiResearchItems);
-          addLog("Araştırmalar API üzerinden yüklendi.");
+          setProcurementFetchState(
+            apiProcurementItems.length > 0 ? "success" : "empty"
+          );
+        } else if (apiProcurementItems && apiProcurementItems.length > 0) {
+          setProcurementItems(apiProcurementItems);
+          setProcurementFetchState("success");
+          addLog("Tedarik kayıtları API üzerinden yüklendi.");
         } else {
-          setResearchItems(localResearchItems);
-          addLog("Araştırmalar API boş döndü, yerel veriler kullanıldı.");
+          setProcurementItems(
+            CAN_USE_LOCAL_FALLBACK ? localProcurementItems : EMPTY_ITEMS
+          );
+          setProcurementFetchState("empty");
+          addLog(
+            CAN_USE_LOCAL_FALLBACK
+              ? "Tedarik API boş döndü, yerel veriler kullanıldı."
+              : "Tedarik API boş döndü."
+          );
         }
       } catch (error) {
         const reason = getApiFailureReason(error);
         if (!cancelled) {
-          setResearchItems(localResearchItems);
-          setResearchError(
-            `Araştırma API erişimi başarısız (${reason}). Yerel araştırma verileri gösteriliyor.`
+          setProcurementItems(
+            CAN_USE_LOCAL_FALLBACK ? localProcurementItems : EMPTY_ITEMS
           );
-          addLog(`Araştırmalar API bağlantı hatası: ${reason}. Yerel veriler kullanıldı.`);
+          setProcurementFetchState("error");
+          setProcurementError(
+            CAN_USE_LOCAL_FALLBACK
+              ? `Tedarik API erişimi başarısız (${reason}). Yerel tedarik verileri gösteriliyor.`
+              : `Tedarik API erişimi başarısız (${reason}). Production ortamında yerel fallback kapalı olduğu için canlı veri gösterilemiyor.`
+          );
+          addLog(
+            CAN_USE_LOCAL_FALLBACK
+              ? `Tedarik API bağlantı hatası: ${reason}. Yerel veriler kullanıldı.`
+              : `Tedarik production API bağlantı hatası: ${reason}.`
+          );
         }
       } finally {
         if (!cancelled) {
-          setResearchLoading(false);
+          setProcurementLoading(false);
         }
       }
     };
 
-    fetchResearchFromApi();
+    fetchProcurementFromApi();
 
     return () => {
       cancelled = true;
@@ -487,8 +765,10 @@ function App() {
     let cancelled = false;
 
     const fetchProjectsFromApi = async () => {
-      const localProjects = getStoredData(STORAGE_KEYS.projects);
+      const localProjects = getInitialItems(STORAGE_KEYS.projects);
       setProjectsLoading(true);
+      setProjectsError(null);
+      setProjectsFetchState("loading");
 
       try {
         const apiProjects = await getProjects();
@@ -499,21 +779,38 @@ function App() {
           addLog(
             "Projelerde yerel değişiklik algılandı, API yanıtı üzerine yazmadı."
           );
+          setProjectsFetchState(apiProjects.length > 0 ? "success" : "empty");
           return;
         }
 
         if (apiProjects && apiProjects.length > 0) {
           setProjects(apiProjects);
+          setProjectsFetchState("success");
           addLog("Projeler API üzerinden yüklendi.");
         } else {
-          setProjects(localProjects);
-          addLog("Projeler API boş döndü, yerel veriler kullanıldı.");
+          setProjects(CAN_USE_LOCAL_FALLBACK ? localProjects : EMPTY_ITEMS);
+          setProjectsFetchState("empty");
+          addLog(
+            CAN_USE_LOCAL_FALLBACK
+              ? "Projeler API boş döndü, yerel veriler kullanıldı."
+              : "Projeler API boş döndü."
+          );
         }
       } catch (error) {
         const reason = getApiFailureReason(error);
         if (!cancelled) {
-          setProjects(localProjects);
-          addLog(`Projelerde API bağlantı hatası: ${reason}. Yerel veriler kullanıldı.`);
+          setProjects(CAN_USE_LOCAL_FALLBACK ? localProjects : EMPTY_ITEMS);
+          setProjectsFetchState("error");
+          setProjectsError(
+            CAN_USE_LOCAL_FALLBACK
+              ? `Projeler API erişimi başarısız (${reason}). Yerel proje verileri gösteriliyor.`
+              : `Projeler API erişimi başarısız (${reason}). Production ortamında yerel fallback kapalı olduğu için canlı veri gösterilemiyor.`
+          );
+          addLog(
+            CAN_USE_LOCAL_FALLBACK
+              ? `Projelerde API bağlantı hatası: ${reason}. Yerel veriler kullanıldı.`
+              : `Projelerde production API bağlantı hatası: ${reason}.`
+          );
         }
       } finally {
         if (!cancelled) {
@@ -541,35 +838,101 @@ function App() {
     );
   };
 
+  const activeProjects = useMemo(
+    () => projects.filter((project) => project.status === "Aktif"),
+    [projects]
+  );
+
+  const pendingOffers = useMemo(
+    () => offers.filter((offer) => offer.status === "Hazırlanıyor"),
+    [offers]
+  );
+
   const dashboardStats = useMemo(
     () => [
       {
         label: "AKTİF PROJELER",
-        value: projects.filter(
-          (project) => project.status === "Aktif"
-        ).length,
+        value: activeProjects.length,
       },
       {
-        label: "ARAŞTIRMALAR",
-        value: researchItems.length,
+        label: "BEKLEYEN TEKLİFLER",
+        value: pendingOffers.length,
       },
       {
-        label: "TEKLİFLER",
-        value: offers.length,
+        label: "ÜRÜNLER",
+        value: products.length,
       },
       {
-        label: "SİSTEM KAYITLARI",
-        value: systemLogs.length,
+        label: "SİSTEMLER",
+        value: systemInventory.length,
       },
     ],
-    [projects, researchItems, offers, systemLogs]
+    [activeProjects.length, pendingOffers.length, products.length, systemInventory.length]
   );
 
-  const createProject = (event) => {
+  const handleModuleNavigation = (moduleId) => {
+    const nextRoute = moduleRouteMap[moduleId] || "/dashboard";
+    if (window.location.hash !== `#${nextRoute}`) {
+      window.location.hash = nextRoute;
+      return;
+    }
+
+    setActiveModule(moduleId);
+  };
+
+  const getConnectionTone = (state) => {
+    switch (state) {
+      case "success":
+        return "success";
+      case "error":
+        return "warning";
+      case "warning":
+        return "warning";
+      case "empty":
+      case "planned":
+        return "info";
+      case "loading":
+      default:
+        return "loading";
+    }
+  };
+
+  const getConnectionLabel = (state) => {
+    switch (state) {
+      case "success":
+        return "Bağlı";
+      case "empty":
+        return "Bağlı / veri yok";
+      case "error":
+        return "Bağlantı hatası";
+      case "warning":
+        return "Yerel fallback";
+      case "planned":
+        return "API entegrasyonu bekliyor";
+      case "loading":
+      default:
+        return "Kontrol ediliyor";
+    }
+  };
+
+  const headerStatusTone = getConnectionTone(apiHealthState.status);
+  const headerStatusLabel =
+    apiHealthState.status === "success"
+      ? "Production API Hazır"
+      : apiHealthState.status === "loading"
+        ? "API Kontrol Ediliyor"
+        : "Production API Kontrol Gerekli";
+  const handleOffersReload = () => {
+    offerDetailsCacheRef.current.clear();
+    setOffersReloadKey((value) => value + 1);
+  };
+
+  const createProject = async (event) => {
     event.preventDefault();
 
     if (!projectName.trim()) return;
     projectsTouchedRef.current = true;
+    let shouldResetForm = false;
 
     const newProject = {
       id: createId(),
@@ -579,69 +942,183 @@ function App() {
       date: formatDate(),
     };
 
-    setProjects((currentProjects) => [
-      newProject,
-      ...currentProjects,
-    ]);
+    setProjectsError(null);
 
-    addLog(`Yeni proje oluşturuldu: ${newProject.name}`);
+    try {
+      const createdProject = await createProjectRequest(newProject);
+      const nextProject = createdProject || newProject;
 
-    setProjectName("");
-    setProjectType("");
-    setProjectStatus("Aktif");
-    setShowProjectForm(false);
-  };
+      setProjects((currentProjects) => [nextProject, ...currentProjects]);
+      setProjectsFetchState("success");
+      addLog(`Yeni proje API üzerinden oluşturuldu: ${nextProject.name}`);
+      shouldResetForm = true;
+    } catch (error) {
+      if (CAN_USE_LOCAL_FALLBACK) {
+        setProjects((currentProjects) => [newProject, ...currentProjects]);
+        setProjectsFetchState("warning");
+        setProjectsError("Proje API'ye kaydedilemedi. Yerel kayıt oluşturuldu.");
+        addLog(`Yeni proje yerel olarak oluşturuldu: ${newProject.name}`);
+        shouldResetForm = true;
+      } else {
+        setProjectsError(
+          `Proje API'ye kaydedilemedi (${getApiFailureReason(error)}). Yerel fallback production ortamında kapalı.`
+        );
+        addLog(
+          `Proje oluşturma production API hatası: ${getApiFailureReason(error)}.`
+        );
+      }
+    }
 
-  const deleteProject = (id) => {
-    const project = projects.find((item) => item.id === id);
-    projectsTouchedRef.current = true;
-
-    setProjects((currentProjects) =>
-      currentProjects.filter((item) => item.id !== id)
-    );
-
-    if (project) {
-      addLog(`Proje silindi: ${project.name}`);
+    if (shouldResetForm) {
+      setProjectName("");
+      setProjectType("");
+      setProjectStatus("Aktif");
+      setShowProjectForm(false);
     }
   };
 
-  const createResearch = (event) => {
+  const deleteProject = async (id) => {
+    const project = projects.find((item) => item.id === id);
+    projectsTouchedRef.current = true;
+
+    if (!isUuid(id)) {
+      setProjects((currentProjects) =>
+        currentProjects.filter((item) => item.id !== id)
+      );
+
+      if (project) {
+        addLog(`Yerel proje silindi: ${project.name}`);
+      }
+
+      return;
+    }
+
+    try {
+      await deleteProjectRequest(id);
+      setProjectsError(null);
+      setProjects((currentProjects) =>
+        currentProjects.filter((item) => item.id !== id)
+      );
+
+      if (project) {
+        addLog(`Proje API üzerinden silindi: ${project.name}`);
+      }
+    } catch (error) {
+      if (getApiStatusCode(error) === 404) {
+        setProjects((currentProjects) =>
+          currentProjects.filter((item) => item.id !== id)
+        );
+        if (project) {
+          addLog(`Proje listeden temizlendi: ${project.name}`);
+        }
+        return;
+      }
+
+      setProjectsError(
+        `Proje silme işlemi API üzerinde tamamlanamadı (${getApiFailureReason(error)}).`
+      );
+      if (project) {
+        addLog(`Proje silme hatası: ${project.name}`);
+      }
+    }
+  };
+
+  const createProcurement = async (event) => {
     event.preventDefault();
 
-    if (!researchName.trim()) return;
-    researchTouchedRef.current = true;
+    if (!procurementName.trim()) return;
+    procurementTouchedRef.current = true;
+    let shouldResetForm = false;
 
-    const newResearch = {
+    const newProcurement = {
       id: createId(),
-      name: researchName.trim(),
-      note: researchNote.trim() || "Not eklenmedi.",
+      name: procurementName.trim(),
+      note: procurementNote.trim() || "Not eklenmedi.",
       date: formatDate(),
     };
 
-    setResearchItems((currentItems) => [
-      newResearch,
-      ...currentItems,
-    ]);
+    setProcurementError(null);
 
-    addLog(`Yeni araştırma kaydı oluşturuldu: ${newResearch.name}`);
+    try {
+      const createdProcurement = await createProcurementRequest(newProcurement);
+      const nextProcurement = createdProcurement || newProcurement;
 
-    setResearchName("");
-    setResearchNote("");
-    setShowResearchForm(false);
+      setProcurementItems((currentItems) => [nextProcurement, ...currentItems]);
+      setProcurementFetchState("success");
+      addLog(`Yeni tedarik kaydı API üzerinden oluşturuldu: ${nextProcurement.name}`);
+      shouldResetForm = true;
+    } catch (error) {
+      if (CAN_USE_LOCAL_FALLBACK) {
+        setProcurementItems((currentItems) => [newProcurement, ...currentItems]);
+        setProcurementFetchState("warning");
+        setProcurementError(
+          "Tedarik kaydı API'ye kaydedilemedi. Yerel kayıt oluşturuldu."
+        );
+        addLog(`Yeni tedarik kaydı yerel olarak oluşturuldu: ${newProcurement.name}`);
+        shouldResetForm = true;
+      } else {
+        setProcurementError(
+          `Tedarik kaydı API'ye kaydedilemedi (${getApiFailureReason(error)}). Yerel fallback production ortamında kapalı.`
+        );
+        addLog(
+          `Tedarik oluşturma production API hatası: ${getApiFailureReason(error)}.`
+        );
+      }
+    }
+
+    if (shouldResetForm) {
+      setProcurementName("");
+      setProcurementNote("");
+      setShowProcurementForm(false);
+    }
   };
 
-  const deleteResearch = (id) => {
-    const item = researchItems.find(
-      (research) => research.id === id
+  const deleteProcurement = async (id) => {
+    const item = procurementItems.find(
+      (procurement) => procurement.id === id
     );
-    researchTouchedRef.current = true;
+    procurementTouchedRef.current = true;
 
-    setResearchItems((currentItems) =>
-      currentItems.filter((research) => research.id !== id)
-    );
+    if (!isUuid(id)) {
+      setProcurementItems((currentItems) =>
+        currentItems.filter((procurement) => procurement.id !== id)
+      );
 
-    if (item) {
-      addLog(`Araştırma kaydı silindi: ${item.name}`);
+      if (item) {
+        addLog(`Yerel tedarik kaydı silindi: ${item.name}`);
+      }
+
+      return;
+    }
+
+    try {
+      await deleteProcurementRequest(id);
+      setProcurementError(null);
+      setProcurementItems((currentItems) =>
+        currentItems.filter((procurement) => procurement.id !== id)
+      );
+
+      if (item) {
+        addLog(`Tedarik kaydı API üzerinden silindi: ${item.name}`);
+      }
+    } catch (error) {
+      if (getApiStatusCode(error) === 404) {
+        setProcurementItems((currentItems) =>
+          currentItems.filter((procurement) => procurement.id !== id)
+        );
+        if (item) {
+          addLog(`Tedarik kaydı listeden temizlendi: ${item.name}`);
+        }
+        return;
+      }
+
+      setProcurementError(
+        `Tedarik silme işlemi API üzerinde tamamlanamadı (${getApiFailureReason(error)}).`
+      );
+
+      if (item) {
+        addLog(`Tedarik silme hatası: ${item.name}`);
+      }
     }
   };
 
@@ -650,6 +1127,7 @@ function App() {
 
     if (!offerName.trim()) return;
     offersTouchedRef.current = true;
+    let shouldResetForm = false;
 
     const newOffer = mapOfferToViewModel({
       id: createId(),
@@ -673,25 +1151,34 @@ function App() {
       ]);
       setSelectedOfferId(nextOffer.id);
       addLog(`Yeni teklif API üzerinden oluşturuldu: ${newOffer.title}`);
+      shouldResetForm = true;
     } catch (error) {
-      console.warn(
-        "Teklif API'ye kaydedilemedi, yerel kayıt oluşturuluyor:",
-        error.message
-      );
+      console.warn("Teklif API'ye kaydedilemedi:", error.message);
 
-      setOffers((currentOffers) => [
-        newOffer,
-        ...currentOffers,
-      ]);
-      setSelectedOfferId(newOffer.id);
-      setOffersError("Teklif API'ye kaydedilemedi. Yerel kayıt oluşturuldu.");
-      addLog(`Yeni teklif yerel olarak oluşturuldu: ${newOffer.title}`);
+      if (CAN_USE_LOCAL_FALLBACK) {
+        setOffers((currentOffers) => [newOffer, ...currentOffers]);
+        setSelectedOfferId(newOffer.id);
+        setOffersFetchState("warning");
+        setOffersError("Teklif API'ye kaydedilemedi. Yerel kayıt oluşturuldu.");
+        addLog(`Yeni teklif yerel olarak oluşturuldu: ${newOffer.title}`);
+        shouldResetForm = true;
+      } else {
+        setOffersFetchState("error");
+        setOffersError(
+          `Teklif API'ye kaydedilemedi (${getApiFailureReason(error)}). Yerel fallback production ortamında kapalı.`
+        );
+        addLog(
+          `Teklif oluşturma production API hatası: ${getApiFailureReason(error)}.`
+        );
+      }
     }
 
-    setOfferName("");
-    setOfferAmount("");
-    setOfferStatus("Hazırlanıyor");
-    setShowOfferForm(false);
+    if (shouldResetForm) {
+      setOfferName("");
+      setOfferAmount("");
+      setOfferStatus("Hazırlanıyor");
+      setShowOfferForm(false);
+    }
   };
 
   const deleteOffer = async (id) => {
@@ -700,6 +1187,7 @@ function App() {
 
     if (!isUuid(id)) {
       setOffersError(null);
+      offerDetailsCacheRef.current.delete(id);
       setOffers((currentOffers) =>
         currentOffers.filter((item) => item.id !== id)
       );
@@ -718,6 +1206,7 @@ function App() {
     try {
       await deleteOfferRequest(id);
       setOffersError(null);
+      offerDetailsCacheRef.current.delete(id);
       setOffers((currentOffers) =>
         currentOffers.filter((item) => item.id !== id)
       );
@@ -732,7 +1221,8 @@ function App() {
     } catch (error) {
       console.warn("Teklif API üzerinden silinemedi:", error.message);
 
-      if (error.status === 404) {
+      if (getApiStatusCode(error) === 404) {
+        offerDetailsCacheRef.current.delete(id);
         setOffers((currentOffers) =>
           currentOffers.filter((item) => item.id !== id)
         );
@@ -853,6 +1343,10 @@ function App() {
 
   const renderDashboard = () => (
     <div className="dashboard-module">
+      {apiHealthState.message ? (
+        <p className="status-banner warning">{apiHealthState.message}</p>
+      ) : null}
+
       <div className="stats-grid">
         {dashboardStats.map((stat) => (
           <div className="stat-card" key={stat.label}>
@@ -865,597 +1359,465 @@ function App() {
       <div className="dashboard-grid">
         <div className="panel">
           <div className="panel-header">
-            <h2>Son Sistem Hareketleri</h2>
+            <h2>Proje Özeti</h2>
           </div>
 
           <div className="panel-content">
-            {systemLogs.length === 0 ? (
-              <p className="empty-state">
-                Henüz sistem kaydı bulunmuyor.
-              </p>
-            ) : (
-              <div className="log-list">
-                {systemLogs.slice(0, 8).map((log) => (
-                  <div className="log-item" key={log.id}>
-                    <strong>{log.message}</strong>
-                    <small>{log.date}</small>
-                  </div>
-                ))}
-              </div>
-            )}
+            <div className="quick-status">
+              <span>Toplam Proje</span>
+              <strong>{projects.length}</strong>
+            </div>
+            <div className="quick-status">
+              <span>Aktif Projeler</span>
+              <strong>
+                {activeProjects.length}
+              </strong>
+            </div>
+            <div className="quick-status">
+              <span>Bekleyen Teklifler</span>
+              <strong>
+                {pendingOffers.length}
+              </strong>
+            </div>
+            <div className="quick-status">
+              <span>Ürün / Sistem Özeti</span>
+              <strong>{products.length + systemInventory.length}</strong>
+            </div>
           </div>
         </div>
 
         <div className="panel">
           <div className="panel-header">
-            <h2>Hızlı Durum</h2>
+            <h2>Hızlı Erişim Kartları</h2>
           </div>
 
-          <div className="panel-content">
-            <div className="quick-status">
-              <span>Proje Sistemi</span>
-              <strong>Hazır</strong>
-            </div>
-            <div className="quick-status">
-              <span>Araştırma Sistemi</span>
-              <strong>Hazır</strong>
-            </div>
-            <div className="quick-status">
-              <span>Teklif Sistemi</span>
-              <strong>Hazır</strong>
-            </div>
-            <div className="quick-status">
-              <span>Merkezi Hafıza</span>
-              <strong>Hazır</strong>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-
-  const renderProjects = () => (
-    <div className="module-page">
-      <div className="module-toolbar">
-        <button
-          type="button"
-          onClick={() => setShowProjectForm((value) => !value)}
-        >
-          {showProjectForm ? "Formu Kapat" : "+ Yeni Proje"}
-        </button>
-      </div>
-
-      {showProjectForm && (
-        <form className="data-form" onSubmit={createProject}>
-          <input
-            type="text"
-            placeholder="Proje adı"
-            value={projectName}
-            onChange={(event) => setProjectName(event.target.value)}
-          />
-
-          <input
-            type="text"
-            placeholder="Proje türü"
-            value={projectType}
-            onChange={(event) => setProjectType(event.target.value)}
-          />
-
-          <select
-            value={projectStatus}
-            onChange={(event) => setProjectStatus(event.target.value)}
-          >
-            <option>Aktif</option>
-            <option>Beklemede</option>
-            <option>Tamamlandı</option>
-          </select>
-
-          <button type="submit">Projeyi Kaydet</button>
-        </form>
-      )}
-
-      <div className="data-list">
-        {projectsLoading ? (
-          <p className="empty-state">Projeler yükleniyor...</p>
-        ) : projects.length === 0 ? (
-          <p className="empty-state">Henüz proje kaydı bulunmuyor.</p>
-        ) : (
-          projects.map((project) => (
-            <div className="data-card" key={project.id}>
-              <div>
-                <h3>{project.name}</h3>
-                <p>{project.type}</p>
-                <small>
-                  {project.status} · {project.date}
-                </small>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => deleteProject(project.id)}
-              >
-                Sil
-              </button>
-            </div>
-          ))
-        )}
-      </div>
-    </div>
-  );
-
-  const renderResearch = () => (
-    <div className="module-page">
-      <div className="module-toolbar">
-        <button
-          type="button"
-          onClick={() => setShowResearchForm((value) => !value)}
-        >
-          {showResearchForm ? "Formu Kapat" : "+ Yeni Araştırma"}
-        </button>
-      </div>
-
-      {showResearchForm && (
-        <form className="data-form" onSubmit={createResearch}>
-          <input
-            type="text"
-            placeholder="Araştırma başlığı"
-            value={researchName}
-            onChange={(event) => setResearchName(event.target.value)}
-          />
-
-          <textarea
-            placeholder="Araştırma notu"
-            value={researchNote}
-            onChange={(event) => setResearchNote(event.target.value)}
-          />
-
-          <button type="submit">Araştırmayı Kaydet</button>
-        </form>
-      )}
-
-      {researchError && (
-        <p className="empty-state" style={{ color: "#f59e0b" }}>
-          ⚠ {researchError}
-        </p>
-      )}
-
-      <div className="data-list">
-        {researchLoading ? (
-          <p className="empty-state">Araştırmalar yükleniyor…</p>
-        ) : researchItems.length === 0 ? (
-          <p className="empty-state">
-            Henüz araştırma kaydı bulunmuyor.
-          </p>
-        ) : (
-          researchItems.map((item) => (
-            <div className="data-card" key={item.id}>
-              <div>
-                <h3>{item.name}</h3>
-                <p>{item.note}</p>
-                <small>{item.date}</small>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => deleteResearch(item.id)}
-              >
-                Sil
-              </button>
-            </div>
-          ))
-        )}
-      </div>
-    </div>
-  );
-
-  const renderAI = () => (
-    <div className="module-page ai-module">
-      <div className="ai-chat">
-        {aiMessages.map((message) => (
-          <div
-            key={message.id}
-            className={`ai-message ${message.role}`}
-          >
-            <strong>
-              {message.role === "assistant"
-                ? "DDPro AI"
-                : "Sen"}
-            </strong>
-            <p>{message.text}</p>
-            <small>{message.date}</small>
-          </div>
-        ))}
-      </div>
-
-      <form className="ai-form" onSubmit={sendAiMessage}>
-        <textarea
-          placeholder="DDPro AI için mesajını yaz..."
-          value={aiInput}
-          onChange={(event) => setAiInput(event.target.value)}
-        />
-
-        <button type="submit">Gönder</button>
-      </form>
-    </div>
-  );
-
-  const renderOffers = () => (
-    <div className="module-page">
-      <div className="module-toolbar">
-        <div className="offers-toolbar-actions">
-          <span className={`offers-status-pill ${offersFetchState}`}>
-            {offersFetchState === "loading" && "API yükleniyor"}
-            {offersFetchState === "success" && "API bağlı"}
-            {offersFetchState === "empty" && "API boş veri döndü"}
-            {offersFetchState === "error" && "API bağlantı hatası"}
-          </span>
-
-          <button
-            type="button"
-            className="secondary-button"
-            disabled={offersLoading}
-            onClick={() => setOffersReloadKey((value) => value + 1)}
-          >
-            {offersLoading ? "Yenileniyor..." : "Yenile"}
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setShowOfferForm((value) => !value)}
-          >
-            {showOfferForm ? "Formu Kapat" : "+ Yeni Teklif"}
-          </button>
-        </div>
-      </div>
-
-      {offersError && (
-        <p className="status-banner warning">
-          ⚠ {offersError}
-        </p>
-      )}
-
-      {!offersError && offersFetchState === "empty" && (
-        <p className="status-banner info">
-          ℹ API üzerinde henüz teklif bulunmuyor
-          {offers.some((offer) => offer.source === "local")
-            ? ", kayıtlı yerel taslaklar listeleniyor."
-            : "."}
-        </p>
-      )}
-
-      {showOfferForm && (
-        <form className="data-form" onSubmit={createOffer}>
-          <input
-            type="text"
-            placeholder="Teklif adı"
-            value={offerName}
-            onChange={(event) => setOfferName(event.target.value)}
-          />
-
-          <input
-            type="text"
-            placeholder="Teklif tutarı"
-            value={offerAmount}
-            onChange={(event) => setOfferAmount(event.target.value)}
-          />
-
-          <select
-            value={offerStatus}
-            onChange={(event) => setOfferStatus(event.target.value)}
-          >
-            <option>Hazırlanıyor</option>
-            <option>Gönderildi</option>
-            <option>Onaylandı</option>
-            <option>Reddedildi</option>
-          </select>
-
-          <button type="submit">Teklifi Kaydet</button>
-
-          <p className="form-hint">
-            Yeni kayıtlar bu sürümde yerel taslak olarak eklenir.
-          </p>
-        </form>
-      )}
-
-      <div className="offers-summary-grid">
-        <div className="offer-summary-card">
-          <span>Toplam Teklif</span>
-          <strong>{offers.length}</strong>
-        </div>
-
-        <div className="offer-summary-card">
-          <span>API Kayıtları</span>
-          <strong>
-            {offers.filter((offer) => offer.source === "api").length}
-          </strong>
-        </div>
-
-        <div className="offer-summary-card">
-          <span>Onaylanan</span>
-          <strong>
-            {offers.filter((offer) => offer.status === "Onaylandı").length}
-          </strong>
-        </div>
-
-        <div className="offer-summary-card">
-          <span>Yerel Taslak</span>
-          <strong>
-            {offers.filter((offer) => offer.source === "local").length}
-          </strong>
-        </div>
-      </div>
-
-      <div className="offers-layout">
-        <div className="panel">
-          <div className="panel-header">
-            <h2>Teklif Listesi</h2>
-            <span className="panel-meta">{offers.length} kayıt</span>
-          </div>
-
-          <div className="panel-content">
-            {offersLoading ? (
-              <p className="empty-state">Teklifler yükleniyor…</p>
-            ) : offers.length === 0 ? (
-              <p className="empty-state">Henüz teklif kaydı bulunmuyor.</p>
-            ) : (
-              <div className="offers-list">
-                {offers.map((offer) => (
-                  <article
-                    className={`offer-card${
-                      offer.id === selectedOfferId ? " selected" : ""
-                    }`}
-                    key={offer.id}
-                  >
-                    <div className="offer-card-top">
-                      <div>
-                        <h3>{offer.title}</h3>
-                        <p className="offer-amount">{offer.amountDisplay}</p>
-                      </div>
-
-                      <span
-                        className={`offer-status-badge ${getOfferStatusTone(
-                          offer.status
-                        )}`}
-                      >
-                        {offer.status}
-                      </span>
-                    </div>
-
-                    <div className="offer-meta-row">
-                      <span>{offer.date}</span>
-                      <span>
-                        {offer.source === "api"
-                          ? "Canlı API"
-                          : "Yerel taslak"}
-                      </span>
-                    </div>
-
-                    <div className="offer-card-actions">
-                      <button
-                        type="button"
-                        className="offer-secondary-button"
-                        onClick={() => setSelectedOfferId(offer.id)}
-                      >
-                        Detay
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => deleteOffer(offer.id)}
-                      >
-                        {offer.source === "local" ? "Sil" : "Listeden Kaldır"}
-                      </button>
-                    </div>
-                  </article>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="panel offer-detail-panel">
-          <div className="panel-header">
-            <h2>Teklif Detayı</h2>
-            {selectedOfferDetail && (
-              <span className="panel-meta">
-                {selectedOfferDetail.source === "api"
-                  ? "API detayı"
-                  : "Taslak detay"}
-              </span>
-            )}
-          </div>
-
-          <div className="panel-content">
-            {offersLoading ? (
-              <p className="empty-state">Detay alanı hazırlanıyor…</p>
-            ) : !selectedOfferDetail ? (
-              <p className="empty-state">
-                Detayları görmek için bir teklif seç.
-              </p>
-            ) : offerDetailLoading ? (
-              <p className="empty-state">Teklif detayı yükleniyor…</p>
-            ) : (
-              <div className="offer-detail-content">
-                <div className="offer-detail-header">
-                  <div>
-                    <h3>{selectedOfferDetail.title}</h3>
-                    <p>{selectedOfferDetail.amountDisplay}</p>
-                  </div>
-
-                  <span
-                    className={`offer-status-badge ${getOfferStatusTone(
-                      selectedOfferDetail.status
-                    )}`}
-                  >
-                    {selectedOfferDetail.status}
-                  </span>
-                </div>
-
-                {offerDetailError && (
-                  <p className="status-banner warning">{offerDetailError}</p>
-                )}
-
-                <div className="offer-detail-grid">
-                  <div className="offer-detail-item">
-                    <span>Kaynak</span>
-                    <strong>
-                      {selectedOfferDetail.source === "api"
-                        ? "Teklifler API"
-                        : "Yerel taslak"}
-                    </strong>
-                  </div>
-
-                  <div className="offer-detail-item">
-                    <span>Teklif Tarihi</span>
-                    <strong>{selectedOfferDetail.date}</strong>
-                  </div>
-
-                  <div className="offer-detail-item">
-                    <span>Para Birimi</span>
-                    <strong>
-                      {selectedOfferDetail.currency || "Belirtilmedi"}
-                    </strong>
-                  </div>
-
-                  <div className="offer-detail-item">
-                    <span>Proje Bağlantısı</span>
-                    <strong>
-                      {selectedOfferDetail.projectId || "Atanmadı"}
-                    </strong>
-                  </div>
-                </div>
-
-                <div className="offer-detail-note">
-                  <strong>Detay görünümü hazır</strong>
-                  <p>
-                    Teklif seçildiğinde temel alanlar ve API detay sorgusu bu
-                    panelde yönetilir.
-                  </p>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-
-  const renderSystems = () => (
-    <div className="module-page">
-      <div className="systems-grid">
-        {systemModules.map((system) => (
-          <div className="system-card" key={system.id}>
-            <h3>{system.title}</h3>
-            <p>{system.description}</p>
-          </div>
-        ))}
-      </div>
-
-      <div className="panel memory-panel">
-        <div className="panel-header">
-          <h2>Merkezi Hafıza</h2>
-
-          <button
-            type="button"
-            onClick={() => setShowMemoryForm((value) => !value)}
-          >
-            {showMemoryForm ? "Kapat" : "+ Yeni Kayıt"}
-          </button>
-        </div>
-
-        {showMemoryForm && (
-          <form className="data-form" onSubmit={createMemory}>
-            <input
-              type="text"
-              placeholder="Hafıza başlığı"
-              value={memoryTitle}
-              onChange={(event) => setMemoryTitle(event.target.value)}
-            />
-
-            <textarea
-              placeholder="Hafıza içeriği"
-              value={memoryContent}
-              onChange={(event) => setMemoryContent(event.target.value)}
-            />
-
-            <button type="submit">Hafızaya Kaydet</button>
-          </form>
-        )}
-
-        <div className="data-list">
-          {memoryItems.length === 0 ? (
-            <p className="empty-state">
-              Merkezi hafızada henüz kayıt bulunmuyor.
-            </p>
-          ) : (
-            memoryItems.map((item) => (
-              <div className="data-card" key={item.id}>
-                <div>
-                  <h3>{item.title}</h3>
-                  <p>{item.content}</p>
-                  <small>{item.date}</small>
-                </div>
-
+          <div className="panel-content quick-links-grid">
+            {modules
+              .filter((module) => module.id !== "dashboard")
+              .slice(0, 6)
+              .map((module) => (
                 <button
                   type="button"
-                  onClick={() => deleteMemory(item.id)}
+                  className="quick-link-card"
+                  key={module.id}
+                  aria-label={`${module.title} modülüne git`}
+                  onClick={() => handleModuleNavigation(module.id)}
                 >
-                  Sil
+                  <span aria-hidden="true">{module.icon}</span>
+                  <strong>{module.title}</strong>
                 </button>
+              ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="dashboard-grid">
+        <div className="panel">
+          <div className="panel-header">
+            <h2>Aktif Projeler</h2>
+          </div>
+
+          <div className="panel-content">
+            {projectsLoading ? (
+              <p className="empty-state">Projeler yükleniyor...</p>
+            ) : activeProjects.length === 0 ? (
+              <p className="empty-state">Henüz veri bulunmuyor.</p>
+            ) : (
+              <div className="log-list">
+                {activeProjects
+                  .slice(0, 6)
+                  .map((project) => (
+                    <div className="log-item" key={project.id}>
+                      <strong>{project.name}</strong>
+                      <small>
+                        {project.type} · {project.date}
+                      </small>
+                    </div>
+                  ))}
               </div>
-            ))
-          )}
+            )}
+          </div>
+        </div>
+
+        <div className="panel">
+          <div className="panel-header">
+            <h2>Sistem Durumu</h2>
+          </div>
+
+          <div className="panel-content">
+            <div className="quick-status">
+              <span>DDPro Core</span>
+              <strong>Hazır</strong>
+            </div>
+            <div className="quick-status">
+              <span>Projeler API</span>
+              <strong>{getConnectionLabel(projectsFetchState)}</strong>
+            </div>
+            <div className="quick-status">
+              <span>Teklifler API</span>
+              <strong>{getConnectionLabel(offersFetchState)}</strong>
+            </div>
+            <div className="quick-status">
+              <span>Tedarik API</span>
+              <strong>{getConnectionLabel(procurementFetchState)}</strong>
+            </div>
+            <div className="quick-status">
+              <span>Diğer Modüller</span>
+              <strong>API entegrasyonu bekliyor</strong>
+            </div>
+          </div>
         </div>
       </div>
 
       <div className="panel">
         <div className="panel-header">
-          <h2>Entegrasyonlar</h2>
+          <h2>Son İşlemler</h2>
         </div>
 
-        <div className="data-list">
-          {integrations.map((item) => (
-            <div className="data-card" key={item.id}>
-              <div>
-                <h3>{item.name}</h3>
-                <p>{item.description}</p>
-                <small>Durum: {item.status}</small>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => toggleIntegration(item.id)}
-              >
-                {item.status === "Aktif" ? "Pasifleştir" : "Aktifleştir"}
-              </button>
+        <div className="panel-content">
+          {systemLogs.length === 0 ? (
+            <p className="empty-state">Henüz veri bulunmuyor.</p>
+          ) : (
+            <div className="log-list">
+              {systemLogs.slice(0, 8).map((log) => (
+                <div className="log-item" key={log.id}>
+                  <strong>{log.message}</strong>
+                  <small>{log.date}</small>
+                </div>
+              ))}
             </div>
-          ))}
+          )}
         </div>
       </div>
     </div>
   );
 
+  const moduleCounts = useMemo(
+    () => ({
+      products: products.length,
+      priceAnalysis: priceAnalysisItems.length,
+      materialAnalysis: materialAnalysisItems.length,
+      customers: customerItems.length,
+      documents: documentItems.length,
+      finance: financeItems.length,
+      reports: reportItems.length,
+      integrations: integrations.length,
+    }),
+    [
+      products.length,
+      priceAnalysisItems.length,
+      materialAnalysisItems.length,
+      customerItems.length,
+      documentItems.length,
+      financeItems.length,
+      reportItems.length,
+      integrations.length,
+    ]
+  );
+
+  const skeletonModuleProps = useMemo(
+    () => ({
+      products: {
+        title: "Ürünler",
+        description:
+          "Ürün yönetimi modülü production API entegrasyonu tamamlanana kadar yerel arayüz olarak kalır.",
+        sections: [
+          {
+            id: "products-catalog",
+            title: "Ürün Kataloğu",
+            description: "Ürün kartları ve temel ürün detayları.",
+            count: moduleCounts.products,
+          },
+          {
+            id: "products-categories",
+            title: "Ürün Kategorileri",
+            description: "Ürün sınıflandırma alanı.",
+            count: 0,
+          },
+          {
+            id: "products-history",
+            title: "Ürün Geçmişi",
+            description: "Ürün işlem geçmişi kayıtları.",
+            count: 0,
+          },
+        ],
+        statusNote: {
+          tone: "info",
+          message: LOCAL_ONLY_MODULE_MESSAGE,
+        },
+      },
+      "price-analysis": {
+        title: "Fiyat Analizi",
+        description:
+          "Fiyat analizi ekranı malzeme analizinden bağımsız tutulur.",
+        sections: [
+          {
+            id: "price-analysis-list",
+            title: "Fiyat Analiz Kayıtları",
+            description: "Ürün veya sistem bazlı fiyat analizi kayıtları.",
+            count: moduleCounts.priceAnalysis,
+          },
+          {
+            id: "price-analysis-comparison",
+            title: "Fiyat Karşılaştırma",
+            description: "Tedarikçi bazlı fiyat karşılaştırma sonuçları.",
+            count: 0,
+          },
+        ],
+        statusNote: {
+          tone: "info",
+          message: LOCAL_ONLY_MODULE_MESSAGE,
+        },
+      },
+      "material-analysis": {
+        title: "Malzeme Analizi",
+        description:
+          "Malzeme maliyet analizleri fiyat analizinden ayrı veri yapısıyla hazırlanır.",
+        sections: [
+          {
+            id: "material-analysis-list",
+            title: "Malzeme Analiz Kayıtları",
+            description: "Malzeme maliyet ve tüketim analiz kayıtları.",
+            count: moduleCounts.materialAnalysis,
+          },
+          {
+            id: "material-analysis-breakdown",
+            title: "Maliyet Kırılımı",
+            description: "Birim ve toplam maliyet kırılım alanı.",
+            count: 0,
+          },
+        ],
+        statusNote: {
+          tone: "info",
+          message: LOCAL_ONLY_MODULE_MESSAGE,
+        },
+      },
+      crm: {
+        title: "Müşteriler / CRM",
+        description:
+          "CRM modülü müşteri yönetimi için API entegrasyonuna hazırdır.",
+        sections: [
+          {
+            id: "crm-customers",
+            title: "Müşteri Listesi",
+            description: "Kurumsal ve bireysel müşteri kayıtları.",
+            count: moduleCounts.customers,
+          },
+          {
+            id: "crm-opportunities",
+            title: "Fırsatlar",
+            description: "Satış fırsatları ve durum takibi.",
+            count: 0,
+          },
+        ],
+        statusNote: {
+          tone: "info",
+          message: LOCAL_ONLY_MODULE_MESSAGE,
+        },
+      },
+      documents: {
+        title: "Belgeler",
+        description:
+          "Belge yönetimi modülü dijital arşiv bağlantıları için hazırlanmıştır.",
+        sections: [
+          {
+            id: "documents-library",
+            title: "Belge Kütüphanesi",
+            description: "Sözleşme, teklif ve teknik belge arşivi.",
+            count: moduleCounts.documents,
+          },
+          {
+            id: "documents-approvals",
+            title: "Onay Süreçleri",
+            description: "Belge onay takip kayıtları.",
+            count: 0,
+          },
+        ],
+        statusNote: {
+          tone: "info",
+          message: LOCAL_ONLY_MODULE_MESSAGE,
+        },
+      },
+      finance: {
+        title: "Finans / Maliyet",
+        description:
+          "Finansal takip ve maliyet yönetimi için temel ekran iskeleti.",
+        sections: [
+          {
+            id: "finance-records",
+            title: "Finans Kayıtları",
+            description: "Gelir-gider, maliyet ve bütçe kayıtları.",
+            count: moduleCounts.finance,
+          },
+          {
+            id: "finance-budget",
+            title: "Bütçe Durumu",
+            description: "Bütçe hedefleri ve gerçekleşme özetleri.",
+            count: 0,
+          },
+        ],
+        statusNote: {
+          tone: "info",
+          message: LOCAL_ONLY_MODULE_MESSAGE,
+        },
+      },
+      reports: {
+        title: "Raporlar",
+        description: "Yönetim raporları ve analiz çıktıları için iskelet yapı.",
+        sections: [
+          {
+            id: "reports-library",
+            title: "Rapor Listesi",
+            description: "Operasyonel ve finansal rapor kayıtları.",
+            count: moduleCounts.reports,
+          },
+          {
+            id: "reports-scheduled",
+            title: "Planlı Raporlar",
+            description: "Zamanlanmış rapor üretim alanı.",
+            count: 0,
+          },
+        ],
+        statusNote: {
+          tone: "info",
+          message: LOCAL_ONLY_MODULE_MESSAGE,
+        },
+      },
+      settings: {
+        title: "Ayarlar",
+        description: "Uygulama tercihleri ve yapılandırma alanı.",
+        sections: [
+          {
+            id: "settings-app",
+            title: "Uygulama Tercihleri",
+            description: "Temel arayüz ve kullanıcı ayarları.",
+            count: 0,
+          },
+          {
+            id: "settings-integrations",
+            title: "Sistem Yapılandırması",
+            description: "API ve entegrasyon ayarları.",
+            count: moduleCounts.integrations,
+          },
+        ],
+        statusNote: {
+          tone: "info",
+          message: LOCAL_ONLY_MODULE_MESSAGE,
+        },
+      },
+    }),
+    [moduleCounts]
+  );
+
   const renderModule = () => {
-    switch (activeModule) {
-      case "projects":
-        return renderProjects();
-
-      case "research":
-        return renderResearch();
-
-      case "ai":
-        return renderAI();
-
-      case "offers":
-        return renderOffers();
-
-      case "systems":
-        return renderSystems();
-
-      case "dashboard":
-      default:
-        return renderDashboard();
+    if (activeModule === "dashboard") {
+      return renderDashboard();
     }
+
+    if (activeModule === "projects") {
+      return (
+        <ProjectsModule
+          showProjectForm={showProjectForm}
+          setShowProjectForm={setShowProjectForm}
+          createProject={createProject}
+          projectName={projectName}
+          setProjectName={setProjectName}
+          projectType={projectType}
+          setProjectType={setProjectType}
+          projectStatus={projectStatus}
+          setProjectStatus={setProjectStatus}
+          projectsLoading={projectsLoading}
+          projectsError={projectsError}
+          projects={projects}
+          deleteProject={deleteProject}
+        />
+      );
+    }
+
+    if (activeModule === "systems") {
+      return (
+        <SystemsModule
+          systemInventory={systemInventory}
+          showMemoryForm={showMemoryForm}
+          setShowMemoryForm={setShowMemoryForm}
+          createMemory={createMemory}
+          memoryTitle={memoryTitle}
+          setMemoryTitle={setMemoryTitle}
+          memoryContent={memoryContent}
+          setMemoryContent={setMemoryContent}
+          memoryItems={memoryItems}
+          deleteMemory={deleteMemory}
+          integrations={integrations}
+          toggleIntegration={toggleIntegration}
+          statusNote={{
+            tone: "info",
+            message: LOCAL_ONLY_MODULE_MESSAGE,
+          }}
+        />
+      );
+    }
+
+    if (activeModule === "offers") {
+      return (
+        <OffersModule
+          offersFetchState={offersFetchState}
+          offersLoading={offersLoading}
+          onOffersReload={handleOffersReload}
+          showOfferForm={showOfferForm}
+          setShowOfferForm={setShowOfferForm}
+          offersError={offersError}
+          offers={offers}
+          createOffer={createOffer}
+          offerName={offerName}
+          setOfferName={setOfferName}
+          offerAmount={offerAmount}
+          setOfferAmount={setOfferAmount}
+          offerStatus={offerStatus}
+          setOfferStatus={setOfferStatus}
+          selectedOfferId={selectedOfferId}
+          setSelectedOfferId={setSelectedOfferId}
+          deleteOffer={deleteOffer}
+          selectedOfferDetail={selectedOfferDetail}
+          offerDetailLoading={offerDetailLoading}
+          offerDetailError={offerDetailError}
+          getOfferStatusTone={getOfferStatusTone}
+          canUseLocalFallback={CAN_USE_LOCAL_FALLBACK}
+        />
+      );
+    }
+
+    if (activeModule === "procurement") {
+      return (
+        <ProcurementModule
+          showProcurementForm={showProcurementForm}
+          setShowProcurementForm={setShowProcurementForm}
+          createProcurement={createProcurement}
+          procurementName={procurementName}
+          setProcurementName={setProcurementName}
+          procurementNote={procurementNote}
+          setProcurementNote={setProcurementNote}
+          procurementError={procurementError}
+          procurementLoading={procurementLoading}
+          procurementItems={procurementItems}
+          deleteProcurement={deleteProcurement}
+        />
+      );
+    }
+
+    if (activeModule === "ai-assistant") {
+      return (
+        <AIModule
+          aiMessages={aiMessages}
+          sendAiMessage={sendAiMessage}
+          aiInput={aiInput}
+          setAiInput={setAiInput}
+        />
+      );
+    }
+
+    const skeletonProps =
+      skeletonModuleProps[activeModule] || skeletonModuleProps.settings;
+    return <SkeletonModule {...skeletonProps} />;
   };
 
   const currentModule =
@@ -1474,9 +1836,9 @@ function App() {
           </div>
         </div>
 
-        <div className="header-status">
-          <span className="status-dot"></span>
-          Sistem Aktif
+        <div className={`header-status ${headerStatusTone}`}>
+          <span className={`status-dot ${headerStatusTone}`}></span>
+          {headerStatusLabel}
         </div>
       </header>
 
@@ -1494,7 +1856,7 @@ function App() {
                 className={`module-button ${
                   activeModule === module.id ? "active" : ""
                 }`}
-                onClick={() => setActiveModule(module.id)}
+                onClick={() => handleModuleNavigation(module.id)}
               >
                 <span className="module-icon">
                   {module.icon}
@@ -1511,7 +1873,7 @@ function App() {
           <div className="sidebar-footer">
             <div className="sidebar-system">
               <span className="status-dot"></span>
-              DDPro Core v1.0
+              DDPro Core v1.1
             </div>
           </div>
         </aside>
@@ -1525,7 +1887,19 @@ function App() {
           </section>
 
           <section className="content-body">
-            {renderModule()}
+            <Suspense
+              fallback={
+                <p
+                  className="module-loading"
+                  role="status"
+                  aria-live="polite"
+                >
+                  Modül yükleniyor...
+                </p>
+              }
+            >
+              {renderModule()}
+            </Suspense>
           </section>
         </main>
       </div>

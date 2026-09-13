@@ -26,12 +26,13 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
 
       - name: Install dependencies
         run: npm install
 
       - name: Resolve API URL
+        id: api_url
         run: |
           API_URL="${{ vars.VITE_API_URL }}"
 
@@ -39,12 +40,35 @@ jobs:
             API_URL="${{ secrets.VITE_API_URL }}"
           fi
 
-          if [ -n "$API_URL" ]; then
-            echo "VITE_API_URL=$API_URL" >> "$GITHUB_ENV"
-            echo "VITE_API_URL detected and exported for build."
-          else
-            echo "VITE_API_URL not configured. Build will continue with frontend fallback mode."
+          if [ -z "$API_URL" ]; then
+            echo "::notice::VITE_API_URL not configured. Build will continue with frontend fallback mode."
+            echo "value=" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
+
+          case "$API_URL" in
+            https://*)
+              ;;
+            *)
+              echo "::error::VITE_API_URL must be an https URL."
+              exit 1
+              ;;
+          esac
+
+          echo "::notice::Using configured production API origin."
+          echo "VITE_API_URL=$API_URL" >> "$GITHUB_ENV"
+          echo "value=$API_URL" >> "$GITHUB_OUTPUT"
+
+      - name: Smoke test production API
+        if: ${{ steps.api_url.outputs.value != '' }}
+        run: |
+          API_URL="${{ steps.api_url.outputs.value }}"
+          curl --fail --silent --show-error \
+            --max-time 20 \
+            --retry 3 \
+            --retry-connrefused \
+            "${API_URL}/health" > /tmp/ddpro-health.json
+          node -e 'const fs=require("fs"); const data=JSON.parse(fs.readFileSync("/tmp/ddpro-health.json","utf8")); if(!data || !data.service || !["ok","degraded"].includes(data.status)){console.error("Unexpected health response", data); process.exit(1)} if(data.status !== "ok"){console.error("Backend health is not ready", data); process.exit(1)} console.log("Health OK:", data.service);'
 
       - name: Build DDPro
         run: npm run build

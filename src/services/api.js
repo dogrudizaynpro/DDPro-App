@@ -11,6 +11,12 @@ const trimTrailingSlash = (value = "") => value.replace(/\/+$/, "");
 const isLocalHost = (hostname = "") =>
   ["localhost", "127.0.0.1", "::1"].includes(hostname);
 
+const getRuntimeHostname = () =>
+  typeof window !== "undefined" ? window.location.hostname : "";
+
+const IS_PRODUCTION_RUNTIME = !isLocalHost(getRuntimeHostname());
+const CAN_USE_LOCAL_FALLBACK = !IS_PRODUCTION_RUNTIME;
+
 const resolveApiBaseUrl = () => {
   const envUrl = trimTrailingSlash(
     String(import.meta.env.VITE_API_URL || "").trim()
@@ -90,6 +96,7 @@ export const fetchAPI = async (endpoint, options = {}) => {
         data.message || `HTTP Error: ${response.status}`
       );
       error.status = response.status;
+      error.statusCode = response.status;
       error.data = data;
       throw error;
     }
@@ -102,8 +109,10 @@ export const fetchAPI = async (endpoint, options = {}) => {
   }
 };
 
+export const getApiHealth = async () => fetchAPI("/health");
+
 // ============================================================
 // EXPORTS
 // ============================================================
 
-export { API_BASE_URL };
+export { API_BASE_URL, CAN_USE_LOCAL_FALLBACK, IS_PRODUCTION_RUNTIME };
