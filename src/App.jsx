@@ -18,6 +18,10 @@ const STORAGE_KEYS = {
   memory: "ddpro_memory_v1",
   logs: "ddpro_system_logs_v1",
   integrations: "ddpro_integrations_v1",
+  products: "ddpro_products_v1",
+  priceAnalysis: "ddpro_price_analysis_v1",
+  materialAnalysis: "ddpro_material_analysis_v1",
+  crm: "ddpro_crm_v1",
 };
 
 const modules = [
@@ -27,31 +31,39 @@ const modules = [
     title: "Genel Bakış",
     short: "Sistem Merkezi",
     description:
-      "Tüm DDPro operasyonlarını, kayıtları ve sistem hareketlerini tek merkezden takip et.",
+      "Tüm DDPro operasyonlarını, modüllerini ve üretim akışlarını tek merkezden takip et.",
   },
   {
-    id: "projects",
-    icon: "▣",
-    title: "Projeler",
-    short: "Proje Yönetimi",
+    id: "products",
+    icon: "◫",
+    title: "Ürünler",
+    short: "Ürün Yönetimi",
     description:
-      "Aktif projelerini oluştur, yönet, düzenle ve tüm süreçlerini merkezi olarak takip et.",
+      "Ürün kayıtlarını oluştur, düzenle ve tedarik akışına hazır yerel taslaklar olarak yönet.",
   },
   {
-    id: "research",
-    icon: "⌕",
-    title: "Tedarik & Araştırma",
-    short: "Araştırma Merkezi",
+    id: "systems",
+    icon: "⚙",
+    title: "Sistemler",
+    short: "Altyapı Merkezi",
     description:
-      "Ürün, malzeme, fiyat ve tedarikçi araştırmalarını merkezi araştırma havuzunda topla.",
+      "DDPro altyapısı, entegrasyonlar, hafıza ve operasyon kayıtlarını merkezi olarak yönet.",
   },
   {
-    id: "ai",
-    icon: "✦",
-    title: "DDPro AI",
-    short: "Yapay Zeka Sistemi",
+    id: "price-analysis",
+    icon: "₺",
+    title: "Fiyat Analizi",
+    short: "Maliyet Analizi",
     description:
-      "Araştırma, analiz ve operasyon süreçlerinde yapay zeka destekli merkezi çalışma alanı.",
+      "Fiyat karşılaştırmalarını ayrı bir modülde tut, teklif öncesi maliyet taslaklarını yönet.",
+  },
+  {
+    id: "material-analysis",
+    icon: "▤",
+    title: "Malzeme Analizi",
+    short: "Malzeme İnceleme",
+    description:
+      "Malzeme özelliklerini, kullanım notlarını ve ihtiyaç analizlerini fiyat analizinden bağımsız tut.",
   },
   {
     id: "offers",
@@ -62,27 +74,63 @@ const modules = [
       "Tekliflerini oluştur, kayıt altına al, takip et ve proje süreçleriyle ilişkilendir.",
   },
   {
-    id: "systems",
-    icon: "⚙",
-    title: "Sistemler",
-    short: "Altyapı Merkezi",
+    id: "projects",
+    icon: "▣",
+    title: "Projeler",
+    short: "Proje Yönetimi",
     description:
-      "DDPro altyapısı, entegrasyonlar, kayıtlar ve merkezi sistem bileşenlerini yönet.",
+      "Aktif projelerini oluştur, yönet, düzenle ve tüm süreçlerini merkezi olarak takip et.",
+  },
+  {
+    id: "crm",
+    icon: "☏",
+    title: "CRM",
+    short: "Müşteri Yönetimi",
+    description:
+      "Müşteri kayıtlarını, temas notlarını ve satış aşamalarını yerel taslak akışıyla izle.",
+  },
+  {
+    id: "research",
+    icon: "⌕",
+    title: "Tedarik & Araştırma",
+    short: "Araştırma Merkezi",
+    description:
+      "Ürün, tedarikçi ve genel araştırma notlarını merkezi araştırma havuzunda topla.",
+  },
+  {
+    id: "ai",
+    icon: "✦",
+    title: "DDPro AI",
+    short: "Yapay Zeka Sistemi",
+    description:
+      "Araştırma, analiz ve operasyon süreçlerinde yapay zeka destekli merkezi çalışma alanı.",
   },
 ];
 
 const systemModules = [
   {
+    id: "product-system",
+    title: "Ürün Sistemi",
+    description:
+      "Ürün taslaklarının eklenmesi, düzenlenmesi ve teklif akışına hazırlanması.",
+  },
+  {
+    id: "price-system",
+    title: "Fiyat Analizi Sistemi",
+    description:
+      "Birim fiyat, adet ve toplam maliyet analizlerinin bağımsız modülde saklanması.",
+  },
+  {
+    id: "material-system",
+    title: "Malzeme Analizi Sistemi",
+    description:
+      "Malzeme özelliklerinin ve kullanım notlarının fiyat analizinden ayrı tutulması.",
+  },
+  {
     id: "project-system",
     title: "Proje Sistemi",
     description:
       "Projelerin oluşturulması, merkezi takibi ve operasyon kayıtlarının yönetimi.",
-  },
-  {
-    id: "research-system",
-    title: "Araştırma Sistemi",
-    description:
-      "Ürün, malzeme, fiyat ve tedarikçi araştırmalarının merkezi havuzda toplanması.",
   },
   {
     id: "offer-system",
@@ -91,22 +139,10 @@ const systemModules = [
       "Teklif oluşturma, kayıt, takip ve proje süreçleriyle ilişkilendirme altyapısı.",
   },
   {
-    id: "ai-system",
-    title: "DDPro AI Sistemi",
+    id: "crm-system",
+    title: "CRM Sistemi",
     description:
-      "Yapay zeka destekli analiz, araştırma ve karar süreçlerinin merkezi çalışma alanı.",
-  },
-  {
-    id: "memory-system",
-    title: "Merkezi Hafıza",
-    description:
-      "Önemli notların, kararların ve sistem bilgisinin kalıcı olarak merkezi hafızada tutulması.",
-  },
-  {
-    id: "integration-system",
-    title: "Entegrasyon Sistemi",
-    description:
-      "Harici servisler ve gelecekteki API bağlantıları için merkezi entegrasyon altyapısı.",
+      "Müşteri temasları, satış aşamaları ve ilişki notlarının kalıcı taslak takibi.",
   },
 ];
 
@@ -117,8 +153,55 @@ const OFFER_STATUS_TONES = {
   Reddedildi: "danger",
 };
 
-const getOfferStatusTone = (status) =>
-  OFFER_STATUS_TONES[status] || "neutral";
+const PRODUCT_STATUS_OPTIONS = ["Taslak", "Aktif", "Arşiv"];
+const CRM_STAGE_OPTIONS = [
+  "Yeni Lead",
+  "İletişimde",
+  "Teklif Hazırlanıyor",
+  "Takipte",
+  "Kazanıldı",
+  "Kaybedildi",
+];
+
+const EMPTY_PRODUCT_FORM = {
+  name: "",
+  category: "",
+  supplier: "",
+  status: "Taslak",
+  note: "",
+};
+
+const EMPTY_PRICE_FORM = {
+  title: "",
+  productName: "",
+  supplier: "",
+  unitPrice: "",
+  quantity: "",
+  note: "",
+};
+
+const EMPTY_MATERIAL_FORM = {
+  title: "",
+  materialName: "",
+  specification: "",
+  quantity: "",
+  unit: "",
+  usageArea: "",
+  note: "",
+};
+
+const EMPTY_CRM_FORM = {
+  customerName: "",
+  companyName: "",
+  contact: "",
+  stage: "Yeni Lead",
+  note: "",
+};
+
+const DEFAULT_MODULE_ID = "dashboard";
+const MODULE_IDS = new Set(modules.map((module) => module.id));
+
+const getOfferStatusTone = (status) => OFFER_STATUS_TONES[status] || "neutral";
 
 const mergeOffers = (apiOffers, storedOffers) => {
   const storedViewModels = mapOffersToViewModel(storedOffers);
@@ -139,8 +222,7 @@ const getStoredData = (key, fallback = []) => {
   }
 };
 
-const createId = () =>
-  `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+const createId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 
 const isUuid = (value) =>
   typeof value === "string" &&
@@ -178,25 +260,57 @@ const getApiFailureReason = (error) => {
   return "Bilinmeyen hata";
 };
 
+const getModuleFromHash = (hash = "") => {
+  const normalizedHash = String(hash)
+    .trim()
+    .replace(/^#\/?/, "")
+    .replace(/\/+$/, "");
+
+  return MODULE_IDS.has(normalizedHash) ? normalizedHash : DEFAULT_MODULE_ID;
+};
+
+const parseDecimalInput = (value) => {
+  const normalized = String(value || "")
+    .trim()
+    .replace(/\s+/g, "")
+    .replace(/\.(?=\d{3}(\D|$))/g, "")
+    .replace(/,/g, ".");
+  const parsed = Number(normalized);
+
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const formatCurrency = (value) => {
+  if (!Number.isFinite(value)) {
+    return "Tutar belirtilmedi";
+  }
+
+  return new Intl.NumberFormat("tr-TR", {
+    style: "currency",
+    currency: "TRY",
+    maximumFractionDigits: 2,
+  }).format(value);
+};
+
 function App() {
-  const [activeModule, setActiveModule] = useState("dashboard");
+  const [activeModule, setActiveModule] = useState(() => {
+    if (typeof window === "undefined") {
+      return DEFAULT_MODULE_ID;
+    }
 
-  const [projects, setProjects] = useState(() =>
-    getStoredData(STORAGE_KEYS.projects)
-  );
+    return getModuleFromHash(window.location.hash);
+  });
 
+  const [projects, setProjects] = useState(() => getStoredData(STORAGE_KEYS.projects));
   const [projectsLoading, setProjectsLoading] = useState(true);
 
-  const [researchItems, setResearchItems] = useState(() =>
-    getStoredData(STORAGE_KEYS.research)
-  );
+  const [researchItems, setResearchItems] = useState(() => getStoredData(STORAGE_KEYS.research));
   const [researchLoading, setResearchLoading] = useState(true);
   const [researchError, setResearchError] = useState(null);
 
   const [offers, setOffers] = useState(() =>
     mapOffersToViewModel(getStoredData(STORAGE_KEYS.offers))
   );
-
   const [offersLoading, setOffersLoading] = useState(true);
   const [offersError, setOffersError] = useState(null);
   const [offersFetchState, setOffersFetchState] = useState("loading");
@@ -205,18 +319,22 @@ function App() {
   const [selectedOfferDetail, setSelectedOfferDetail] = useState(null);
   const [offerDetailLoading, setOfferDetailLoading] = useState(false);
   const [offerDetailError, setOfferDetailError] = useState(null);
+
+  const [products, setProducts] = useState(() => getStoredData(STORAGE_KEYS.products));
+  const [priceAnalyses, setPriceAnalyses] = useState(() =>
+    getStoredData(STORAGE_KEYS.priceAnalysis)
+  );
+  const [materialAnalyses, setMaterialAnalyses] = useState(() =>
+    getStoredData(STORAGE_KEYS.materialAnalysis)
+  );
+  const [crmRecords, setCrmRecords] = useState(() => getStoredData(STORAGE_KEYS.crm));
+
   const projectsTouchedRef = useRef(false);
   const researchTouchedRef = useRef(false);
   const offersTouchedRef = useRef(false);
 
-  const [memoryItems, setMemoryItems] = useState(() =>
-    getStoredData(STORAGE_KEYS.memory)
-  );
-
-  const [systemLogs, setSystemLogs] = useState(() =>
-    getStoredData(STORAGE_KEYS.logs)
-  );
-
+  const [memoryItems, setMemoryItems] = useState(() => getStoredData(STORAGE_KEYS.memory));
+  const [systemLogs, setSystemLogs] = useState(() => getStoredData(STORAGE_KEYS.logs));
   const [integrations, setIntegrations] = useState(() =>
     getStoredData(STORAGE_KEYS.integrations, [
       {
@@ -231,6 +349,12 @@ function App() {
         status: "Aktif",
         description: "Tarayıcı içi kalıcı kayıt sistemi.",
       },
+      {
+        id: "github-pages",
+        name: "GitHub Pages",
+        status: "Aktif",
+        description: "Production arayüz yayını ve hash tabanlı modül erişimi.",
+      },
     ])
   );
 
@@ -238,6 +362,15 @@ function App() {
   const [showResearchForm, setShowResearchForm] = useState(false);
   const [showOfferForm, setShowOfferForm] = useState(false);
   const [showMemoryForm, setShowMemoryForm] = useState(false);
+  const [showProductForm, setShowProductForm] = useState(false);
+  const [showPriceForm, setShowPriceForm] = useState(false);
+  const [showMaterialForm, setShowMaterialForm] = useState(false);
+  const [showCrmForm, setShowCrmForm] = useState(false);
+
+  const [editingProductId, setEditingProductId] = useState(null);
+  const [editingPriceId, setEditingPriceId] = useState(null);
+  const [editingMaterialId, setEditingMaterialId] = useState(null);
+  const [editingCrmId, setEditingCrmId] = useState(null);
 
   const [projectName, setProjectName] = useState("");
   const [projectType, setProjectType] = useState("");
@@ -253,32 +386,97 @@ function App() {
   const [memoryTitle, setMemoryTitle] = useState("");
   const [memoryContent, setMemoryContent] = useState("");
 
-  const [aiInput, setAiInput] = useState("");
+  const [productForm, setProductForm] = useState(EMPTY_PRODUCT_FORM);
+  const [priceForm, setPriceForm] = useState(EMPTY_PRICE_FORM);
+  const [materialForm, setMaterialForm] = useState(EMPTY_MATERIAL_FORM);
+  const [crmForm, setCrmForm] = useState(EMPTY_CRM_FORM);
 
+  const [aiInput, setAiInput] = useState("");
   const [aiMessages, setAiMessages] = useState([
     {
       id: "welcome",
       role: "assistant",
       text:
-        "DDPro AI çalışma alanı hazır. Proje, teklif, araştırma veya sistem analiziyle ilgili bir çalışma başlatabilirsin.",
+        "DDPro AI çalışma alanı hazır. Proje, teklif, ürün veya analiz süreçleriyle ilgili bir çalışma başlatabilirsin.",
       date: formatDate(),
     },
   ]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return undefined;
+    }
+
+    const syncModuleFromHash = () => {
+      setActiveModule(getModuleFromHash(window.location.hash));
+    };
+
+    syncModuleFromHash();
+    window.addEventListener("hashchange", syncModuleFromHash);
+
+    return () => {
+      window.removeEventListener("hashchange", syncModuleFromHash);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const nextHash = `#/${activeModule}`;
+
+    if (window.location.hash !== nextHash) {
+      window.history.replaceState(
+        null,
+        "",
+        `${window.location.pathname}${window.location.search}${nextHash}`
+      );
+    }
+  }, [activeModule]);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.projects, JSON.stringify(projects));
   }, [projects]);
 
   useEffect(() => {
-    localStorage.setItem(
-      STORAGE_KEYS.research,
-      JSON.stringify(researchItems)
-    );
+    localStorage.setItem(STORAGE_KEYS.research, JSON.stringify(researchItems));
   }, [researchItems]);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.offers, JSON.stringify(offers));
   }, [offers]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.memory, JSON.stringify(memoryItems));
+  }, [memoryItems]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.logs, JSON.stringify(systemLogs));
+  }, [systemLogs]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.integrations, JSON.stringify(integrations));
+  }, [integrations]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.products, JSON.stringify(products));
+  }, [products]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.priceAnalysis, JSON.stringify(priceAnalyses));
+  }, [priceAnalyses]);
+
+  useEffect(() => {
+    localStorage.setItem(
+      STORAGE_KEYS.materialAnalysis,
+      JSON.stringify(materialAnalyses)
+    );
+  }, [materialAnalyses]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.crm, JSON.stringify(crmRecords));
+  }, [crmRecords]);
 
   useEffect(() => {
     let cancelled = false;
@@ -463,27 +661,6 @@ function App() {
   }, []);
 
   useEffect(() => {
-    localStorage.setItem(
-      STORAGE_KEYS.memory,
-      JSON.stringify(memoryItems)
-    );
-  }, [memoryItems]);
-
-  useEffect(() => {
-    localStorage.setItem(
-      STORAGE_KEYS.logs,
-      JSON.stringify(systemLogs)
-    );
-  }, [systemLogs]);
-
-  useEffect(() => {
-    localStorage.setItem(
-      STORAGE_KEYS.integrations,
-      JSON.stringify(integrations)
-    );
-  }, [integrations]);
-
-  useEffect(() => {
     let cancelled = false;
 
     const fetchProjectsFromApi = async () => {
@@ -536,34 +713,61 @@ function App() {
       date: formatDate(),
     };
 
-    setSystemLogs((currentLogs) =>
-      [newLog, ...currentLogs].slice(0, 50)
-    );
+    setSystemLogs((currentLogs) => [newLog, ...currentLogs].slice(0, 50));
   };
 
   const dashboardStats = useMemo(
     () => [
       {
         label: "AKTİF PROJELER",
-        value: projects.filter(
-          (project) => project.status === "Aktif"
-        ).length,
+        value: projects.filter((project) => project.status === "Aktif").length,
       },
       {
-        label: "ARAŞTIRMALAR",
-        value: researchItems.length,
+        label: "ÜRÜN TASLAKLARI",
+        value: products.length,
+      },
+      {
+        label: "FİYAT ANALİZİ",
+        value: priceAnalyses.length,
+      },
+      {
+        label: "MALZEME ANALİZİ",
+        value: materialAnalyses.length,
       },
       {
         label: "TEKLİFLER",
         value: offers.length,
       },
       {
-        label: "SİSTEM KAYITLARI",
-        value: systemLogs.length,
+        label: "CRM KAYITLARI",
+        value: crmRecords.length,
       },
     ],
-    [projects, researchItems, offers, systemLogs]
+    [projects, products, priceAnalyses, materialAnalyses, offers, crmRecords]
   );
+
+  const priceAnalysisTotal = useMemo(
+    () =>
+      priceAnalyses.reduce(
+        (total, item) => total + (Number.isFinite(item.totalAmount) ? item.totalAmount : 0),
+        0
+      ),
+    [priceAnalyses]
+  );
+
+  const moduleReadiness = useMemo(
+    () =>
+      modules.map((module) => ({
+        ...module,
+        route: `#/${module.id}`,
+        status: "Hazır",
+      })),
+    []
+  );
+
+  const openModule = (moduleId) => {
+    setActiveModule(moduleId);
+  };
 
   const createProject = (event) => {
     event.preventDefault();
@@ -577,13 +781,10 @@ function App() {
       type: projectType.trim() || "Genel Proje",
       status: projectStatus,
       date: formatDate(),
+      source: "local",
     };
 
-    setProjects((currentProjects) => [
-      newProject,
-      ...currentProjects,
-    ]);
-
+    setProjects((currentProjects) => [newProject, ...currentProjects]);
     addLog(`Yeni proje oluşturuldu: ${newProject.name}`);
 
     setProjectName("");
@@ -596,9 +797,7 @@ function App() {
     const project = projects.find((item) => item.id === id);
     projectsTouchedRef.current = true;
 
-    setProjects((currentProjects) =>
-      currentProjects.filter((item) => item.id !== id)
-    );
+    setProjects((currentProjects) => currentProjects.filter((item) => item.id !== id));
 
     if (project) {
       addLog(`Proje silindi: ${project.name}`);
@@ -616,13 +815,10 @@ function App() {
       name: researchName.trim(),
       note: researchNote.trim() || "Not eklenmedi.",
       date: formatDate(),
+      source: "local",
     };
 
-    setResearchItems((currentItems) => [
-      newResearch,
-      ...currentItems,
-    ]);
-
+    setResearchItems((currentItems) => [newResearch, ...currentItems]);
     addLog(`Yeni araştırma kaydı oluşturuldu: ${newResearch.name}`);
 
     setResearchName("");
@@ -631,9 +827,7 @@ function App() {
   };
 
   const deleteResearch = (id) => {
-    const item = researchItems.find(
-      (research) => research.id === id
-    );
+    const item = researchItems.find((research) => research.id === id);
     researchTouchedRef.current = true;
 
     setResearchItems((currentItems) =>
@@ -667,10 +861,7 @@ function App() {
       const createdOffer = await createOfferRequest(newOffer);
       const nextOffer = createdOffer || newOffer;
 
-      setOffers((currentOffers) => [
-        nextOffer,
-        ...currentOffers,
-      ]);
+      setOffers((currentOffers) => [nextOffer, ...currentOffers]);
       setSelectedOfferId(nextOffer.id);
       addLog(`Yeni teklif API üzerinden oluşturuldu: ${newOffer.title}`);
     } catch (error) {
@@ -679,10 +870,7 @@ function App() {
         error.message
       );
 
-      setOffers((currentOffers) => [
-        newOffer,
-        ...currentOffers,
-      ]);
+      setOffers((currentOffers) => [newOffer, ...currentOffers]);
       setSelectedOfferId(newOffer.id);
       setOffersError("Teklif API'ye kaydedilemedi. Yerel kayıt oluşturuldu.");
       addLog(`Yeni teklif yerel olarak oluşturuldu: ${newOffer.title}`);
@@ -700,9 +888,7 @@ function App() {
 
     if (!isUuid(id)) {
       setOffersError(null);
-      setOffers((currentOffers) =>
-        currentOffers.filter((item) => item.id !== id)
-      );
+      setOffers((currentOffers) => currentOffers.filter((item) => item.id !== id));
       if (selectedOfferId === id) {
         setSelectedOfferId(null);
       }
@@ -718,9 +904,7 @@ function App() {
     try {
       await deleteOfferRequest(id);
       setOffersError(null);
-      setOffers((currentOffers) =>
-        currentOffers.filter((item) => item.id !== id)
-      );
+      setOffers((currentOffers) => currentOffers.filter((item) => item.id !== id));
       if (selectedOfferId === id) {
         setSelectedOfferId(null);
       }
@@ -733,9 +917,7 @@ function App() {
       console.warn("Teklif API üzerinden silinemedi:", error.message);
 
       if (error.status === 404) {
-        setOffers((currentOffers) =>
-          currentOffers.filter((item) => item.id !== id)
-        );
+        setOffers((currentOffers) => currentOffers.filter((item) => item.id !== id));
         if (selectedOfferId === id) {
           setSelectedOfferId(null);
         }
@@ -768,11 +950,7 @@ function App() {
       date: formatDate(),
     };
 
-    setMemoryItems((currentItems) => [
-      newMemory,
-      ...currentItems,
-    ]);
-
+    setMemoryItems((currentItems) => [newMemory, ...currentItems]);
     addLog(`Merkezi hafızaya kayıt eklendi: ${newMemory.title}`);
 
     setMemoryTitle("");
@@ -783,9 +961,7 @@ function App() {
   const deleteMemory = (id) => {
     const memory = memoryItems.find((item) => item.id === id);
 
-    setMemoryItems((currentItems) =>
-      currentItems.filter((item) => item.id !== id)
-    );
+    setMemoryItems((currentItems) => currentItems.filter((item) => item.id !== id));
 
     if (memory) {
       addLog(`Hafıza kaydı silindi: ${memory.title}`);
@@ -797,8 +973,7 @@ function App() {
 
     if (!integration) return;
 
-    const nextStatus =
-      integration.status === "Aktif" ? "Pasif" : "Aktif";
+    const nextStatus = integration.status === "Aktif" ? "Pasif" : "Aktif";
 
     setIntegrations((currentItems) =>
       currentItems.map((item) =>
@@ -811,9 +986,257 @@ function App() {
       )
     );
 
-    addLog(
-      `${integration.name} entegrasyon durumu değiştirildi: ${nextStatus}`
+    addLog(`${integration.name} entegrasyon durumu değiştirildi: ${nextStatus}`);
+  };
+
+  const resetProductForm = () => {
+    setProductForm(EMPTY_PRODUCT_FORM);
+    setEditingProductId(null);
+    setShowProductForm(false);
+  };
+
+  const startProductEdit = (product) => {
+    setProductForm({
+      name: product.name || "",
+      category: product.category || "",
+      supplier: product.supplier || "",
+      status: product.status || "Taslak",
+      note: product.note || "",
+    });
+    setEditingProductId(product.id);
+    setShowProductForm(true);
+  };
+
+  const saveProduct = (event) => {
+    event.preventDefault();
+
+    if (!productForm.name.trim()) return;
+
+    const nextProduct = {
+      id: editingProductId || createId(),
+      name: productForm.name.trim(),
+      category: productForm.category.trim() || "Genel Ürün",
+      supplier: productForm.supplier.trim() || "Tedarikçi belirtilmedi",
+      status: productForm.status,
+      note: productForm.note.trim() || "Not eklenmedi.",
+      date: formatDate(),
+      source: "local",
+    };
+
+    setProducts((currentItems) =>
+      editingProductId
+        ? currentItems.map((item) => (item.id === editingProductId ? nextProduct : item))
+        : [nextProduct, ...currentItems]
     );
+
+    addLog(
+      `${editingProductId ? "Ürün güncellendi" : "Yeni ürün taslağı oluşturuldu"}: ${nextProduct.name}`
+    );
+    resetProductForm();
+  };
+
+  const deleteProduct = (id) => {
+    const product = products.find((item) => item.id === id);
+    setProducts((currentItems) => currentItems.filter((item) => item.id !== id));
+
+    if (editingProductId === id) {
+      resetProductForm();
+    }
+
+    if (product) {
+      addLog(`Ürün taslağı silindi: ${product.name}`);
+    }
+  };
+
+  const resetPriceForm = () => {
+    setPriceForm(EMPTY_PRICE_FORM);
+    setEditingPriceId(null);
+    setShowPriceForm(false);
+  };
+
+  const startPriceEdit = (item) => {
+    setPriceForm({
+      title: item.title || "",
+      productName: item.productName || "",
+      supplier: item.supplier || "",
+      unitPrice: item.unitPriceInput || item.unitPrice?.toString() || "",
+      quantity: item.quantityInput || item.quantity?.toString() || "",
+      note: item.note || "",
+    });
+    setEditingPriceId(item.id);
+    setShowPriceForm(true);
+  };
+
+  const savePriceAnalysis = (event) => {
+    event.preventDefault();
+
+    if (!priceForm.title.trim()) return;
+
+    const unitPrice = parseDecimalInput(priceForm.unitPrice);
+    const quantity = parseDecimalInput(priceForm.quantity);
+    const totalAmount =
+      Number.isFinite(unitPrice) && Number.isFinite(quantity) ? unitPrice * quantity : null;
+
+    const nextItem = {
+      id: editingPriceId || createId(),
+      title: priceForm.title.trim(),
+      productName: priceForm.productName.trim() || "Ürün belirtilmedi",
+      supplier: priceForm.supplier.trim() || "Tedarikçi belirtilmedi",
+      unitPrice,
+      unitPriceInput: priceForm.unitPrice.trim(),
+      quantity,
+      quantityInput: priceForm.quantity.trim(),
+      totalAmount,
+      note: priceForm.note.trim() || "Not eklenmedi.",
+      date: formatDate(),
+      source: "local",
+    };
+
+    setPriceAnalyses((currentItems) =>
+      editingPriceId
+        ? currentItems.map((item) => (item.id === editingPriceId ? nextItem : item))
+        : [nextItem, ...currentItems]
+    );
+
+    addLog(
+      `${editingPriceId ? "Fiyat analizi güncellendi" : "Fiyat analizi oluşturuldu"}: ${nextItem.title}`
+    );
+    resetPriceForm();
+  };
+
+  const deletePriceAnalysis = (id) => {
+    const item = priceAnalyses.find((entry) => entry.id === id);
+    setPriceAnalyses((currentItems) => currentItems.filter((entry) => entry.id !== id));
+
+    if (editingPriceId === id) {
+      resetPriceForm();
+    }
+
+    if (item) {
+      addLog(`Fiyat analizi silindi: ${item.title}`);
+    }
+  };
+
+  const resetMaterialForm = () => {
+    setMaterialForm(EMPTY_MATERIAL_FORM);
+    setEditingMaterialId(null);
+    setShowMaterialForm(false);
+  };
+
+  const startMaterialEdit = (item) => {
+    setMaterialForm({
+      title: item.title || "",
+      materialName: item.materialName || "",
+      specification: item.specification || "",
+      quantity: item.quantity || "",
+      unit: item.unit || "",
+      usageArea: item.usageArea || "",
+      note: item.note || "",
+    });
+    setEditingMaterialId(item.id);
+    setShowMaterialForm(true);
+  };
+
+  const saveMaterialAnalysis = (event) => {
+    event.preventDefault();
+
+    if (!materialForm.title.trim()) return;
+
+    const nextItem = {
+      id: editingMaterialId || createId(),
+      title: materialForm.title.trim(),
+      materialName: materialForm.materialName.trim() || "Malzeme belirtilmedi",
+      specification: materialForm.specification.trim() || "Özellik belirtilmedi",
+      quantity: materialForm.quantity.trim() || "Miktar belirtilmedi",
+      unit: materialForm.unit.trim() || "Birim belirtilmedi",
+      usageArea: materialForm.usageArea.trim() || "Kullanım alanı belirtilmedi",
+      note: materialForm.note.trim() || "Not eklenmedi.",
+      date: formatDate(),
+      source: "local",
+    };
+
+    setMaterialAnalyses((currentItems) =>
+      editingMaterialId
+        ? currentItems.map((item) => (item.id === editingMaterialId ? nextItem : item))
+        : [nextItem, ...currentItems]
+    );
+
+    addLog(
+      `${editingMaterialId ? "Malzeme analizi güncellendi" : "Malzeme analizi oluşturuldu"}: ${nextItem.title}`
+    );
+    resetMaterialForm();
+  };
+
+  const deleteMaterialAnalysis = (id) => {
+    const item = materialAnalyses.find((entry) => entry.id === id);
+    setMaterialAnalyses((currentItems) => currentItems.filter((entry) => entry.id !== id));
+
+    if (editingMaterialId === id) {
+      resetMaterialForm();
+    }
+
+    if (item) {
+      addLog(`Malzeme analizi silindi: ${item.title}`);
+    }
+  };
+
+  const resetCrmForm = () => {
+    setCrmForm(EMPTY_CRM_FORM);
+    setEditingCrmId(null);
+    setShowCrmForm(false);
+  };
+
+  const startCrmEdit = (item) => {
+    setCrmForm({
+      customerName: item.customerName || "",
+      companyName: item.companyName || "",
+      contact: item.contact || "",
+      stage: item.stage || "Yeni Lead",
+      note: item.note || "",
+    });
+    setEditingCrmId(item.id);
+    setShowCrmForm(true);
+  };
+
+  const saveCrmRecord = (event) => {
+    event.preventDefault();
+
+    if (!crmForm.customerName.trim()) return;
+
+    const nextItem = {
+      id: editingCrmId || createId(),
+      customerName: crmForm.customerName.trim(),
+      companyName: crmForm.companyName.trim() || "Firma belirtilmedi",
+      contact: crmForm.contact.trim() || "İletişim bilgisi belirtilmedi",
+      stage: crmForm.stage,
+      note: crmForm.note.trim() || "Not eklenmedi.",
+      date: formatDate(),
+      source: "local",
+    };
+
+    setCrmRecords((currentItems) =>
+      editingCrmId
+        ? currentItems.map((item) => (item.id === editingCrmId ? nextItem : item))
+        : [nextItem, ...currentItems]
+    );
+
+    addLog(
+      `${editingCrmId ? "CRM kaydı güncellendi" : "Yeni CRM kaydı oluşturuldu"}: ${nextItem.customerName}`
+    );
+    resetCrmForm();
+  };
+
+  const deleteCrmRecord = (id) => {
+    const item = crmRecords.find((entry) => entry.id === id);
+    setCrmRecords((currentItems) => currentItems.filter((entry) => entry.id !== id));
+
+    if (editingCrmId === id) {
+      resetCrmForm();
+    }
+
+    if (item) {
+      addLog(`CRM kaydı silindi: ${item.customerName}`);
+    }
   };
 
   const sendAiMessage = (event) => {
@@ -836,7 +1259,7 @@ function App() {
       text:
         `Mesaj alındı: "${message}". ` +
         "DDPro AI çalışma alanı bu mesajı kayıt altına aldı. " +
-        "Gelişmiş AI/API entegrasyonu sonraki altyapı aşamasında bu alana bağlanabilir.",
+        "Üretim arayüzünde modül ve analiz akışları bu kayıt üzerinden takip edilebilir.",
       date: formatDate(),
     };
 
@@ -847,7 +1270,6 @@ function App() {
     ]);
 
     addLog(`DDPro AI mesajı gönderildi: ${message}`);
-
     setAiInput("");
   };
 
@@ -870,9 +1292,7 @@ function App() {
 
           <div className="panel-content">
             {systemLogs.length === 0 ? (
-              <p className="empty-state">
-                Henüz sistem kaydı bulunmuyor.
-              </p>
+              <p className="empty-state">Henüz sistem kaydı bulunmuyor.</p>
             ) : (
               <div className="log-list">
                 {systemLogs.slice(0, 8).map((log) => (
@@ -888,28 +1308,143 @@ function App() {
 
         <div className="panel">
           <div className="panel-header">
-            <h2>Hızlı Durum</h2>
+            <h2>Üretim Modül Durumu</h2>
           </div>
 
           <div className="panel-content">
-            <div className="quick-status">
-              <span>Proje Sistemi</span>
-              <strong>Hazır</strong>
-            </div>
-            <div className="quick-status">
-              <span>Araştırma Sistemi</span>
-              <strong>Hazır</strong>
-            </div>
-            <div className="quick-status">
-              <span>Teklif Sistemi</span>
-              <strong>Hazır</strong>
-            </div>
-            <div className="quick-status">
-              <span>Merkezi Hafıza</span>
-              <strong>Hazır</strong>
-            </div>
+            {moduleReadiness.map((module) => (
+              <div className="quick-status" key={module.id}>
+                <span>
+                  {module.title} <small className="route-label">{module.route}</small>
+                </span>
+                <strong>{module.status}</strong>
+              </div>
+            ))}
           </div>
         </div>
+      </div>
+    </div>
+  );
+
+  const renderProducts = () => (
+    <div className="module-page">
+      <div className="module-toolbar">
+        <button
+          type="button"
+          onClick={() => {
+            if (showProductForm && !editingProductId) {
+              setShowProductForm(false);
+              return;
+            }
+
+            setEditingProductId(null);
+            setProductForm(EMPTY_PRODUCT_FORM);
+            setShowProductForm((value) => !value || Boolean(editingProductId));
+          }}
+        >
+          {showProductForm ? "Formu Kapat" : "+ Yeni Ürün"}
+        </button>
+      </div>
+
+      <p className="status-banner info">
+        ℹ Ürün ekleme ve düzenleme akışı production arayüzünde yerel taslak olarak korunur.
+      </p>
+
+      {showProductForm && (
+        <form className="data-form" onSubmit={saveProduct}>
+          <input
+            type="text"
+            placeholder="Ürün adı"
+            value={productForm.name}
+            onChange={(event) =>
+              setProductForm((current) => ({ ...current, name: event.target.value }))
+            }
+          />
+
+          <input
+            type="text"
+            placeholder="Kategori"
+            value={productForm.category}
+            onChange={(event) =>
+              setProductForm((current) => ({ ...current, category: event.target.value }))
+            }
+          />
+
+          <input
+            type="text"
+            placeholder="Tedarikçi"
+            value={productForm.supplier}
+            onChange={(event) =>
+              setProductForm((current) => ({ ...current, supplier: event.target.value }))
+            }
+          />
+
+          <select
+            value={productForm.status}
+            onChange={(event) =>
+              setProductForm((current) => ({ ...current, status: event.target.value }))
+            }
+          >
+            {PRODUCT_STATUS_OPTIONS.map((status) => (
+              <option key={status}>{status}</option>
+            ))}
+          </select>
+
+          <textarea
+            placeholder="Ürün notu"
+            value={productForm.note}
+            onChange={(event) =>
+              setProductForm((current) => ({ ...current, note: event.target.value }))
+            }
+          />
+
+          <div className="form-actions-row">
+            <button type="submit">
+              {editingProductId ? "Ürünü Güncelle" : "Ürünü Kaydet"}
+            </button>
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={resetProductForm}
+            >
+              İptal
+            </button>
+          </div>
+        </form>
+      )}
+
+      <div className="data-list">
+        {products.length === 0 ? (
+          <p className="empty-state">Henüz ürün taslağı bulunmuyor.</p>
+        ) : (
+          products.map((product) => (
+            <div className="data-card" key={product.id}>
+              <div>
+                <h3>{product.name}</h3>
+                <p>
+                  {product.category} · {product.supplier}
+                </p>
+                <p>{product.note}</p>
+                <small>
+                  {product.status} · {product.date}
+                </small>
+              </div>
+
+              <div className="data-card-actions">
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() => startProductEdit(product)}
+                >
+                  Düzenle
+                </button>
+                <button type="button" onClick={() => deleteProduct(product.id)}>
+                  Sil
+                </button>
+              </div>
+            </div>
+          ))
+        )}
       </div>
     </div>
   );
@@ -917,10 +1452,7 @@ function App() {
   const renderProjects = () => (
     <div className="module-page">
       <div className="module-toolbar">
-        <button
-          type="button"
-          onClick={() => setShowProjectForm((value) => !value)}
-        >
+        <button type="button" onClick={() => setShowProjectForm((value) => !value)}>
           {showProjectForm ? "Formu Kapat" : "+ Yeni Proje"}
         </button>
       </div>
@@ -970,12 +1502,627 @@ function App() {
                 </small>
               </div>
 
-              <button
-                type="button"
-                onClick={() => deleteProject(project.id)}
-              >
+              <button type="button" onClick={() => deleteProject(project.id)}>
                 Sil
               </button>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+
+  const renderPriceAnalysis = () => (
+    <div className="module-page">
+      <div className="module-toolbar">
+        <button
+          type="button"
+          onClick={() => {
+            if (showPriceForm && !editingPriceId) {
+              setShowPriceForm(false);
+              return;
+            }
+
+            setEditingPriceId(null);
+            setPriceForm(EMPTY_PRICE_FORM);
+            setShowPriceForm((value) => !value || Boolean(editingPriceId));
+          }}
+        >
+          {showPriceForm ? "Formu Kapat" : "+ Yeni Fiyat Analizi"}
+        </button>
+      </div>
+
+      <p className="status-banner info">
+        ℹ Fiyat Analizi modülü Malzeme Analizi modülünden bağımsızdır ve toplam maliyet taslaklarını ayrı saklar.
+      </p>
+
+      <div className="offers-summary-grid compact-grid">
+        <div className="offer-summary-card">
+          <span>Toplam Analiz</span>
+          <strong>{priceAnalyses.length}</strong>
+        </div>
+        <div className="offer-summary-card">
+          <span>Toplam Tahmini Maliyet</span>
+          <strong>{formatCurrency(priceAnalysisTotal)}</strong>
+        </div>
+      </div>
+
+      {showPriceForm && (
+        <form className="data-form" onSubmit={savePriceAnalysis}>
+          <input
+            type="text"
+            placeholder="Analiz başlığı"
+            value={priceForm.title}
+            onChange={(event) =>
+              setPriceForm((current) => ({ ...current, title: event.target.value }))
+            }
+          />
+
+          <input
+            type="text"
+            placeholder="Ürün adı"
+            value={priceForm.productName}
+            onChange={(event) =>
+              setPriceForm((current) => ({ ...current, productName: event.target.value }))
+            }
+          />
+
+          <input
+            type="text"
+            placeholder="Tedarikçi"
+            value={priceForm.supplier}
+            onChange={(event) =>
+              setPriceForm((current) => ({ ...current, supplier: event.target.value }))
+            }
+          />
+
+          <input
+            type="text"
+            placeholder="Birim fiyat (₺)"
+            value={priceForm.unitPrice}
+            onChange={(event) =>
+              setPriceForm((current) => ({ ...current, unitPrice: event.target.value }))
+            }
+          />
+
+          <input
+            type="text"
+            placeholder="Adet"
+            value={priceForm.quantity}
+            onChange={(event) =>
+              setPriceForm((current) => ({ ...current, quantity: event.target.value }))
+            }
+          />
+
+          <textarea
+            placeholder="Fiyat analizi notu"
+            value={priceForm.note}
+            onChange={(event) =>
+              setPriceForm((current) => ({ ...current, note: event.target.value }))
+            }
+          />
+
+          <div className="form-actions-row">
+            <button type="submit">
+              {editingPriceId ? "Analizi Güncelle" : "Analizi Kaydet"}
+            </button>
+            <button type="button" className="secondary-button" onClick={resetPriceForm}>
+              İptal
+            </button>
+          </div>
+        </form>
+      )}
+
+      <div className="data-list">
+        {priceAnalyses.length === 0 ? (
+          <p className="empty-state">Henüz fiyat analizi bulunmuyor.</p>
+        ) : (
+          priceAnalyses.map((item) => (
+            <div className="data-card" key={item.id}>
+              <div>
+                <h3>{item.title}</h3>
+                <p>
+                  {item.productName} · {item.supplier}
+                </p>
+                <p>
+                  Birim: {item.unitPrice !== null ? formatCurrency(item.unitPrice) : "Belirtilmedi"} · Adet: {item.quantityInput || "Belirtilmedi"}
+                </p>
+                <p>{item.note}</p>
+                <small>
+                  Toplam: {item.totalAmount !== null ? formatCurrency(item.totalAmount) : "Hesaplanamadı"} · {item.date}
+                </small>
+              </div>
+
+              <div className="data-card-actions">
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() => startPriceEdit(item)}
+                >
+                  Düzenle
+                </button>
+                <button type="button" onClick={() => deletePriceAnalysis(item.id)}>
+                  Sil
+                </button>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+
+  const renderMaterialAnalysis = () => (
+    <div className="module-page">
+      <div className="module-toolbar">
+        <button
+          type="button"
+          onClick={() => {
+            if (showMaterialForm && !editingMaterialId) {
+              setShowMaterialForm(false);
+              return;
+            }
+
+            setEditingMaterialId(null);
+            setMaterialForm(EMPTY_MATERIAL_FORM);
+            setShowMaterialForm((value) => !value || Boolean(editingMaterialId));
+          }}
+        >
+          {showMaterialForm ? "Formu Kapat" : "+ Yeni Malzeme Analizi"}
+        </button>
+      </div>
+
+      <p className="status-banner info">
+        ℹ Malzeme Analizi modülü yalnızca malzeme özellikleri ve kullanım alanlarını yönetir; fiyat hesapları burada tutulmaz.
+      </p>
+
+      {showMaterialForm && (
+        <form className="data-form" onSubmit={saveMaterialAnalysis}>
+          <input
+            type="text"
+            placeholder="Analiz başlığı"
+            value={materialForm.title}
+            onChange={(event) =>
+              setMaterialForm((current) => ({ ...current, title: event.target.value }))
+            }
+          />
+
+          <input
+            type="text"
+            placeholder="Malzeme adı"
+            value={materialForm.materialName}
+            onChange={(event) =>
+              setMaterialForm((current) => ({ ...current, materialName: event.target.value }))
+            }
+          />
+
+          <input
+            type="text"
+            placeholder="Teknik özellik"
+            value={materialForm.specification}
+            onChange={(event) =>
+              setMaterialForm((current) => ({ ...current, specification: event.target.value }))
+            }
+          />
+
+          <input
+            type="text"
+            placeholder="Miktar"
+            value={materialForm.quantity}
+            onChange={(event) =>
+              setMaterialForm((current) => ({ ...current, quantity: event.target.value }))
+            }
+          />
+
+          <input
+            type="text"
+            placeholder="Birim"
+            value={materialForm.unit}
+            onChange={(event) =>
+              setMaterialForm((current) => ({ ...current, unit: event.target.value }))
+            }
+          />
+
+          <input
+            type="text"
+            placeholder="Kullanım alanı"
+            value={materialForm.usageArea}
+            onChange={(event) =>
+              setMaterialForm((current) => ({ ...current, usageArea: event.target.value }))
+            }
+          />
+
+          <textarea
+            placeholder="Malzeme analizi notu"
+            value={materialForm.note}
+            onChange={(event) =>
+              setMaterialForm((current) => ({ ...current, note: event.target.value }))
+            }
+          />
+
+          <div className="form-actions-row">
+            <button type="submit">
+              {editingMaterialId ? "Analizi Güncelle" : "Analizi Kaydet"}
+            </button>
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={resetMaterialForm}
+            >
+              İptal
+            </button>
+          </div>
+        </form>
+      )}
+
+      <div className="data-list">
+        {materialAnalyses.length === 0 ? (
+          <p className="empty-state">Henüz malzeme analizi bulunmuyor.</p>
+        ) : (
+          materialAnalyses.map((item) => (
+            <div className="data-card" key={item.id}>
+              <div>
+                <h3>{item.title}</h3>
+                <p>
+                  {item.materialName} · {item.specification}
+                </p>
+                <p>
+                  Kullanım: {item.usageArea} · Miktar: {item.quantity} {item.unit}
+                </p>
+                <p>{item.note}</p>
+                <small>{item.date}</small>
+              </div>
+
+              <div className="data-card-actions">
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() => startMaterialEdit(item)}
+                >
+                  Düzenle
+                </button>
+                <button type="button" onClick={() => deleteMaterialAnalysis(item.id)}>
+                  Sil
+                </button>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+
+  const renderOffers = () => (
+    <div className="module-page">
+      <div className="module-toolbar">
+        <div className="offers-toolbar-actions">
+          <span className={`offers-status-pill ${offersFetchState}`}>
+            {offersFetchState === "loading" && "API yükleniyor"}
+            {offersFetchState === "success" && "API bağlı"}
+            {offersFetchState === "empty" && "API boş veri döndü"}
+            {offersFetchState === "error" && "API bağlantı hatası"}
+          </span>
+
+          <button
+            type="button"
+            className="secondary-button"
+            disabled={offersLoading}
+            onClick={() => setOffersReloadKey((value) => value + 1)}
+          >
+            {offersLoading ? "Yenileniyor..." : "Yenile"}
+          </button>
+
+          <button type="button" onClick={() => setShowOfferForm((value) => !value)}>
+            {showOfferForm ? "Formu Kapat" : "+ Yeni Teklif"}
+          </button>
+        </div>
+      </div>
+
+      {offersError && <p className="status-banner warning">⚠ {offersError}</p>}
+
+      {!offersError && offersFetchState === "empty" && (
+        <p className="status-banner info">
+          ℹ API üzerinde henüz teklif bulunmuyor
+          {offers.some((offer) => offer.source === "local")
+            ? ", kayıtlı yerel taslaklar listeleniyor."
+            : "."}
+        </p>
+      )}
+
+      {showOfferForm && (
+        <form className="data-form" onSubmit={createOffer}>
+          <input
+            type="text"
+            placeholder="Teklif adı"
+            value={offerName}
+            onChange={(event) => setOfferName(event.target.value)}
+          />
+
+          <input
+            type="text"
+            placeholder="Teklif tutarı"
+            value={offerAmount}
+            onChange={(event) => setOfferAmount(event.target.value)}
+          />
+
+          <select value={offerStatus} onChange={(event) => setOfferStatus(event.target.value)}>
+            <option>Hazırlanıyor</option>
+            <option>Gönderildi</option>
+            <option>Onaylandı</option>
+            <option>Reddedildi</option>
+          </select>
+
+          <button type="submit">Teklifi Kaydet</button>
+
+          <p className="form-hint">
+            Yeni kayıtlar bu sürümde yerel taslak olarak eklenir.
+          </p>
+        </form>
+      )}
+
+      <div className="offers-summary-grid">
+        <div className="offer-summary-card">
+          <span>Toplam Teklif</span>
+          <strong>{offers.length}</strong>
+        </div>
+
+        <div className="offer-summary-card">
+          <span>API Kayıtları</span>
+          <strong>{offers.filter((offer) => offer.source === "api").length}</strong>
+        </div>
+
+        <div className="offer-summary-card">
+          <span>Onaylanan</span>
+          <strong>{offers.filter((offer) => offer.status === "Onaylandı").length}</strong>
+        </div>
+
+        <div className="offer-summary-card">
+          <span>Yerel Taslak</span>
+          <strong>{offers.filter((offer) => offer.source === "local").length}</strong>
+        </div>
+      </div>
+
+      <div className="offers-layout">
+        <div className="panel">
+          <div className="panel-header">
+            <h2>Teklif Listesi</h2>
+            <span className="panel-meta">{offers.length} kayıt</span>
+          </div>
+
+          <div className="panel-content">
+            {offersLoading ? (
+              <p className="empty-state">Teklifler yükleniyor…</p>
+            ) : offers.length === 0 ? (
+              <p className="empty-state">Henüz teklif kaydı bulunmuyor.</p>
+            ) : (
+              <div className="offers-list">
+                {offers.map((offer) => (
+                  <article
+                    className={`offer-card${offer.id === selectedOfferId ? " selected" : ""}`}
+                    key={offer.id}
+                  >
+                    <div className="offer-card-top">
+                      <div>
+                        <h3>{offer.title}</h3>
+                        <p className="offer-amount">{offer.amountDisplay}</p>
+                      </div>
+
+                      <span className={`offer-status-badge ${getOfferStatusTone(offer.status)}`}>
+                        {offer.status}
+                      </span>
+                    </div>
+
+                    <div className="offer-meta-row">
+                      <span>{offer.date}</span>
+                      <span>{offer.source === "api" ? "Canlı API" : "Yerel taslak"}</span>
+                    </div>
+
+                    <div className="offer-card-actions">
+                      <button
+                        type="button"
+                        className="offer-secondary-button"
+                        onClick={() => setSelectedOfferId(offer.id)}
+                      >
+                        Detay
+                      </button>
+
+                      <button type="button" onClick={() => deleteOffer(offer.id)}>
+                        {offer.source === "local" ? "Sil" : "Listeden Kaldır"}
+                      </button>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="panel offer-detail-panel">
+          <div className="panel-header">
+            <h2>Teklif Detayı</h2>
+            {selectedOfferDetail && (
+              <span className="panel-meta">
+                {selectedOfferDetail.source === "api" ? "API detayı" : "Taslak detay"}
+              </span>
+            )}
+          </div>
+
+          <div className="panel-content">
+            {offersLoading ? (
+              <p className="empty-state">Detay alanı hazırlanıyor…</p>
+            ) : !selectedOfferDetail ? (
+              <p className="empty-state">Detayları görmek için bir teklif seç.</p>
+            ) : offerDetailLoading ? (
+              <p className="empty-state">Teklif detayı yükleniyor…</p>
+            ) : (
+              <div className="offer-detail-content">
+                <div className="offer-detail-header">
+                  <div>
+                    <h3>{selectedOfferDetail.title}</h3>
+                    <p>{selectedOfferDetail.amountDisplay}</p>
+                  </div>
+
+                  <span
+                    className={`offer-status-badge ${getOfferStatusTone(
+                      selectedOfferDetail.status
+                    )}`}
+                  >
+                    {selectedOfferDetail.status}
+                  </span>
+                </div>
+
+                {offerDetailError && <p className="status-banner warning">{offerDetailError}</p>}
+
+                <div className="offer-detail-grid">
+                  <div className="offer-detail-item">
+                    <span>Kaynak</span>
+                    <strong>
+                      {selectedOfferDetail.source === "api" ? "Teklifler API" : "Yerel taslak"}
+                    </strong>
+                  </div>
+
+                  <div className="offer-detail-item">
+                    <span>Teklif Tarihi</span>
+                    <strong>{selectedOfferDetail.date}</strong>
+                  </div>
+
+                  <div className="offer-detail-item">
+                    <span>Para Birimi</span>
+                    <strong>{selectedOfferDetail.currency || "Belirtilmedi"}</strong>
+                  </div>
+
+                  <div className="offer-detail-item">
+                    <span>Proje Bağlantısı</span>
+                    <strong>{selectedOfferDetail.projectId || "Atanmadı"}</strong>
+                  </div>
+                </div>
+
+                <div className="offer-detail-note">
+                  <strong>Detay görünümü hazır</strong>
+                  <p>
+                    Teklif seçildiğinde temel alanlar ve API detay sorgusu bu panelde yönetilir.
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderCrm = () => (
+    <div className="module-page">
+      <div className="module-toolbar">
+        <button
+          type="button"
+          onClick={() => {
+            if (showCrmForm && !editingCrmId) {
+              setShowCrmForm(false);
+              return;
+            }
+
+            setEditingCrmId(null);
+            setCrmForm(EMPTY_CRM_FORM);
+            setShowCrmForm((value) => !value || Boolean(editingCrmId));
+          }}
+        >
+          {showCrmForm ? "Formu Kapat" : "+ Yeni CRM Kaydı"}
+        </button>
+      </div>
+
+      <p className="status-banner info">
+        ℹ CRM modülü mevcut sürümde yerel taslak davranışını korur ve müşteri takip akışını bozmaz.
+      </p>
+
+      {showCrmForm && (
+        <form className="data-form" onSubmit={saveCrmRecord}>
+          <input
+            type="text"
+            placeholder="Müşteri adı"
+            value={crmForm.customerName}
+            onChange={(event) =>
+              setCrmForm((current) => ({ ...current, customerName: event.target.value }))
+            }
+          />
+
+          <input
+            type="text"
+            placeholder="Firma adı"
+            value={crmForm.companyName}
+            onChange={(event) =>
+              setCrmForm((current) => ({ ...current, companyName: event.target.value }))
+            }
+          />
+
+          <input
+            type="text"
+            placeholder="İletişim bilgisi"
+            value={crmForm.contact}
+            onChange={(event) =>
+              setCrmForm((current) => ({ ...current, contact: event.target.value }))
+            }
+          />
+
+          <select
+            value={crmForm.stage}
+            onChange={(event) =>
+              setCrmForm((current) => ({ ...current, stage: event.target.value }))
+            }
+          >
+            {CRM_STAGE_OPTIONS.map((stage) => (
+              <option key={stage}>{stage}</option>
+            ))}
+          </select>
+
+          <textarea
+            placeholder="CRM notu"
+            value={crmForm.note}
+            onChange={(event) =>
+              setCrmForm((current) => ({ ...current, note: event.target.value }))
+            }
+          />
+
+          <div className="form-actions-row">
+            <button type="submit">
+              {editingCrmId ? "Kaydı Güncelle" : "Kaydı Kaydet"}
+            </button>
+            <button type="button" className="secondary-button" onClick={resetCrmForm}>
+              İptal
+            </button>
+          </div>
+        </form>
+      )}
+
+      <div className="data-list">
+        {crmRecords.length === 0 ? (
+          <p className="empty-state">Henüz CRM kaydı bulunmuyor.</p>
+        ) : (
+          crmRecords.map((item) => (
+            <div className="data-card" key={item.id}>
+              <div>
+                <h3>{item.customerName}</h3>
+                <p>
+                  {item.companyName} · {item.contact}
+                </p>
+                <p>{item.note}</p>
+                <small>
+                  {item.stage} · {item.date}
+                </small>
+              </div>
+
+              <div className="data-card-actions">
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() => startCrmEdit(item)}
+                >
+                  Düzenle
+                </button>
+                <button type="button" onClick={() => deleteCrmRecord(item.id)}>
+                  Sil
+                </button>
+              </div>
             </div>
           ))
         )}
@@ -986,10 +2133,7 @@ function App() {
   const renderResearch = () => (
     <div className="module-page">
       <div className="module-toolbar">
-        <button
-          type="button"
-          onClick={() => setShowResearchForm((value) => !value)}
-        >
+        <button type="button" onClick={() => setShowResearchForm((value) => !value)}>
           {showResearchForm ? "Formu Kapat" : "+ Yeni Araştırma"}
         </button>
       </div>
@@ -1023,9 +2167,7 @@ function App() {
         {researchLoading ? (
           <p className="empty-state">Araştırmalar yükleniyor…</p>
         ) : researchItems.length === 0 ? (
-          <p className="empty-state">
-            Henüz araştırma kaydı bulunmuyor.
-          </p>
+          <p className="empty-state">Henüz araştırma kaydı bulunmuyor.</p>
         ) : (
           researchItems.map((item) => (
             <div className="data-card" key={item.id}>
@@ -1035,10 +2177,7 @@ function App() {
                 <small>{item.date}</small>
               </div>
 
-              <button
-                type="button"
-                onClick={() => deleteResearch(item.id)}
-              >
+              <button type="button" onClick={() => deleteResearch(item.id)}>
                 Sil
               </button>
             </div>
@@ -1052,15 +2191,8 @@ function App() {
     <div className="module-page ai-module">
       <div className="ai-chat">
         {aiMessages.map((message) => (
-          <div
-            key={message.id}
-            className={`ai-message ${message.role}`}
-          >
-            <strong>
-              {message.role === "assistant"
-                ? "DDPro AI"
-                : "Sen"}
-            </strong>
+          <div key={message.id} className={`ai-message ${message.role}`}>
+            <strong>{message.role === "assistant" ? "DDPro AI" : "Sen"}</strong>
             <p>{message.text}</p>
             <small>{message.date}</small>
           </div>
@@ -1079,267 +2211,6 @@ function App() {
     </div>
   );
 
-  const renderOffers = () => (
-    <div className="module-page">
-      <div className="module-toolbar">
-        <div className="offers-toolbar-actions">
-          <span className={`offers-status-pill ${offersFetchState}`}>
-            {offersFetchState === "loading" && "API yükleniyor"}
-            {offersFetchState === "success" && "API bağlı"}
-            {offersFetchState === "empty" && "API boş veri döndü"}
-            {offersFetchState === "error" && "API bağlantı hatası"}
-          </span>
-
-          <button
-            type="button"
-            className="secondary-button"
-            disabled={offersLoading}
-            onClick={() => setOffersReloadKey((value) => value + 1)}
-          >
-            {offersLoading ? "Yenileniyor..." : "Yenile"}
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setShowOfferForm((value) => !value)}
-          >
-            {showOfferForm ? "Formu Kapat" : "+ Yeni Teklif"}
-          </button>
-        </div>
-      </div>
-
-      {offersError && (
-        <p className="status-banner warning">
-          ⚠ {offersError}
-        </p>
-      )}
-
-      {!offersError && offersFetchState === "empty" && (
-        <p className="status-banner info">
-          ℹ API üzerinde henüz teklif bulunmuyor
-          {offers.some((offer) => offer.source === "local")
-            ? ", kayıtlı yerel taslaklar listeleniyor."
-            : "."}
-        </p>
-      )}
-
-      {showOfferForm && (
-        <form className="data-form" onSubmit={createOffer}>
-          <input
-            type="text"
-            placeholder="Teklif adı"
-            value={offerName}
-            onChange={(event) => setOfferName(event.target.value)}
-          />
-
-          <input
-            type="text"
-            placeholder="Teklif tutarı"
-            value={offerAmount}
-            onChange={(event) => setOfferAmount(event.target.value)}
-          />
-
-          <select
-            value={offerStatus}
-            onChange={(event) => setOfferStatus(event.target.value)}
-          >
-            <option>Hazırlanıyor</option>
-            <option>Gönderildi</option>
-            <option>Onaylandı</option>
-            <option>Reddedildi</option>
-          </select>
-
-          <button type="submit">Teklifi Kaydet</button>
-
-          <p className="form-hint">
-            Yeni kayıtlar bu sürümde yerel taslak olarak eklenir.
-          </p>
-        </form>
-      )}
-
-      <div className="offers-summary-grid">
-        <div className="offer-summary-card">
-          <span>Toplam Teklif</span>
-          <strong>{offers.length}</strong>
-        </div>
-
-        <div className="offer-summary-card">
-          <span>API Kayıtları</span>
-          <strong>
-            {offers.filter((offer) => offer.source === "api").length}
-          </strong>
-        </div>
-
-        <div className="offer-summary-card">
-          <span>Onaylanan</span>
-          <strong>
-            {offers.filter((offer) => offer.status === "Onaylandı").length}
-          </strong>
-        </div>
-
-        <div className="offer-summary-card">
-          <span>Yerel Taslak</span>
-          <strong>
-            {offers.filter((offer) => offer.source === "local").length}
-          </strong>
-        </div>
-      </div>
-
-      <div className="offers-layout">
-        <div className="panel">
-          <div className="panel-header">
-            <h2>Teklif Listesi</h2>
-            <span className="panel-meta">{offers.length} kayıt</span>
-          </div>
-
-          <div className="panel-content">
-            {offersLoading ? (
-              <p className="empty-state">Teklifler yükleniyor…</p>
-            ) : offers.length === 0 ? (
-              <p className="empty-state">Henüz teklif kaydı bulunmuyor.</p>
-            ) : (
-              <div className="offers-list">
-                {offers.map((offer) => (
-                  <article
-                    className={`offer-card${
-                      offer.id === selectedOfferId ? " selected" : ""
-                    }`}
-                    key={offer.id}
-                  >
-                    <div className="offer-card-top">
-                      <div>
-                        <h3>{offer.title}</h3>
-                        <p className="offer-amount">{offer.amountDisplay}</p>
-                      </div>
-
-                      <span
-                        className={`offer-status-badge ${getOfferStatusTone(
-                          offer.status
-                        )}`}
-                      >
-                        {offer.status}
-                      </span>
-                    </div>
-
-                    <div className="offer-meta-row">
-                      <span>{offer.date}</span>
-                      <span>
-                        {offer.source === "api"
-                          ? "Canlı API"
-                          : "Yerel taslak"}
-                      </span>
-                    </div>
-
-                    <div className="offer-card-actions">
-                      <button
-                        type="button"
-                        className="offer-secondary-button"
-                        onClick={() => setSelectedOfferId(offer.id)}
-                      >
-                        Detay
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => deleteOffer(offer.id)}
-                      >
-                        {offer.source === "local" ? "Sil" : "Listeden Kaldır"}
-                      </button>
-                    </div>
-                  </article>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="panel offer-detail-panel">
-          <div className="panel-header">
-            <h2>Teklif Detayı</h2>
-            {selectedOfferDetail && (
-              <span className="panel-meta">
-                {selectedOfferDetail.source === "api"
-                  ? "API detayı"
-                  : "Taslak detay"}
-              </span>
-            )}
-          </div>
-
-          <div className="panel-content">
-            {offersLoading ? (
-              <p className="empty-state">Detay alanı hazırlanıyor…</p>
-            ) : !selectedOfferDetail ? (
-              <p className="empty-state">
-                Detayları görmek için bir teklif seç.
-              </p>
-            ) : offerDetailLoading ? (
-              <p className="empty-state">Teklif detayı yükleniyor…</p>
-            ) : (
-              <div className="offer-detail-content">
-                <div className="offer-detail-header">
-                  <div>
-                    <h3>{selectedOfferDetail.title}</h3>
-                    <p>{selectedOfferDetail.amountDisplay}</p>
-                  </div>
-
-                  <span
-                    className={`offer-status-badge ${getOfferStatusTone(
-                      selectedOfferDetail.status
-                    )}`}
-                  >
-                    {selectedOfferDetail.status}
-                  </span>
-                </div>
-
-                {offerDetailError && (
-                  <p className="status-banner warning">{offerDetailError}</p>
-                )}
-
-                <div className="offer-detail-grid">
-                  <div className="offer-detail-item">
-                    <span>Kaynak</span>
-                    <strong>
-                      {selectedOfferDetail.source === "api"
-                        ? "Teklifler API"
-                        : "Yerel taslak"}
-                    </strong>
-                  </div>
-
-                  <div className="offer-detail-item">
-                    <span>Teklif Tarihi</span>
-                    <strong>{selectedOfferDetail.date}</strong>
-                  </div>
-
-                  <div className="offer-detail-item">
-                    <span>Para Birimi</span>
-                    <strong>
-                      {selectedOfferDetail.currency || "Belirtilmedi"}
-                    </strong>
-                  </div>
-
-                  <div className="offer-detail-item">
-                    <span>Proje Bağlantısı</span>
-                    <strong>
-                      {selectedOfferDetail.projectId || "Atanmadı"}
-                    </strong>
-                  </div>
-                </div>
-
-                <div className="offer-detail-note">
-                  <strong>Detay görünümü hazır</strong>
-                  <p>
-                    Teklif seçildiğinde temel alanlar ve API detay sorgusu bu
-                    panelde yönetilir.
-                  </p>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-
   const renderSystems = () => (
     <div className="module-page">
       <div className="systems-grid">
@@ -1355,10 +2226,7 @@ function App() {
         <div className="panel-header">
           <h2>Merkezi Hafıza</h2>
 
-          <button
-            type="button"
-            onClick={() => setShowMemoryForm((value) => !value)}
-          >
+          <button type="button" onClick={() => setShowMemoryForm((value) => !value)}>
             {showMemoryForm ? "Kapat" : "+ Yeni Kayıt"}
           </button>
         </div>
@@ -1384,9 +2252,7 @@ function App() {
 
         <div className="data-list">
           {memoryItems.length === 0 ? (
-            <p className="empty-state">
-              Merkezi hafızada henüz kayıt bulunmuyor.
-            </p>
+            <p className="empty-state">Merkezi hafızada henüz kayıt bulunmuyor.</p>
           ) : (
             memoryItems.map((item) => (
               <div className="data-card" key={item.id}>
@@ -1396,10 +2262,7 @@ function App() {
                   <small>{item.date}</small>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => deleteMemory(item.id)}
-                >
+                <button type="button" onClick={() => deleteMemory(item.id)}>
                   Sil
                 </button>
               </div>
@@ -1422,10 +2285,7 @@ function App() {
                 <small>Durum: {item.status}</small>
               </div>
 
-              <button
-                type="button"
-                onClick={() => toggleIntegration(item.id)}
-              >
+              <button type="button" onClick={() => toggleIntegration(item.id)}>
                 {item.status === "Aktif" ? "Pasifleştir" : "Aktifleştir"}
               </button>
             </div>
@@ -1437,21 +2297,24 @@ function App() {
 
   const renderModule = () => {
     switch (activeModule) {
-      case "projects":
-        return renderProjects();
-
-      case "research":
-        return renderResearch();
-
-      case "ai":
-        return renderAI();
-
-      case "offers":
-        return renderOffers();
-
+      case "products":
+        return renderProducts();
       case "systems":
         return renderSystems();
-
+      case "price-analysis":
+        return renderPriceAnalysis();
+      case "material-analysis":
+        return renderMaterialAnalysis();
+      case "offers":
+        return renderOffers();
+      case "projects":
+        return renderProjects();
+      case "crm":
+        return renderCrm();
+      case "research":
+        return renderResearch();
+      case "ai":
+        return renderAI();
       case "dashboard":
       default:
         return renderDashboard();
@@ -1459,8 +2322,7 @@ function App() {
   };
 
   const currentModule =
-    modules.find((module) => module.id === activeModule) ||
-    modules[0];
+    modules.find((module) => module.id === activeModule) || modules[0];
 
   return (
     <div className="ddpro-app">
@@ -1482,23 +2344,17 @@ function App() {
 
       <div className="app-layout">
         <aside className="sidebar">
-          <div className="sidebar-title">
-            ANA MODÜLLER
-          </div>
+          <div className="sidebar-title">ANA MODÜLLER</div>
 
           <nav className="module-nav">
             {modules.map((module) => (
               <button
                 key={module.id}
                 type="button"
-                className={`module-button ${
-                  activeModule === module.id ? "active" : ""
-                }`}
-                onClick={() => setActiveModule(module.id)}
+                className={`module-button ${activeModule === module.id ? "active" : ""}`}
+                onClick={() => openModule(module.id)}
               >
-                <span className="module-icon">
-                  {module.icon}
-                </span>
+                <span className="module-icon">{module.icon}</span>
 
                 <span className="module-text">
                   <strong>{module.title}</strong>
@@ -1518,15 +2374,16 @@ function App() {
 
         <main className="main-content">
           <section className="content-header">
-            <div>
-              <h1>{currentModule.title}</h1>
-              <p>{currentModule.description}</p>
+            <div className="content-header-top">
+              <div>
+                <h1>{currentModule.title}</h1>
+                <p>{currentModule.description}</p>
+              </div>
+              <span className="panel-meta module-route-badge">#/{activeModule}</span>
             </div>
           </section>
 
-          <section className="content-body">
-            {renderModule()}
-          </section>
+          <section className="content-body">{renderModule()}</section>
         </main>
       </div>
     </div>

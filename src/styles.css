@@ -379,6 +379,13 @@ select {
   min-width: 0;
 }
 
+.content-header-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
 .content-header h1 {
   margin: 0;
   color: #f1f6ff;
@@ -411,7 +418,7 @@ select {
 
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 15px;
 }
 
@@ -590,6 +597,13 @@ select {
   font-size: 12px;
 }
 
+.route-label {
+  display: block;
+  margin-top: 4px;
+  color: #5f738e;
+  font-size: 10px;
+}
+
 .quick-status strong {
   display: inline-flex;
   align-items: center;
@@ -754,6 +768,20 @@ select {
   font-weight: 750;
 }
 
+.form-actions-row {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 10px;
+}
+
+.data-form .secondary-button,
+.data-card-actions .secondary-button {
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: rgba(148, 163, 184, 0.08);
+  color: #c8d6e8;
+  box-shadow: none;
+}
+
 .form-hint {
   grid-column: 1 / -1;
   margin: -2px 0 0;
@@ -807,6 +835,10 @@ select {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 14px;
   margin-bottom: 18px;
+}
+
+.offers-summary-grid.compact-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .offer-summary-card {
@@ -1089,6 +1121,20 @@ select {
   font-weight: 700;
 }
 
+.data-card-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 8px;
+}
+
+.data-card-actions button {
+  min-width: 88px;
+}
+
+.module-route-badge {
+  flex-shrink: 0;
+}
+
 /* =========================================================
    EMPTY STATE
 ========================================================= */
@@ -1367,6 +1413,19 @@ select {
     justify-content: center;
   }
 
+  .content-header-top,
+  .form-actions-row {
+    flex-direction: column;
+  }
+
+  .data-card-actions {
+    width: 100%;
+  }
+
+  .data-card-actions button {
+    flex: 1 1 0;
+  }
+
   .offer-detail-grid {
     grid-template-columns: 1fr;
   }
@@ -1456,6 +1515,14 @@ select {
   }
 
   .module-toolbar button {
+    width: 100%;
+  }
+
+  .data-card-actions {
+    flex-direction: column;
+  }
+
+  .data-card-actions button {
     width: 100%;
   }
 
