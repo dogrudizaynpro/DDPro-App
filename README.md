@@ -29,3 +29,17 @@ DDPro-App; gerçek veriler, gerçek projeler ve kontrollü entegrasyonlar üzeri
 3. API ve sistem entegrasyonları
 4. AI destekli otomasyonlar
 5. Gelişmiş dijital ekosistem
+
+### Production API Bağlantısı
+
+- Frontend build sırasında production API origin'i `VITE_API_URL` repository variable'ından alınır.
+- Repository içinde doğrulanmış bir production backend URL'si bulunmamaktadır; URL tahmin edilmemelidir.
+- GitHub Pages deploy'u artık `VITE_API_URL` tanımlı değilse veya `/health` endpoint'i `200 OK` dönmüyorsa başarısız olur.
+- Backend deployment şablonu `render.yaml` dosyasında tanımlanmıştır. Backend ayağa kaldırıldıktan sonra gerçek origin değeri GitHub repository variable `VITE_API_URL` olarak girilmelidir.
+- Backend health endpoint'i `/health` yolunda çalışır ve veritabanı hazır değilse deploy smoke testi başarısız olacak şekilde kullanılır.
+
+### Backend Notları
+
+- Backend kodu `/backend` altında Node.js + Express + Supabase yapısındadır.
+- Aktif API rotaları: `/api/projects`, `/api/research`, `/api/offers`
+- Production CORS origin'i `https://dogrudizaynpro.github.io` olacak şekilde yapılandırılmalıdır.

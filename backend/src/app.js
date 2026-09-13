@@ -6,6 +6,7 @@ import { errorHandler } from "./middleware/errorHandler.js";
 import projectsRouter from "./routes/projects.routes.js";
 import researchRouter from "./routes/research.routes.js";
 import offersRouter from "./routes/offers.routes.js";
+import { isSupabaseAvailable } from "./config/supabase.js";
 
 const app = express();
 
@@ -43,9 +44,15 @@ app.use("/api/offers", offersRouter);
 // ============================================================
 
 app.get("/health", (req, res) => {
-  res.status(200).json({
-    status: "ok",
+  const databaseReady = isSupabaseAvailable();
+
+  res.status(databaseReady ? 200 : 503).json({
+    status: databaseReady ? "ok" : "degraded",
     service: "ddpro-backend",
+    database: {
+      provider: "supabase",
+      ready: databaseReady,
+    },
     timestamp: new Date().toISOString(),
   });
 });

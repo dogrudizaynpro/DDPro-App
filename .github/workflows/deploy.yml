@@ -37,16 +37,31 @@ jobs:
           API_URL="${{ vars.VITE_API_URL }}"
 
           if [ -z "$API_URL" ]; then
-            API_URL="${{ secrets.VITE_API_URL }}"
+            echo "::error::Repository variable VITE_API_URL is required for production deployment."
+            exit 1
           fi
 
-          if [ -z "$API_URL" ]; then
-            echo "::warning::VITE_API_URL is not set. Continuing without an injected API URL; configure it for production runtime."
-          else
-            echo "::add-mask::$API_URL"
-          fi
+          case "$API_URL" in
+            https://*)
+              ;;
+            *)
+              echo "::error::VITE_API_URL must be an https URL."
+              exit 1
+              ;;
+          esac
 
+          echo "::notice::Using configured production API origin."
           echo "value=$API_URL" >> "$GITHUB_OUTPUT"
+
+      - name: Smoke test production API
+        run: |
+          API_URL="${{ steps.api_url.outputs.value }}"
+          curl --fail --silent --show-error \
+            --max-time 20 \
+            --retry 3 \
+            --retry-connrefused \
+            "${API_URL}/health" > /tmp/ddpro-health.json
+          node -e 'const fs=require("fs"); const data=JSON.parse(fs.readFileSync("/tmp/ddpro-health.json","utf8")); if(!data || !data.service || !["ok","degraded"].includes(data.status)){console.error("Unexpected health response", data); process.exit(1)} if(data.status !== "ok"){console.error("Backend health is not ready", data); process.exit(1)} console.log("Health OK:", data.service);'
 
       - name: Build DDPro
         run: npm run build

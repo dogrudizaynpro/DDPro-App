@@ -184,6 +184,19 @@ select {
   font-weight: 700;
 }
 
+.header-status.warning,
+.header-status.error {
+  border-color: rgba(245, 158, 11, 0.18);
+  background: rgba(245, 158, 11, 0.08);
+  color: #f7c875;
+}
+
+.header-status.loading {
+  border-color: rgba(76, 147, 255, 0.18);
+  background: rgba(76, 147, 255, 0.08);
+  color: #9cc4ff;
+}
+
 .status-dot {
   width: 8px;
   height: 8px;
@@ -192,6 +205,17 @@ select {
   border-radius: 50%;
   background: #46c880;
   box-shadow: 0 0 0 4px rgba(70, 200, 128, 0.08);
+}
+
+.status-dot.warning,
+.status-dot.error {
+  background: #f59e0b;
+  box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.08);
+}
+
+.status-dot.loading {
+  background: #4c93ff;
+  box-shadow: 0 0 0 4px rgba(76, 147, 255, 0.08);
 }
 
 /* =========================================================
@@ -878,6 +902,18 @@ select {
   border-color: rgba(56, 189, 248, 0.18);
   background: rgba(56, 189, 248, 0.08);
   color: #9bddf5;
+}
+
+.status-banner.loading {
+  border-color: rgba(76, 147, 255, 0.18);
+  background: rgba(76, 147, 255, 0.08);
+  color: #9cc4ff;
+}
+
+.status-banner.success {
+  border-color: rgba(70, 200, 128, 0.18);
+  background: rgba(70, 200, 128, 0.08);
+  color: #8edbb0;
 }
 
 .offers-summary-grid {
