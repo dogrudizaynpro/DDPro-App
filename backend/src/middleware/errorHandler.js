@@ -5,7 +5,7 @@
 // Must be used as the last middleware in the stack.
 // ============================================================
 
-export const errorHandler = (err, req, res, next) => {
+export const errorHandler = (err, req, res, _next) => {
   // Log error safely
   const isDevelopment = process.env.NODE_ENV === "development";
 
