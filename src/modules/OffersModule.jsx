@@ -20,6 +20,7 @@ function OffersModule({
   offerDetailLoading,
   offerDetailError,
   getOfferStatusTone,
+  canUseLocalFallback,
 }) {
   return (
     <div className="module-page">
@@ -29,6 +30,7 @@ function OffersModule({
             {offersFetchState === "loading" && "API yükleniyor"}
             {offersFetchState === "success" && "API bağlı"}
             {offersFetchState === "empty" && "API boş veri döndü"}
+            {offersFetchState === "warning" && "Yerel fallback"}
             {offersFetchState === "error" && "API bağlantı hatası"}
           </span>
 
@@ -59,7 +61,7 @@ function OffersModule({
       {!offersError && offersFetchState === "empty" && (
         <p className="status-banner info">
           ℹ API üzerinde henüz teklif bulunmuyor
-          {offers.some((offer) => offer.source === "local")
+          {canUseLocalFallback && offers.some((offer) => offer.source === "local")
             ? ", kayıtlı yerel taslaklar listeleniyor."
             : "."}
         </p>
@@ -93,9 +95,11 @@ function OffersModule({
 
           <button type="submit">Teklifi Kaydet</button>
 
-          <p className="form-hint">
-            Yeni kayıtlar bu sürümde yerel taslak olarak eklenir.
-          </p>
+          {canUseLocalFallback ? (
+            <p className="form-hint">
+              API hata verirse geliştirme ortamında yerel taslak korunur.
+            </p>
+          ) : null}
         </form>
       )}
 

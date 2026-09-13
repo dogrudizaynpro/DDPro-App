@@ -9,6 +9,7 @@ function ProjectsModule({
   projectStatus,
   setProjectStatus,
   projectsLoading,
+  projectsError,
   projects,
   deleteProject,
 }) {
@@ -22,6 +23,10 @@ function ProjectsModule({
           {showProjectForm ? "Formu Kapat" : "+ Yeni Proje"}
         </button>
       </div>
+
+      {projectsError && (
+        <p className="status-banner warning">⚠ {projectsError}</p>
+      )}
 
       {showProjectForm && (
         <form className="data-form" onSubmit={createProject}>

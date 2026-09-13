@@ -11,6 +11,7 @@ function SystemsModule({
   deleteMemory,
   integrations,
   toggleIntegration,
+  statusNote,
 }) {
   return (
     <div className="module-page">
@@ -20,6 +21,11 @@ function SystemsModule({
         </div>
 
         <div className="panel-content">
+          {statusNote ? (
+            <p className={`status-banner ${statusNote.tone || "info"}`}>
+              {statusNote.message}
+            </p>
+          ) : null}
           {systemInventory.length === 0 ? (
             <p className="empty-state">Henüz veri bulunmuyor.</p>
           ) : (

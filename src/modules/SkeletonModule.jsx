@@ -1,4 +1,4 @@
-function SkeletonModule({ title, description, sections }) {
+function SkeletonModule({ title, description, sections, statusNote }) {
   return (
     <div className="module-page">
       <div className="panel">
@@ -7,6 +7,11 @@ function SkeletonModule({ title, description, sections }) {
         </div>
         <div className="panel-content">
           <p className="module-intro">{description}</p>
+          {statusNote ? (
+            <p className={`status-banner ${statusNote.tone || "info"}`}>
+              {statusNote.message}
+            </p>
+          ) : null}
         </div>
       </div>
 

@@ -42,9 +42,7 @@ function ProcurementModule({
       )}
 
       {procurementError && (
-        <p className="empty-state" style={{ color: "#f59e0b" }}>
-          ⚠ {procurementError}
-        </p>
+        <p className="status-banner warning">⚠ {procurementError}</p>
       )}
 
       <div className="data-list">
