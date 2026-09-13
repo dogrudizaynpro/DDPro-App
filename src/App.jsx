@@ -111,6 +111,8 @@ const moduleByRoute = modules.reduce((accumulator, module) => {
   return accumulator;
 }, {});
 
+moduleByRoute.research = "price-analysis";
+
 const OFFER_STATUS_TONES = {
   Hazırlanıyor: "pending",
   Gönderildi: "info",
@@ -214,6 +216,8 @@ function App() {
   const [productStatusFilter, setProductStatusFilter] = useState("Tümü");
   const [selectedProductId, setSelectedProductId] = useState(null);
   const [selectedSystemId, setSelectedSystemId] = useState(null);
+  const [selectedProjectId, setSelectedProjectId] = useState(null);
+  const [products] = useState(productsSeed);
 
   const [projects, setProjects] = useState(() =>
     getStoredData(STORAGE_KEYS.projects)
@@ -239,6 +243,7 @@ function App() {
   const [selectedOfferDetail, setSelectedOfferDetail] = useState(null);
   const [offerDetailLoading, setOfferDetailLoading] = useState(false);
   const [offerDetailError, setOfferDetailError] = useState(null);
+  const initialHashSyncedRef = useRef(false);
   const projectsTouchedRef = useRef(false);
   const researchTouchedRef = useRef(false);
   const offersTouchedRef = useRef(false);
@@ -283,6 +288,7 @@ function App() {
   const [offerName, setOfferName] = useState("");
   const [offerAmount, setOfferAmount] = useState("");
   const [offerCustomer, setOfferCustomer] = useState("");
+  const [offerProjectId, setOfferProjectId] = useState("");
   const [offerProjectName, setOfferProjectName] = useState("");
   const [offerAnalysisItems, setOfferAnalysisItems] = useState("");
   const [offerStatus, setOfferStatus] = useState("Hazırlanıyor");
@@ -518,10 +524,23 @@ function App() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
+    const currentHash = window.location.hash.replace(/^#/, "").trim();
     const expectedHash = `#${activeModule}`;
-    if (window.location.hash !== expectedHash) {
-      window.location.hash = expectedHash;
+    const isKnownCurrentHash = Boolean(moduleByRoute[currentHash]);
+
+    if (!currentHash || isKnownCurrentHash) {
+      if (!initialHashSyncedRef.current && !currentHash) {
+        window.history.replaceState(
+          null,
+          "",
+          `${window.location.pathname}${window.location.search}${expectedHash}`
+        );
+      } else if (window.location.hash !== expectedHash) {
+        window.location.hash = expectedHash;
+      }
     }
+
+    initialHashSyncedRef.current = true;
   }, [activeModule]);
 
   useEffect(() => {
@@ -613,7 +632,7 @@ function App() {
       },
       {
         label: "ÜRÜNLER",
-        value: productsSeed.length,
+        value: products.length,
       },
       {
         label: "TEKLİFLER",
@@ -624,12 +643,12 @@ function App() {
         value: systemModules.length,
       },
     ],
-    [projects, offers]
+    [projects, offers, products]
   );
 
   const filteredProducts = useMemo(
     () =>
-      productsSeed.filter((product) => {
+      products.filter((product) => {
         const search = productSearch.trim().toLowerCase();
         const matchesSearch =
           !search ||
@@ -642,7 +661,7 @@ function App() {
           product.status === productStatusFilter;
         return matchesSearch && matchesStatus;
       }),
-    [productSearch, productStatusFilter]
+    [productSearch, productStatusFilter, products]
   );
 
   const selectedProduct =
@@ -654,6 +673,33 @@ function App() {
     systemModules.find((system) => system.id === selectedSystemId) ||
     systemModules[0] ||
     null;
+  const selectedProject =
+    projects.find((project) => project.id === selectedProjectId) ||
+    projects[0] ||
+    null;
+  const selectedSystemLinkedProducts = selectedSystem
+    ? products
+        .filter((product) => product.systemCode === selectedSystem.code)
+        .map((product) => product.productCode)
+        .join(", ") || "Henüz veri bulunmuyor"
+    : "Henüz veri bulunmuyor";
+  const selectedProjectSystemDisplay =
+    selectedProject &&
+    Array.isArray(selectedProject.systemCodes) &&
+    selectedProject.systemCodes.length > 0
+      ? selectedProject.systemCodes.join(", ")
+      : "Henüz veri bulunmuyor";
+  const selectedProjectOffersDisplay = (() => {
+    if (!selectedProject) {
+      return "Henüz veri bulunmuyor";
+    }
+    const linkedOffers = offers.filter(
+      (offer) => offer.projectId === selectedProject.id
+    );
+    return linkedOffers.length > 0
+      ? linkedOffers.map((offer) => offer.title).join(", ")
+      : "Henüz veri bulunmuyor";
+  })();
 
   useEffect(() => {
     if (filteredProducts.length === 0) {
@@ -671,6 +717,17 @@ function App() {
       setSelectedSystemId(systemModules[0].id);
     }
   }, [selectedSystemId]);
+
+  useEffect(() => {
+    if (projects.length === 0) {
+      setSelectedProjectId(null);
+      return;
+    }
+
+    if (!projects.some((project) => project.id === selectedProjectId)) {
+      setSelectedProjectId(projects[0].id);
+    }
+  }, [projects, selectedProjectId]);
 
   const createProject = (event) => {
     event.preventDefault();
@@ -766,7 +823,11 @@ function App() {
       statusRaw: offerStatus,
       date: formatDate(),
       customerName: offerCustomer.trim() || null,
-      projectName: offerProjectName.trim() || null,
+      projectId: offerProjectId || null,
+      projectName:
+        projects.find((project) => project.id === offerProjectId)?.name ||
+        offerProjectName.trim() ||
+        null,
       analysisItems: offerAnalysisItems
         .split(",")
         .map((item) => item.trim())
@@ -807,6 +868,7 @@ function App() {
     setOfferName("");
     setOfferAmount("");
     setOfferCustomer("");
+    setOfferProjectId("");
     setOfferProjectName("");
     setOfferAnalysisItems("");
     setOfferStatus("Hazırlanıyor");
@@ -1276,12 +1338,21 @@ function App() {
                       </small>
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={() => deleteProject(project.id)}
-                    >
-                      Sil
-                    </button>
+                    <div className="inline-actions">
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        onClick={() => setSelectedProjectId(project.id)}
+                      >
+                        Detay
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => deleteProject(project.id)}
+                      >
+                        Sil
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -1294,26 +1365,25 @@ function App() {
             <h2>Proje Detay</h2>
           </div>
           <div className="panel-content">
-            {projects.length === 0 ? (
+            {!selectedProject ? (
               <p className="empty-state">Henüz veri bulunmuyor.</p>
             ) : (
               <div className="detail-grid">
                 <div className="offer-detail-item">
+                  <span>Proje</span>
+                  <strong>{selectedProject.name}</strong>
+                </div>
+                <div className="offer-detail-item">
+                  <span>Proje Türü</span>
+                  <strong>{selectedProject.type}</strong>
+                </div>
+                <div className="offer-detail-item">
                   <span>Sistem İlişkileri</span>
-                  <strong>
-                    {systemModules.map((system) => system.code).join(", ")}
-                  </strong>
+                  <strong>{selectedProjectSystemDisplay}</strong>
                 </div>
                 <div className="offer-detail-item">
                   <span>Teklif İlişkileri</span>
-                  <strong>
-                    {offers.length > 0
-                      ? offers
-                          .slice(0, 3)
-                          .map((offer) => offer.title)
-                          .join(", ")
-                      : "Henüz veri bulunmuyor"}
-                  </strong>
+                  <strong>{selectedProjectOffersDisplay}</strong>
                 </div>
               </div>
             )}
@@ -1424,25 +1494,50 @@ function App() {
             onChange={(event) => setOfferAmount(event.target.value)}
           />
 
-          <input
-            type="text"
-            placeholder="Müşteri"
-            value={offerCustomer}
-            onChange={(event) => setOfferCustomer(event.target.value)}
-          />
+          <label className="field-group">
+            <span>Müşteri</span>
+            <input
+              type="text"
+              placeholder="Müşteri"
+              value={offerCustomer}
+              onChange={(event) => setOfferCustomer(event.target.value)}
+            />
+          </label>
 
-          <input
-            type="text"
-            placeholder="Proje"
-            value={offerProjectName}
-            onChange={(event) => setOfferProjectName(event.target.value)}
-          />
+          <label className="field-group">
+            <span>Proje Seçimi</span>
+            <select
+              value={offerProjectId}
+              onChange={(event) => setOfferProjectId(event.target.value)}
+            >
+              <option value="">Proje seçilmedi</option>
+              {projects.map((project) => (
+                <option key={project.id} value={project.id}>
+                  {project.name}
+                </option>
+              ))}
+            </select>
+          </label>
 
-          <textarea
-            placeholder="Analiz kalemleri (virgülle ayır)"
-            value={offerAnalysisItems}
-            onChange={(event) => setOfferAnalysisItems(event.target.value)}
-          />
+          <label className="field-group">
+            <span>Proje (manuel)</span>
+            <input
+              type="text"
+              placeholder="Proje"
+              value={offerProjectName}
+              disabled={Boolean(offerProjectId)}
+              onChange={(event) => setOfferProjectName(event.target.value)}
+            />
+          </label>
+
+          <label className="field-group field-group-full">
+            <span>Analiz Kalemleri</span>
+            <textarea
+              placeholder="Analiz kalemleri (virgülle ayır)"
+              value={offerAnalysisItems}
+              onChange={(event) => setOfferAnalysisItems(event.target.value)}
+            />
+          </label>
 
           <select
             value={offerStatus}
@@ -1690,11 +1785,12 @@ function App() {
             <span className="panel-meta">{systemModules.length} kayıt</span>
           </div>
           <div className="panel-content">
-            <div className="systems-grid">
+            <div className="systems-grid" aria-label="Sistem listesi">
               {systemModules.map((system) => (
                 <button
                   key={system.id}
                   type="button"
+                  aria-pressed={selectedSystem?.id === system.id}
                   className={`system-card${
                     selectedSystem?.id === system.id ? " selected" : ""
                   }`}
@@ -1730,15 +1826,7 @@ function App() {
                 </div>
                 <div className="offer-detail-item full">
                   <span>Bağlı Ürünler</span>
-                  <strong>
-                    {productsSeed
-                      .filter(
-                        (product) =>
-                          product.systemCode === selectedSystem.code
-                      )
-                      .map((product) => product.productCode)
-                      .join(", ") || "Henüz veri bulunmuyor"}
-                  </strong>
+                  <strong>{selectedSystemLinkedProducts}</strong>
                 </div>
               </div>
             )}
