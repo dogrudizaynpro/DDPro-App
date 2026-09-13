@@ -18,6 +18,7 @@ export default function Sidebar({
             type="button"
             className={`module-button ${activeModule === module.id ? "active" : ""}`}
             onClick={() => onSelectModule(module.id)}
+            aria-current={activeModule === module.id ? "page" : undefined}
           >
             <span className="module-icon">{module.icon}</span>
             <span className="module-text">

@@ -215,6 +215,12 @@ export default function OffersModule({
                 description="Seçili teklifin ayrıntıları sorgulanıyor."
                 badge="İstek sürüyor"
               />
+            ) : offerDetailError ? (
+              <EmptyState
+                title="Teklif detayı alınamadı"
+                description="Seçili kayıt korunuyor ancak güncel detay sorgusu başarısız oldu. Liste üzerinden tekrar seçim yapabilir veya yenileme deneyebilirsin."
+                badge="API uyarısı"
+              />
             ) : (
               <div className="offer-detail-content">
                 <div className="offer-detail-header">
@@ -231,10 +237,6 @@ export default function OffersModule({
                     {selectedOfferDetail.status}
                   </span>
                 </div>
-
-                {offerDetailError ? (
-                  <p className="status-banner warning">{offerDetailError}</p>
-                ) : null}
 
                 <div className="offer-detail-grid">
                   <div className="offer-detail-item">

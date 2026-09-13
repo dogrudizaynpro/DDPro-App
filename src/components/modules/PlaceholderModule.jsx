@@ -25,7 +25,7 @@ export default function PlaceholderModule({ module, onOpenDashboard }) {
             title="Bu modül henüz bağlı değil"
             description={`${module.description} Gerçek veri veya tamamlanmış işlev izlenimi verilmeden mimari kabuk hazırlandı.`}
             badge="Bağlantı yok"
-            actionLabel="Dashboarda Dön"
+            actionLabel="Ana Paneli Aç"
             onAction={onOpenDashboard}
           />
         </section>
