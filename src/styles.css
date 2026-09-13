@@ -460,6 +460,40 @@ select {
   margin-top: 18px;
 }
 
+.quick-links-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.quick-link-card {
+  min-height: 74px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  color: #d8e6fa;
+  text-align: left;
+}
+
+.quick-link-card span {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: rgba(76, 147, 255, 0.14);
+  color: #9ec6ff;
+}
+
+.quick-link-card strong {
+  font-size: 12px;
+  font-weight: 700;
+}
+
 /* =========================================================
    PANELS
 ========================================================= */
@@ -614,6 +648,50 @@ select {
 .module-page {
   width: 100%;
   min-width: 0;
+}
+
+.module-intro {
+  margin: 0;
+  color: #8498b2;
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.skeleton-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.skeleton-card {
+  min-width: 0;
+  min-height: 170px;
+  padding: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.1);
+  border-radius: 16px;
+  background: rgba(10, 21, 37, 0.84);
+}
+
+.skeleton-card h3 {
+  margin: 0;
+  color: #e7effb;
+  font-size: 14px;
+  font-weight: 740;
+}
+
+.skeleton-card p {
+  margin: 10px 0 0;
+  color: #7d92ab;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.skeleton-card small {
+  display: inline-block;
+  margin-top: 14px;
+  color: #96c9ac;
+  font-size: 11px;
 }
 
 .module-toolbar {
@@ -1105,6 +1183,12 @@ select {
   text-align: center;
 }
 
+.empty-state.compact {
+  margin-top: 12px;
+  padding: 12px;
+  font-size: 11px;
+}
+
 /* =========================================================
    SYSTEMS
 ========================================================= */
@@ -1292,6 +1376,10 @@ select {
   .dashboard-grid {
     grid-template-columns: 1fr;
   }
+
+  .skeleton-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 /* =========================================================
@@ -1370,6 +1458,10 @@ select {
   .offer-detail-grid {
     grid-template-columns: 1fr;
   }
+
+  .quick-links-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* =========================================================
@@ -1422,7 +1514,8 @@ select {
 
   .stats-grid,
   .systems-grid,
-  .offers-summary-grid {
+  .offers-summary-grid,
+  .skeleton-grid {
     grid-template-columns: 1fr;
   }
 
