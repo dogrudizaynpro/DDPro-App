@@ -303,6 +303,9 @@ const getApiFailureReason = (error) => {
   return "Bilinmeyen hata";
 };
 
+const isLocalOnlyRecord = (item) =>
+  shouldUseLocalApiFallback && item?.source !== "api";
+
 function App() {
   const [activeModule, setActiveModule] = useState(() =>
     resolveModuleFromHash(window.location.hash)
@@ -880,7 +883,7 @@ function App() {
     const project = projects.find((item) => item.id === id);
     projectsTouchedRef.current = true;
 
-    if (project?.source !== "api") {
+    if (isLocalOnlyRecord(project)) {
       setProjectsError(null);
       setProjects((currentProjects) =>
         currentProjects.filter((item) => item.id !== id)
@@ -977,7 +980,7 @@ function App() {
     );
     procurementTouchedRef.current = true;
 
-    if (item?.source !== "api") {
+    if (isLocalOnlyRecord(item)) {
       setProcurementError(null);
       setProcurementItems((currentItems) =>
         currentItems.filter((procurement) => procurement.id !== id)

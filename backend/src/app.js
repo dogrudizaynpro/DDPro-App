@@ -60,7 +60,7 @@ app.get("/health", async (req, res) => {
     const supabase = getSupabaseClient();
     const { error } = await supabase
       .from("projects")
-      .select("id", { head: true, count: "exact" });
+      .select("id", { head: true });
 
     if (error) {
       return res.status(503).json({
