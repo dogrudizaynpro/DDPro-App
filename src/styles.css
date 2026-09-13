@@ -1796,6 +1796,23 @@ select {
   min-height: 96px;
 }
 
+.field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: #cfe0f4;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.field-group span {
+  letter-spacing: 0.02em;
+}
+
+.field-group-full {
+  grid-column: 1 / -1;
+}
+
 .line-items-editor {
   margin-top: 16px;
 }

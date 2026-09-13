@@ -1,9 +1,9 @@
-export default function StatusPill({ tone = 'neutral', children, className = '' }) {
+export default function StatusPill({ tone = 'neutral', children, className = '', live = false }) {
   return (
     <span
       className={`workflow-status-pill ${tone}${className ? ` ${className}` : ''}`}
-      role="status"
-      aria-live="polite"
+      role={live ? 'status' : undefined}
+      aria-live={live ? 'polite' : undefined}
     >
       {children}
     </span>

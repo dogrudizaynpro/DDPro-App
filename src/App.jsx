@@ -310,6 +310,7 @@ const normalizeOffer = (record = {}) => {
     updatedAt: record.updatedAt || record.createdAt || record.date || new Date().toISOString(),
     source: record.source || 'local',
     copiedFromId: record.copiedFromId || null,
+    customerInheritedFromProject: Boolean(record.customerInheritedFromProject),
   };
 };
 
@@ -963,15 +964,23 @@ function App() {
     setOfferDrafts((current) =>
       current.map((offer) => {
         if (nextRecord.offerIds.includes(offer.id)) {
+          const shouldInheritCustomer = Boolean(nextRecord.customerId) && (!offer.customerId || offer.customerInheritedFromProject);
+
           return normalizeOffer({
             ...offer,
             projectId: nextRecord.id,
-            customerId: nextRecord.customerId || offer.customerId,
+            customerId: shouldInheritCustomer ? nextRecord.customerId : offer.customerId,
+            customerInheritedFromProject: shouldInheritCustomer,
           });
         }
 
         if (offer.projectId === nextRecord.id) {
-          return normalizeOffer({ ...offer, projectId: '' });
+          return normalizeOffer({
+            ...offer,
+            projectId: '',
+            customerId: offer.customerInheritedFromProject ? '' : offer.customerId,
+            customerInheritedFromProject: false,
+          });
         }
 
         return offer;
@@ -990,6 +999,7 @@ function App() {
     const validItems = offerForm.items.filter((item) => item.description.trim());
     const selectedProjectRecord = projects.find((item) => item.id === offerForm.projectId);
     const derivedCustomerId = offerForm.customerId || selectedProjectRecord?.customerId || '';
+    const customerInheritedFromProject = Boolean(selectedProjectRecord?.customerId && !offerForm.customerId);
 
     if (offerForm.projectId && selectedProjectRecord?.customerId && offerForm.customerId && offerForm.customerId !== selectedProjectRecord.customerId) {
       setOfferFormError('Seçilen proje ile müşteri kaydı eşleşmiyor. Aynı müşteriyi seçin veya proje bağlantısını kaldırın.');
@@ -1010,6 +1020,7 @@ function App() {
     const nextRecord = normalizeOffer({
       ...offerForm,
       customerId: derivedCustomerId,
+      customerInheritedFromProject,
       items: validItems,
       id: offerForm.id || createLocalId('offer'),
       createdAt: offerForm.id ? offerDrafts.find((item) => item.id === offerForm.id)?.createdAt : now,
@@ -1186,7 +1197,8 @@ function App() {
           ? normalizeOffer({
               ...item,
               projectId: '',
-              customerId: item.customerId === current.customerId ? '' : item.customerId,
+              customerId: item.customerInheritedFromProject ? '' : item.customerId,
+              customerInheritedFromProject: false,
             })
           : item
       )
@@ -1907,7 +1919,7 @@ function App() {
         {renderToolbar(
           <div className="toolbar-search-grid">
             <input type="search" placeholder="Teklif ara" value={offerSearch} onChange={(event) => setOfferSearch(event.target.value)} />
-            <StatusPill tone={offersFetchState === 'success' ? 'success' : offersFetchState === 'loading' ? 'info' : offersFetchState === 'empty' ? 'neutral' : 'warning'}>
+            <StatusPill live tone={offersFetchState === 'success' ? 'success' : offersFetchState === 'loading' ? 'info' : offersFetchState === 'empty' ? 'neutral' : 'warning'}>
               {offersFetchState === 'success' ? 'API bağlı' : offersFetchState === 'loading' ? 'API yükleniyor' : offersFetchState === 'empty' ? 'API boş veri' : 'API hatası'}
             </StatusPill>
           </div>,
@@ -1921,23 +1933,23 @@ function App() {
         {showOfferForm && (
           <form className="workflow-form" onSubmit={handleSaveOffer}>
             <div className="form-grid two-columns">
-              <input type="text" placeholder="Teklif adı" value={offerForm.title} onChange={(event) => setOfferForm((current) => ({ ...current, title: event.target.value }))} />
-              <select value={offerForm.customerId} onChange={(event) => setOfferForm((current) => ({ ...current, customerId: event.target.value }))}>
+              <label className="field-group"><span>Teklif adı</span><input type="text" placeholder="Teklif adı" value={offerForm.title} onChange={(event) => setOfferForm((current) => ({ ...current, title: event.target.value }))} /></label>
+              <label className="field-group"><span>Müşteri</span><select value={offerForm.customerId} onChange={(event) => setOfferForm((current) => ({ ...current, customerId: event.target.value }))}>
                 <option value="">Müşteri seçin</option>
                 {customers.map((item) => <option key={item.id} value={item.id}>{item.company}</option>)}
-              </select>
-              <select value={offerForm.projectId} onChange={(event) => setOfferForm((current) => ({ ...current, projectId: event.target.value }))}>
+              </select></label>
+              <label className="field-group"><span>Proje</span><select value={offerForm.projectId} onChange={(event) => setOfferForm((current) => ({ ...current, projectId: event.target.value }))}>
                 <option value="">Proje seçin</option>
                 {projects.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-              </select>
-              <select value={offerForm.status} onChange={(event) => setOfferForm((current) => ({ ...current, status: event.target.value }))}>
+              </select></label>
+              <label className="field-group"><span>Durum</span><select value={offerForm.status} onChange={(event) => setOfferForm((current) => ({ ...current, status: event.target.value }))}>
                 <option>Taslak</option>
                 <option>Gönderildi</option>
                 <option>Onaylandı</option>
                 <option>Reddedildi</option>
-              </select>
-              <input type="number" min="0" step="1" placeholder="KDV %" value={offerForm.vatRate} onChange={(event) => setOfferForm((current) => ({ ...current, vatRate: event.target.value }))} />
-              <textarea placeholder="Teklif notları" value={offerForm.notes} onChange={(event) => setOfferForm((current) => ({ ...current, notes: event.target.value }))} />
+              </select></label>
+              <label className="field-group"><span>KDV (%)</span><input type="number" min="0" step="1" placeholder="KDV %" value={offerForm.vatRate} onChange={(event) => setOfferForm((current) => ({ ...current, vatRate: event.target.value }))} /></label>
+              <label className="field-group field-group-full"><span>Teklif notları</span><textarea placeholder="Teklif notları" value={offerForm.notes} onChange={(event) => setOfferForm((current) => ({ ...current, notes: event.target.value }))} /></label>
             </div>
             <LineItemsEditor
               items={offerForm.items}
@@ -2041,7 +2053,7 @@ function App() {
         {renderToolbar(
           <div className="toolbar-search-grid">
             <input type="search" placeholder="Proje ara" value={projectSearch} onChange={(event) => setProjectSearch(event.target.value)} />
-            <StatusPill tone={projectsFetchState === 'success' ? 'success' : projectsFetchState === 'loading' ? 'info' : projectsFetchState === 'empty' ? 'neutral' : 'warning'}>
+            <StatusPill live tone={projectsFetchState === 'success' ? 'success' : projectsFetchState === 'loading' ? 'info' : projectsFetchState === 'empty' ? 'neutral' : 'warning'}>
               {projectsFetchState === 'success' ? 'API proje listesi hazır' : projectsFetchState === 'loading' ? 'API yükleniyor' : projectsFetchState === 'empty' ? 'API boş veri' : 'API hatası'}
             </StatusPill>
           </div>,
@@ -2055,20 +2067,20 @@ function App() {
         {showProjectForm && (
           <form className="workflow-form" onSubmit={handleSaveProject}>
             <div className="form-grid two-columns">
-              <input type="text" placeholder="Proje adı" value={projectForm.name} onChange={(event) => setProjectForm((current) => ({ ...current, name: event.target.value }))} />
-              <input type="text" placeholder="Proje türü" value={projectForm.type} onChange={(event) => setProjectForm((current) => ({ ...current, type: event.target.value }))} />
-              <select value={projectForm.status} onChange={(event) => setProjectForm((current) => ({ ...current, status: event.target.value }))}>
+              <label className="field-group"><span>Proje adı</span><input type="text" placeholder="Proje adı" value={projectForm.name} onChange={(event) => setProjectForm((current) => ({ ...current, name: event.target.value }))} /></label>
+              <label className="field-group"><span>Proje türü</span><input type="text" placeholder="Proje türü" value={projectForm.type} onChange={(event) => setProjectForm((current) => ({ ...current, type: event.target.value }))} /></label>
+              <label className="field-group"><span>Durum</span><select value={projectForm.status} onChange={(event) => setProjectForm((current) => ({ ...current, status: event.target.value }))}>
                 <option>Taslak</option>
                 <option>Aktif</option>
                 <option>Beklemede</option>
                 <option>Tamamlandı</option>
-              </select>
-              <select value={projectForm.customerId} onChange={(event) => setProjectForm((current) => ({ ...current, customerId: event.target.value }))}>
+              </select></label>
+              <label className="field-group"><span>Müşteri</span><select value={projectForm.customerId} onChange={(event) => setProjectForm((current) => ({ ...current, customerId: event.target.value }))}>
                 <option value="">Müşteri seçin</option>
                 {customers.map((item) => <option key={item.id} value={item.id}>{item.company}</option>)}
-              </select>
-              <input type="text" placeholder="Lokasyon" value={projectForm.location} onChange={(event) => setProjectForm((current) => ({ ...current, location: event.target.value }))} />
-              <textarea placeholder="Proje açıklaması" value={projectForm.description} onChange={(event) => setProjectForm((current) => ({ ...current, description: event.target.value }))} />
+              </select></label>
+              <label className="field-group"><span>Lokasyon</span><input type="text" placeholder="Lokasyon" value={projectForm.location} onChange={(event) => setProjectForm((current) => ({ ...current, location: event.target.value }))} /></label>
+              <label className="field-group field-group-full"><span>Proje açıklaması</span><textarea placeholder="Proje açıklaması" value={projectForm.description} onChange={(event) => setProjectForm((current) => ({ ...current, description: event.target.value }))} /></label>
             </div>
             <div className="multi-select-grid">
               <div>
@@ -2229,7 +2241,7 @@ function App() {
   const renderResearch = () => (
     <div className="module-page">
       {renderToolbar(
-        <StatusPill tone={researchError ? 'warning' : 'info'}>{researchError ? 'API hatası, yerel kayıtlar gösteriliyor' : 'Araştırma kayıtları senkronize ediliyor'}</StatusPill>,
+        <StatusPill live tone={researchError ? 'warning' : 'info'}>{researchError ? 'API hatası, yerel kayıtlar gösteriliyor' : 'Araştırma kayıtları senkronize ediliyor'}</StatusPill>,
         <button type="button" onClick={() => { setShowResearchForm((value) => !value); setResearchForm(emptyResearchForm()); }}>
           {showResearchForm ? 'Formu Kapat' : '+ Yeni Araştırma'}
         </button>
