@@ -41,11 +41,11 @@ jobs:
           fi
 
           if [ -z "$API_URL" ]; then
-            echo "VITE_API_URL is required. Set repository variable or secret VITE_API_URL."
-            exit 1
+            echo "::warning::VITE_API_URL is not set. Continuing without an injected API URL; configure it for production runtime."
+          else
+            echo "::add-mask::$API_URL"
           fi
 
-          echo "::add-mask::$API_URL"
           echo "value=$API_URL" >> "$GITHUB_OUTPUT"
 
       - name: Build DDPro
