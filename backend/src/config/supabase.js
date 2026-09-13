@@ -13,6 +13,8 @@ const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
 
 let supabaseClient = null;
 let isConfigured = false;
+let supabaseClientOverride = undefined;
+let supabaseAvailabilityOverride = undefined;
 
 // Check if Supabase credentials are available
 if (SUPABASE_URL && SUPABASE_ANON_KEY) {
@@ -45,6 +47,10 @@ if (SUPABASE_URL && SUPABASE_ANON_KEY) {
 export { supabaseClient, isConfigured };
 
 export const getSupabaseClient = () => {
+  if (supabaseClientOverride !== undefined) {
+    return supabaseClientOverride;
+  }
+
   if (!isConfigured) {
     console.warn(
       "⚠️  Attempted to use Supabase client, but it is not configured."
@@ -55,5 +61,22 @@ export const getSupabaseClient = () => {
 };
 
 export const isSupabaseAvailable = () => {
+  if (supabaseAvailabilityOverride !== undefined) {
+    return supabaseAvailabilityOverride;
+  }
+
   return isConfigured && supabaseClient !== null;
+};
+
+export const setSupabaseTestOverrides = ({
+  client = undefined,
+  isAvailable = undefined,
+} = {}) => {
+  supabaseClientOverride = client;
+  supabaseAvailabilityOverride = isAvailable;
+};
+
+export const clearSupabaseTestOverrides = () => {
+  supabaseClientOverride = undefined;
+  supabaseAvailabilityOverride = undefined;
 };

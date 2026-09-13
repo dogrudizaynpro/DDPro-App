@@ -170,6 +170,13 @@ export const updateOffer = async (req, res, next) => {
       return next(error);
     }
 
+    if (!data) {
+      return res.status(404).json({
+        status: "error",
+        message: "Offer not found",
+      });
+    }
+
     res.status(200).json({
       status: "success",
       data,
@@ -213,6 +220,13 @@ export const deleteOffer = async (req, res, next) => {
 
       console.error("Error deleting offer:", error.message);
       return next(error);
+    }
+
+    if (!data) {
+      return res.status(404).json({
+        status: "error",
+        message: "Offer not found",
+      });
     }
 
     res.status(200).json({

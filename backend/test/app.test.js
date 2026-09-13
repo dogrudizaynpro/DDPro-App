@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import app from "../src/app.js";
+import * as supabaseConfig from "../src/config/supabase.js";
 
 const startServer = () =>
   new Promise((resolve) => {
@@ -30,6 +31,29 @@ const withServer = async (callback) => {
     await stopServer(server);
   }
 };
+
+const createNullMutationClient = () => ({
+  from() {
+    return {
+      update() {
+        return this;
+      },
+      delete() {
+        return this;
+      },
+      eq() {
+        return this;
+      },
+      select() {
+        return this;
+      },
+      single: async () => ({
+        data: null,
+        error: null,
+      }),
+    };
+  },
+});
 
 test("health endpoint returns OK payload", async () => {
   await withServer(async (server) => {
@@ -125,6 +149,48 @@ test("update project validates id and reports 503 without database", async () =>
   });
 });
 
+test("project update and delete return 404 when no row is affected", async () => {
+  supabaseConfig.setSupabaseTestOverrides({
+    isAvailable: true,
+    client: createNullMutationClient(),
+  });
+
+  try {
+    await withServer(async (server) => {
+      const updateResponse = await fetch(
+        `http://127.0.0.1:${server.address().port}/api/projects/123e4567-e89b-12d3-a456-426614174000`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            name: "DDPro Güncelleme",
+            status: "Aktif",
+          }),
+        }
+      );
+      const updatePayload = await updateResponse.json();
+
+      assert.equal(updateResponse.status, 404);
+      assert.equal(updatePayload.message, "Project not found");
+
+      const deleteResponse = await fetch(
+        `http://127.0.0.1:${server.address().port}/api/projects/123e4567-e89b-12d3-a456-426614174000`,
+        {
+          method: "DELETE",
+        }
+      );
+      const deletePayload = await deleteResponse.json();
+
+      assert.equal(deleteResponse.status, 404);
+      assert.equal(deletePayload.message, "Project not found");
+    });
+  } finally {
+    supabaseConfig.clearSupabaseTestOverrides();
+  }
+});
+
 test("research update and delete guard invalid ids and missing database", async () => {
   await withServer(async (server) => {
     const invalidUpdate = await fetch(
@@ -193,6 +259,47 @@ test("research update and delete guard invalid ids and missing database", async 
   });
 });
 
+test("research update and delete return 404 when no row is affected", async () => {
+  supabaseConfig.setSupabaseTestOverrides({
+    isAvailable: true,
+    client: createNullMutationClient(),
+  });
+
+  try {
+    await withServer(async (server) => {
+      const updateResponse = await fetch(
+        `http://127.0.0.1:${server.address().port}/api/research/123e4567-e89b-12d3-a456-426614174000`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            title: "Araştırma",
+          }),
+        }
+      );
+      const updatePayload = await updateResponse.json();
+
+      assert.equal(updateResponse.status, 404);
+      assert.equal(updatePayload.message, "Research item not found");
+
+      const deleteResponse = await fetch(
+        `http://127.0.0.1:${server.address().port}/api/research/123e4567-e89b-12d3-a456-426614174000`,
+        {
+          method: "DELETE",
+        }
+      );
+      const deletePayload = await deleteResponse.json();
+
+      assert.equal(deleteResponse.status, 404);
+      assert.equal(deletePayload.message, "Research item not found");
+    });
+  } finally {
+    supabaseConfig.clearSupabaseTestOverrides();
+  }
+});
+
 test("offer update guards invalid ids and missing database", async () => {
   await withServer(async (server) => {
     const invalidResponse = await fetch(
@@ -235,6 +342,48 @@ test("offer update guards invalid ids and missing database", async () => {
       "Database service is not configured"
     );
   });
+});
+
+test("offer update and delete return 404 when no row is affected", async () => {
+  supabaseConfig.setSupabaseTestOverrides({
+    isAvailable: true,
+    client: createNullMutationClient(),
+  });
+
+  try {
+    await withServer(async (server) => {
+      const updateResponse = await fetch(
+        `http://127.0.0.1:${server.address().port}/api/offers/123e4567-e89b-12d3-a456-426614174000`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            title: "Teklif",
+            amount: 1500,
+          }),
+        }
+      );
+      const updatePayload = await updateResponse.json();
+
+      assert.equal(updateResponse.status, 404);
+      assert.equal(updatePayload.message, "Offer not found");
+
+      const deleteResponse = await fetch(
+        `http://127.0.0.1:${server.address().port}/api/offers/123e4567-e89b-12d3-a456-426614174000`,
+        {
+          method: "DELETE",
+        }
+      );
+      const deletePayload = await deleteResponse.json();
+
+      assert.equal(deleteResponse.status, 404);
+      assert.equal(deletePayload.message, "Offer not found");
+    });
+  } finally {
+    supabaseConfig.clearSupabaseTestOverrides();
+  }
 });
 
 test("offer delete guards invalid ids and missing database", async () => {

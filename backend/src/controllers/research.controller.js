@@ -169,6 +169,13 @@ export const updateResearchItem = async (req, res, next) => {
       return next(error);
     }
 
+    if (!data) {
+      return res.status(404).json({
+        status: "error",
+        message: "Research item not found",
+      });
+    }
+
     res.status(200).json({
       status: "success",
       data,
@@ -208,6 +215,13 @@ export const deleteResearchItem = async (req, res, next) => {
 
       console.error("Error deleting research item:", error.message);
       return next(error);
+    }
+
+    if (!data) {
+      return res.status(404).json({
+        status: "error",
+        message: "Research item not found",
+      });
     }
 
     res.status(200).json({
