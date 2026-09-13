@@ -642,12 +642,8 @@ function App() {
           setProcurementItems(apiProcurementItems);
           addLog("Tedarik kayıtları API üzerinden yüklendi.");
         } else {
-          setProcurementItems(localProcurementItems);
-          addLog(
-            shouldUseLocalApiFallback
-              ? "Tedarik API boş döndü, yerel veriler kullanıldı."
-              : "Tedarik API boş döndü."
-          );
+          setProcurementItems([]);
+          addLog("Tedarik API boş döndü.");
         }
       } catch (error) {
         const reason = getApiFailureReason(error);
@@ -727,12 +723,8 @@ function App() {
           setProjects(apiProjects);
           addLog("Projeler API üzerinden yüklendi.");
         } else {
-          setProjects(localProjects);
-          addLog(
-            shouldUseLocalApiFallback
-              ? "Projeler API boş döndü, yerel veriler kullanıldı."
-              : "Projeler API boş döndü."
-          );
+          setProjects([]);
+          addLog("Projeler API boş döndü.");
         }
       } catch (error) {
         const reason = getApiFailureReason(error);
@@ -850,6 +842,7 @@ function App() {
       type: projectType.trim() || "Genel Proje",
       status: projectStatus,
       date: formatDate(),
+      source: "local",
     };
 
     setProjectsError(null);
@@ -887,7 +880,7 @@ function App() {
     const project = projects.find((item) => item.id === id);
     projectsTouchedRef.current = true;
 
-    if (!isUuid(id)) {
+    if (project?.source !== "api") {
       setProjectsError(null);
       setProjects((currentProjects) =>
         currentProjects.filter((item) => item.id !== id)
@@ -940,6 +933,7 @@ function App() {
       name: procurementName.trim(),
       note: procurementNote.trim() || "Not eklenmedi.",
       date: formatDate(),
+      source: "local",
     };
 
     setProcurementError(null);
@@ -983,7 +977,7 @@ function App() {
     );
     procurementTouchedRef.current = true;
 
-    if (!isUuid(id)) {
+    if (item?.source !== "api") {
       setProcurementError(null);
       setProcurementItems((currentItems) =>
         currentItems.filter((procurement) => procurement.id !== id)
