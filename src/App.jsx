@@ -840,6 +840,25 @@ const getRecordLabel = (moduleId, record = {}) => {
   return fields.map((field) => record?.[field]).find(Boolean) || "Kayıt";
 };
 
+const getSearchText = (moduleId, record = {}) => {
+  const config = MODULE_CONFIGS[moduleId];
+  const fieldValues = config.fields
+    .flatMap((field) => {
+      const value = record[field.name];
+      return Array.isArray(value) ? value : [value];
+    })
+    .filter(Boolean);
+
+  return [
+    getRecordLabel(moduleId, record),
+    record[config.secondaryField],
+    ...fieldValues,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+};
+
 const getRelationLabel = (moduleId, value, records) => {
   if (!value) {
     return "Bağlı değil";
@@ -1143,6 +1162,31 @@ const getRelatedRecords = (link, records) => {
   return [];
 };
 
+const sanitizeDraftReferences = (draft, moduleId, deletedModuleId, deletedId) => {
+  if (!draft || !moduleId) {
+    return draft;
+  }
+
+  const config = MODULE_CONFIGS[moduleId];
+  const nextDraft = { ...draft };
+
+  config.fields.forEach((field) => {
+    if (field.relation !== deletedModuleId) {
+      return;
+    }
+
+    if (field.type === "relation" && nextDraft[field.name] === deletedId) {
+      nextDraft[field.name] = "";
+    }
+
+    if (field.type === "multiselect" && Array.isArray(nextDraft[field.name])) {
+      nextDraft[field.name] = nextDraft[field.name].filter((value) => value !== deletedId);
+    }
+  });
+
+  return nextDraft;
+};
+
 function App() {
   const initialRecords = useMemo(() => buildInitialRecords(), []);
 
@@ -1214,6 +1258,26 @@ function App() {
     ].slice(0, 80));
   };
 
+  const navigateToModule = (moduleId) => {
+    const module = MODULES.find((item) => item.id === moduleId);
+
+    if (!module) {
+      return;
+    }
+
+    if (typeof window === "undefined") {
+      setActiveModule(moduleId);
+      return;
+    }
+
+    if (window.location.hash === module.hash) {
+      setActiveModule(moduleId);
+      return;
+    }
+
+    window.location.hash = module.hash;
+  };
+
   useEffect(() => {
     isMountedRef.current = true;
 
@@ -1256,31 +1320,15 @@ function App() {
       return;
     }
 
-    const currentHash = window.location.hash || "#dashboard";
-    const module = findModuleByHash(currentHash);
-    if (module.id !== activeModule) {
-      setActiveModule(module.id);
-    }
-
     const onHashChange = () => {
-      const nextModule = findModuleByHash(window.location.hash);
+      const nextModule = findModuleByHash(window.location.hash || "#dashboard");
       setActiveModule(nextModule.id);
     };
 
+    onHashChange();
     window.addEventListener("hashchange", onHashChange);
     return () => window.removeEventListener("hashchange", onHashChange);
-  }, [activeModule]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    const module = MODULES.find((item) => item.id === activeModule);
-    if (module && window.location.hash !== module.hash) {
-      window.history.replaceState(null, "", module.hash);
-    }
-  }, [activeModule]);
+  }, []);
 
   const loadRemoteModule = async (moduleId) => {
     const loaders = {
@@ -1323,6 +1371,7 @@ function App() {
           [moduleId]: {
             ...current[moduleId],
             loading: false,
+            lastSync: formatDate(),
           },
         }));
         return;
@@ -1365,14 +1414,19 @@ function App() {
   }, []);
 
   useEffect(() => {
+    const nextSelectedIds = { ...selectedIds };
+    let hasChanges = false;
+
     ENTITY_MODULES.forEach((moduleId) => {
-      if (!selectedIds[moduleId] && records[moduleId]?.length > 0) {
-        setSelectedIds((current) => ({
-          ...current,
-          [moduleId]: records[moduleId][0].id,
-        }));
+      if (!nextSelectedIds[moduleId] && records[moduleId]?.length > 0) {
+        nextSelectedIds[moduleId] = records[moduleId][0].id;
+        hasChanges = true;
       }
     });
+
+    if (hasChanges) {
+      setSelectedIds(nextSelectedIds);
+    }
   }, [records, selectedIds]);
 
   const lookup = useMemo(() => buildLookup(records), [records]);
@@ -1446,12 +1500,7 @@ function App() {
       const config = MODULE_CONFIGS[moduleId];
       const { search, status } = filters[moduleId];
       accumulator[moduleId] = (records[moduleId] || []).filter((record) => {
-        const haystack = config.fields
-          .map((field) => record[field.name])
-          .flat()
-          .filter(Boolean)
-          .join(" ")
-          .toLowerCase();
+        const haystack = getSearchText(moduleId, record);
         const searchMatch = !search || haystack.includes(search.toLowerCase());
         const statusMatch = status === "all" || record.status === status;
         return searchMatch && statusMatch;
@@ -1461,7 +1510,7 @@ function App() {
   }, [filters, records]);
 
   const openCreateForm = (moduleId) => {
-    setActiveModule(moduleId);
+    navigateToModule(moduleId);
     setEditorState({
       moduleId,
       mode: "create",
@@ -1471,7 +1520,7 @@ function App() {
   };
 
   const openEditForm = (moduleId, record) => {
-    setActiveModule(moduleId);
+    navigateToModule(moduleId);
     setEditorState({
       moduleId,
       mode: "edit",
@@ -1612,7 +1661,21 @@ function App() {
     const existingRecord = (records[editorState.moduleId] || []).find(
       (item) => item.id === editorState.recordId
     );
-    const record = buildModuleRecord(editorState.moduleId, editorState.draft, existingRecord);
+    let record = buildModuleRecord(editorState.moduleId, editorState.draft, existingRecord);
+
+    if (editorState.moduleId === "systems") {
+      const allowedProductIds = new Set(
+        (records.products || [])
+          .filter((product) => !product.systemId || product.systemId === record.id)
+          .map((product) => product.id)
+      );
+
+      record = normalizeSystem({
+        ...record,
+        productIds: (record.productIds || []).filter((productId) => allowedProductIds.has(productId)),
+      });
+    }
+
     localChangeVersionRef.current[editorState.moduleId] =
       (localChangeVersionRef.current[editorState.moduleId] || 0) + 1;
 
@@ -1667,6 +1730,15 @@ function App() {
     );
 
     setRecords(nextRecords);
+    setEditorState((currentEditorState) => ({
+      ...currentEditorState,
+      draft: sanitizeDraftReferences(
+        currentEditorState.draft,
+        currentEditorState.moduleId,
+        moduleId,
+        recordId
+      ),
+    }));
     setSelectedIds((currentSelectedIds) => ({
       ...currentSelectedIds,
       [moduleId]:
@@ -1697,7 +1769,7 @@ function App() {
         status: "all",
       },
     }));
-    setActiveModule(moduleId);
+    navigateToModule(moduleId);
     setSelectedIds((current) => ({
       ...current,
       [moduleId]: recordId,
@@ -1988,8 +2060,9 @@ function App() {
                     const subtitle = record[config.secondaryField] || formatDate(record.updatedAt);
 
                     return (
-                      <article
+                      <button
                         key={record.id}
+                        type="button"
                         className={`record-card${isSelected ? " selected" : ""}`}
                         onClick={() =>
                           setSelectedIds((current) => ({
@@ -2012,7 +2085,7 @@ function App() {
                           <span>{formatDate(record.updatedAt)}</span>
                           <span className="source-chip">{record.source === "api" ? "API" : "Taslak"}</span>
                         </div>
-                      </article>
+                      </button>
                     );
                   })}
                 </div>
@@ -2197,7 +2270,7 @@ function App() {
             <button type="button" onClick={() => openCreateForm("products")}>
               Yeni Ürün
             </button>
-            <button type="button" className="secondary-button" onClick={() => setActiveModule("offers")}>
+            <button type="button" className="secondary-button" onClick={() => navigateToModule("offers")}>
               Tekliflere Git
             </button>
           </div>
@@ -2224,7 +2297,7 @@ function App() {
             <div className="panel-content">
               <div className="pipeline-grid">
                 {pipelineSteps.map((step) => (
-                  <button key={step.key} type="button" className="pipeline-card" onClick={() => setActiveModule(step.key)}>
+                  <button key={step.key} type="button" className="pipeline-card" onClick={() => navigateToModule(step.key)}>
                     <span>{step.label}</span>
                     <strong>{step.count}</strong>
                   </button>
@@ -2380,7 +2453,7 @@ function App() {
                 key={module.id}
                 type="button"
                 className={`nav-item${activeModule === module.id ? " active" : ""}`}
-                onClick={() => setActiveModule(module.id)}
+                onClick={() => navigateToModule(module.id)}
               >
                 <span className="nav-icon">{module.icon}</span>
                 <span className="nav-copy">
