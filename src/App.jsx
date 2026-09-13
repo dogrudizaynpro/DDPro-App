@@ -11,6 +11,7 @@ import {
 } from "./services/offers.service.js";
 import { getResearchItems } from "./services/research.service.js";
 import {
+  defaultModuleId,
   getModuleById,
   getModuleIdFromHash,
   modules,
@@ -187,10 +188,20 @@ function App() {
       return undefined;
     }
 
+    const defaultModule = getModuleById(defaultModuleId);
+
+    const replaceWithDefaultHash = () => {
+      window.history.replaceState(
+        null,
+        "",
+        `${window.location.pathname}${window.location.search}${defaultModule.path}`
+      );
+      setActiveModule(defaultModule.id);
+    };
+
     const syncModuleFromHash = () => {
       if (!window.location.hash) {
-        window.location.hash = modules[0].path;
-        setActiveModule(modules[0].id);
+        replaceWithDefaultHash();
         return;
       }
 
@@ -199,8 +210,7 @@ function App() {
       );
 
       if (window.location.hash !== nextModule.path) {
-        window.location.hash = nextModule.path;
-        setActiveModule(nextModule.id);
+        replaceWithDefaultHash();
         return;
       }
 
@@ -980,6 +990,18 @@ function App() {
           </div>
 
           <div className="panel-content">
+            {offersFetchState === "error" && (
+              <p className="status-banner warning dashboard-status-banner">
+                Teklif API'sine ulaşılamadı. Yerel kayıtlar gösteriliyor.
+              </p>
+            )}
+
+            {offersFetchState === "empty" && (
+              <p className="status-banner info dashboard-status-banner">
+                API üzerinde bekleyen teklif bulunmuyor.
+              </p>
+            )}
+
             {offersFetchState === "loading" ? (
               <p className="empty-state">Teklifler yükleniyor...</p>
             ) : pendingOffers.length === 0 ? (

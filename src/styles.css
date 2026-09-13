@@ -277,6 +277,12 @@ select {
   transform: translateY(1px);
 }
 
+.module-button:focus-visible {
+  border-color: rgba(76, 147, 255, 0.22);
+  background: rgba(255, 255, 255, 0.04);
+  color: #edf3ff;
+}
+
 .module-button.active {
   border-color: rgba(76, 147, 255, 0.14);
   background:
@@ -839,6 +845,10 @@ select {
   color: #9bddf5;
 }
 
+.dashboard-status-banner {
+  margin-bottom: 14px;
+}
+
 .offers-summary-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -1274,6 +1284,12 @@ select {
 .quick-access-button:hover {
   border-color: rgba(76, 147, 255, 0.22);
   transform: translateY(-1px);
+}
+
+.quick-access-button:focus-visible {
+  border-color: rgba(76, 147, 255, 0.3);
+  transform: translateY(-1px);
+  box-shadow: 0 0 0 1px rgba(76, 147, 255, 0.32);
 }
 
 .quick-access-button span {
