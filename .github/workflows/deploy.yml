@@ -31,7 +31,7 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Resolve and validate API URL
+      - name: Resolve API URL
         run: |
           API_URL="${{ vars.VITE_API_URL }}"
 
@@ -39,12 +39,12 @@ jobs:
             API_URL="${{ secrets.VITE_API_URL }}"
           fi
 
-          if [ -z "$API_URL" ]; then
-            echo "VITE_API_URL is required for GitHub Pages API access. Define it as a repository variable or secret."
-            exit 1
+          if [ -n "$API_URL" ]; then
+            echo "VITE_API_URL=$API_URL" >> "$GITHUB_ENV"
+            echo "VITE_API_URL detected and exported for build."
+          else
+            echo "VITE_API_URL not configured. Build will continue with frontend fallback mode."
           fi
-
-          echo "VITE_API_URL=$API_URL" >> "$GITHUB_ENV"
 
       - name: Build DDPro
         run: npm run build
