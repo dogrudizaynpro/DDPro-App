@@ -80,6 +80,37 @@ export const mapProjectToViewModel = (project = {}) => {
 export const mapProjectsToViewModel = (projects = []) =>
   projects.filter(Boolean).map((project) => mapProjectToViewModel(project));
 
+const toProjectPayload = (project = {}) => {
+  const name =
+    typeof project.name === "string" && project.name.trim()
+      ? project.name.trim()
+      : typeof project.title === "string" && project.title.trim()
+        ? project.title.trim()
+        : "";
+
+  if (!name) {
+    throw new Error("Project name is required");
+  }
+
+  return {
+    name,
+    project_type:
+      typeof project.project_type === "string" && project.project_type.trim()
+        ? project.project_type.trim()
+        : typeof project.projectType === "string" && project.projectType.trim()
+          ? project.projectType.trim()
+          : typeof project.type === "string" && project.type.trim()
+            ? project.type.trim()
+            : "Genel Proje",
+    status:
+      typeof project.statusRaw === "string" && project.statusRaw.trim()
+        ? project.statusRaw.trim()
+        : typeof project.status === "string" && project.status.trim()
+          ? project.status.trim()
+          : "Aktif",
+  };
+};
+
 // ============================================================
 // GET ALL PROJECTS
 // ============================================================
@@ -117,6 +148,39 @@ export const getProjectById = async (id) => {
       return null;
     }
     console.error("Failed to fetch project:", error.message);
+    throw error;
+  }
+};
+
+export const createProject = async (project) => {
+  const payload = toProjectPayload(project);
+
+  try {
+    const data = await fetchAPI("/api/projects", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+
+    return data.data ? mapProjectToViewModel(data.data) : null;
+  } catch (error) {
+    console.error("Failed to create project:", error.message);
+    throw error;
+  }
+};
+
+export const deleteProject = async (id) => {
+  if (!id) {
+    throw new Error("Project ID is required");
+  }
+
+  try {
+    const data = await fetchAPI(`/api/projects/${id}`, {
+      method: "DELETE",
+    });
+
+    return data.data ? mapProjectToViewModel(data.data) : null;
+  } catch (error) {
+    console.error("Failed to delete project:", error.message);
     throw error;
   }
 };

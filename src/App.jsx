@@ -1,5 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { getProjects } from "./services/projects.service.js";
+import {
+  createProject as createProjectRequest,
+  deleteProject as deleteProjectRequest,
+  getProjects,
+} from "./services/projects.service.js";
 import "./styles.css";
 import {
   createOffer as createOfferRequest,
@@ -9,7 +13,15 @@ import {
   mapOfferToViewModel,
   mapOffersToViewModel,
 } from "./services/offers.service.js";
-import { getResearchItems as getProcurementItems } from "./services/research.service.js";
+import {
+  createResearchItem as createProcurementRequest,
+  deleteResearchItem as deleteProcurementRequest,
+  getResearchItems as getProcurementItems,
+} from "./services/research.service.js";
+import {
+  getApiHealth,
+  isProductionEnvironment,
+} from "./services/api.js";
 
 const STORAGE_KEYS = {
   projects: "ddpro_projects_v1",
@@ -207,8 +219,19 @@ const mergeOffers = (apiOffers, storedOffers) => {
 };
 
 const EMPTY_ITEMS = Object.freeze([]);
+const API_BACKED_STORAGE_KEYS = new Set([
+  STORAGE_KEYS.projects,
+  STORAGE_KEYS.procurement,
+  STORAGE_KEYS.offers,
+]);
+
+const shouldUseLocalApiFallback = !isProductionEnvironment;
 
 const getStoredData = (key, fallback = EMPTY_ITEMS) => {
+  if (isProductionEnvironment && API_BACKED_STORAGE_KEYS.has(key)) {
+    return fallback;
+  }
+
   try {
     const value = localStorage.getItem(key);
     return value ? JSON.parse(value) : fallback;
@@ -290,6 +313,7 @@ function App() {
   );
 
   const [projectsLoading, setProjectsLoading] = useState(true);
+  const [projectsError, setProjectsError] = useState(null);
 
   const [procurementItems, setProcurementItems] = useState(() =>
     getStoredData(STORAGE_KEYS.procurement)
@@ -309,6 +333,7 @@ function App() {
   const [selectedOfferDetail, setSelectedOfferDetail] = useState(null);
   const [offerDetailLoading, setOfferDetailLoading] = useState(false);
   const [offerDetailError, setOfferDetailError] = useState(null);
+  const [backendHealthStatus, setBackendHealthStatus] = useState("loading");
   const projectsTouchedRef = useRef(false);
   const procurementTouchedRef = useRef(false);
   const offersTouchedRef = useRef(false);
@@ -408,26 +433,56 @@ function App() {
   }, [activeModule]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.projects, JSON.stringify(projects));
+    if (shouldUseLocalApiFallback) {
+      localStorage.setItem(STORAGE_KEYS.projects, JSON.stringify(projects));
+    }
   }, [projects]);
 
   useEffect(() => {
-    localStorage.setItem(
-      STORAGE_KEYS.procurement,
-      JSON.stringify(procurementItems)
-    );
+    if (shouldUseLocalApiFallback) {
+      localStorage.setItem(
+        STORAGE_KEYS.procurement,
+        JSON.stringify(procurementItems)
+      );
+    }
   }, [procurementItems]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.offers, JSON.stringify(offers));
+    if (shouldUseLocalApiFallback) {
+      localStorage.setItem(STORAGE_KEYS.offers, JSON.stringify(offers));
+    }
   }, [offers]);
 
   useEffect(() => {
     let cancelled = false;
 
+    getApiHealth()
+      .then((data) => {
+        if (!cancelled) {
+          setBackendHealthStatus(data?.status === "ok" ? "ok" : "error");
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setBackendHealthStatus("error");
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
     const fetchOffersFromApi = async () => {
-      const localOffers = getStoredData(STORAGE_KEYS.offers);
-      const localOfferViewModels = mapOffersToViewModel(localOffers);
+      const localOffers = shouldUseLocalApiFallback
+        ? getStoredData(STORAGE_KEYS.offers)
+        : EMPTY_ITEMS;
+      const localOfferViewModels = shouldUseLocalApiFallback
+        ? mapOffersToViewModel(localOffers)
+        : EMPTY_ITEMS;
       setOffersLoading(true);
       setOffersError(null);
       setOffersFetchState("loading");
@@ -446,18 +501,22 @@ function App() {
         }
 
         if (apiOffers && apiOffers.length > 0) {
-          setOffers(mergeOffers(apiOffers, localOffers));
+          setOffers(
+            shouldUseLocalApiFallback
+              ? mergeOffers(apiOffers, localOffers)
+              : apiOffers
+          );
           setOffersFetchState("success");
           addLog("Teklifler API üzerinden yüklendi.");
         } else {
-          const localDrafts = localOfferViewModels.filter(
-            (offer) => offer.source === "local"
-          );
+          const localDrafts = shouldUseLocalApiFallback
+            ? localOfferViewModels.filter((offer) => offer.source === "local")
+            : EMPTY_ITEMS;
 
           setOffers(localDrafts);
           setOffersFetchState("empty");
           addLog(
-            localDrafts.length > 0
+            shouldUseLocalApiFallback && localDrafts.length > 0
               ? "Teklif API boş döndü, yerel taslaklar korundu."
               : "Teklif API boş döndü."
           );
@@ -465,23 +524,32 @@ function App() {
       } catch (error) {
         const reason = getApiFailureReason(error);
         if (!cancelled) {
-          console.warn(
-            "API erişilemedi, localStorage verileri kullanılıyor:",
-            error.message
-          );
-          setOffers(localOfferViewModels);
-          setSelectedOfferId((currentId) =>
-            localOfferViewModels.some((offer) => offer.id === currentId)
-              ? currentId
-              : localOfferViewModels[0]?.id || null
-          );
+          if (shouldUseLocalApiFallback) {
+            console.warn(
+              "API erişilemedi, localStorage verileri kullanılıyor:",
+              error.message
+            );
+            setOffers(localOfferViewModels);
+            setSelectedOfferId((currentId) =>
+              localOfferViewModels.some((offer) => offer.id === currentId)
+                ? currentId
+                : localOfferViewModels[0]?.id || null
+            );
+          } else {
+            setOffers([]);
+            setSelectedOfferId(null);
+          }
           setOffersFetchState("error");
           setOffersError(
-            localOfferViewModels.length > 0
+            shouldUseLocalApiFallback && localOfferViewModels.length > 0
               ? `Teklif API’sine ulaşılamadı (${reason}). Son kaydedilen veriler gösteriliyor.`
-              : `Teklif API’sine ulaşılamadı (${reason}). Lütfen tekrar deneyin.`
+              : `Teklif API’sine ulaşılamadı (${reason}). Production fallback devre dışı bırakıldı.`
           );
-          addLog(`Tekliflerde API bağlantı hatası: ${reason}. Yerel veriler kullanıldı.`);
+          addLog(
+            shouldUseLocalApiFallback
+              ? `Tekliflerde API bağlantı hatası: ${reason}. Yerel veriler kullanıldı.`
+              : `Tekliflerde API bağlantı hatası: ${reason}. Production fallback engellendi.`
+          );
         }
       } finally {
         if (!cancelled) {
@@ -558,7 +626,9 @@ function App() {
     let cancelled = false;
 
     const fetchProcurementFromApi = async () => {
-      const localProcurementItems = getStoredData(STORAGE_KEYS.procurement);
+      const localProcurementItems = shouldUseLocalApiFallback
+        ? getStoredData(STORAGE_KEYS.procurement)
+        : EMPTY_ITEMS;
       setProcurementLoading(true);
       setProcurementError(null);
 
@@ -576,16 +646,26 @@ function App() {
           addLog("Tedarik kayıtları API üzerinden yüklendi.");
         } else {
           setProcurementItems(localProcurementItems);
-          addLog("Tedarik API boş döndü, yerel veriler kullanıldı.");
+          addLog(
+            shouldUseLocalApiFallback
+              ? "Tedarik API boş döndü, yerel veriler kullanıldı."
+              : "Tedarik API boş döndü."
+          );
         }
       } catch (error) {
         const reason = getApiFailureReason(error);
         if (!cancelled) {
           setProcurementItems(localProcurementItems);
           setProcurementError(
-            `Tedarik API erişimi başarısız (${reason}). Yerel tedarik verileri gösteriliyor.`
+            shouldUseLocalApiFallback
+              ? `Tedarik API erişimi başarısız (${reason}). Yerel tedarik verileri gösteriliyor.`
+              : `Tedarik API erişimi başarısız (${reason}). Production fallback devre dışı bırakıldı.`
           );
-          addLog(`Tedarik API bağlantı hatası: ${reason}. Yerel veriler kullanıldı.`);
+          addLog(
+            shouldUseLocalApiFallback
+              ? `Tedarik API bağlantı hatası: ${reason}. Yerel veriler kullanıldı.`
+              : `Tedarik API bağlantı hatası: ${reason}. Production fallback engellendi.`
+          );
         }
       } finally {
         if (!cancelled) {
@@ -626,8 +706,11 @@ function App() {
     let cancelled = false;
 
     const fetchProjectsFromApi = async () => {
-      const localProjects = getStoredData(STORAGE_KEYS.projects);
+      const localProjects = shouldUseLocalApiFallback
+        ? getStoredData(STORAGE_KEYS.projects)
+        : EMPTY_ITEMS;
       setProjectsLoading(true);
+      setProjectsError(null);
 
       try {
         const apiProjects = await getProjects();
@@ -646,13 +729,26 @@ function App() {
           addLog("Projeler API üzerinden yüklendi.");
         } else {
           setProjects(localProjects);
-          addLog("Projeler API boş döndü, yerel veriler kullanıldı.");
+          addLog(
+            shouldUseLocalApiFallback
+              ? "Projeler API boş döndü, yerel veriler kullanıldı."
+              : "Projeler API boş döndü."
+          );
         }
       } catch (error) {
         const reason = getApiFailureReason(error);
         if (!cancelled) {
           setProjects(localProjects);
-          addLog(`Projelerde API bağlantı hatası: ${reason}. Yerel veriler kullanıldı.`);
+          if (!shouldUseLocalApiFallback) {
+            setProjectsError(
+              `Projeler API’sine ulaşılamadı (${reason}). Production fallback devre dışı bırakıldı.`
+            );
+          }
+          addLog(
+            shouldUseLocalApiFallback
+              ? `Projelerde API bağlantı hatası: ${reason}. Yerel veriler kullanıldı.`
+              : `Projelerde API bağlantı hatası: ${reason}. Production fallback engellendi.`
+          );
         }
       } finally {
         if (!cancelled) {
@@ -742,7 +838,7 @@ function App() {
     </div>
   );
 
-  const createProject = (event) => {
+  const createProject = async (event) => {
     event.preventDefault();
 
     if (!projectName.trim()) return;
@@ -756,33 +852,84 @@ function App() {
       date: formatDate(),
     };
 
-    setProjects((currentProjects) => [
-      newProject,
-      ...currentProjects,
-    ]);
+    setProjectsError(null);
 
-    addLog(`Yeni proje oluşturuldu: ${newProject.name}`);
+    try {
+      const createdProject = await createProjectRequest(newProject);
+      const nextProject = createdProject || newProject;
 
-    setProjectName("");
-    setProjectType("");
-    setProjectStatus("Aktif");
-    setShowProjectForm(false);
-  };
+      setProjects((currentProjects) => [nextProject, ...currentProjects]);
+      addLog(`Yeni proje API üzerinden oluşturuldu: ${newProject.name}`);
+      setProjectName("");
+      setProjectType("");
+      setProjectStatus("Aktif");
+      setShowProjectForm(false);
+    } catch (error) {
+      if (shouldUseLocalApiFallback) {
+        setProjects((currentProjects) => [newProject, ...currentProjects]);
+        addLog(`Yeni proje yerel olarak oluşturuldu: ${newProject.name}`);
+        setProjectName("");
+        setProjectType("");
+        setProjectStatus("Aktif");
+        setShowProjectForm(false);
+        return;
+      }
 
-  const deleteProject = (id) => {
-    const project = projects.find((item) => item.id === id);
-    projectsTouchedRef.current = true;
-
-    setProjects((currentProjects) =>
-      currentProjects.filter((item) => item.id !== id)
-    );
-
-    if (project) {
-      addLog(`Proje silindi: ${project.name}`);
+      const reason = getApiFailureReason(error);
+      setProjectsError(
+        `Proje API’ye kaydedilemedi (${reason}). Form verileri korunuyor.`
+      );
+      addLog(`Proje oluşturma hatası: ${reason}`);
     }
   };
 
-  const createProcurement = (event) => {
+  const deleteProject = async (id) => {
+    const project = projects.find((item) => item.id === id);
+    projectsTouchedRef.current = true;
+
+    if (!isUuid(id)) {
+      setProjectsError(null);
+      setProjects((currentProjects) =>
+        currentProjects.filter((item) => item.id !== id)
+      );
+
+      if (project) {
+        addLog(`Yerel proje silindi: ${project.name}`);
+      }
+
+      return;
+    }
+
+    try {
+      await deleteProjectRequest(id);
+      setProjectsError(null);
+      setProjects((currentProjects) =>
+        currentProjects.filter((item) => item.id !== id)
+      );
+
+      if (project) {
+        addLog(`Proje API üzerinden silindi: ${project.name}`);
+      }
+    } catch (error) {
+      if (error.status === 404) {
+        setProjects((currentProjects) =>
+          currentProjects.filter((item) => item.id !== id)
+        );
+
+        if (project) {
+          addLog(`Proje yerelde temizlendi: ${project.name}`);
+        }
+
+        return;
+      }
+
+      const reason = getApiFailureReason(error);
+      setProjectsError(`Proje silme işlemi tamamlanamadı (${reason}).`);
+      addLog(`Proje silme hatası: ${reason}`);
+    }
+  };
+
+  const createProcurement = async (event) => {
     event.preventDefault();
 
     if (!procurementName.trim()) return;
@@ -795,30 +942,88 @@ function App() {
       date: formatDate(),
     };
 
-    setProcurementItems((currentItems) => [
-      newProcurement,
-      ...currentItems,
-    ]);
+    setProcurementError(null);
 
-    addLog(`Yeni tedarik kaydı oluşturuldu: ${newProcurement.name}`);
+    try {
+      const createdProcurement = await createProcurementRequest(newProcurement);
+      const nextProcurement = createdProcurement || newProcurement;
 
-    setProcurementName("");
-    setProcurementNote("");
-    setShowProcurementForm(false);
+      setProcurementItems((currentItems) => [
+        nextProcurement,
+        ...currentItems,
+      ]);
+      addLog(`Yeni tedarik kaydı API üzerinden oluşturuldu: ${newProcurement.name}`);
+      setProcurementName("");
+      setProcurementNote("");
+      setShowProcurementForm(false);
+    } catch (error) {
+      if (shouldUseLocalApiFallback) {
+        setProcurementItems((currentItems) => [
+          newProcurement,
+          ...currentItems,
+        ]);
+        addLog(`Yeni tedarik kaydı yerel olarak oluşturuldu: ${newProcurement.name}`);
+        setProcurementName("");
+        setProcurementNote("");
+        setShowProcurementForm(false);
+        return;
+      }
+
+      const reason = getApiFailureReason(error);
+      setProcurementError(
+        `Tedarik kaydı API’ye kaydedilemedi (${reason}). Form verileri korunuyor.`
+      );
+      addLog(`Tedarik oluşturma hatası: ${reason}`);
+    }
   };
 
-  const deleteProcurement = (id) => {
+  const deleteProcurement = async (id) => {
     const item = procurementItems.find(
       (procurement) => procurement.id === id
     );
     procurementTouchedRef.current = true;
 
-    setProcurementItems((currentItems) =>
-      currentItems.filter((procurement) => procurement.id !== id)
-    );
+    if (!isUuid(id)) {
+      setProcurementError(null);
+      setProcurementItems((currentItems) =>
+        currentItems.filter((procurement) => procurement.id !== id)
+      );
 
-    if (item) {
-      addLog(`Tedarik kaydı silindi: ${item.name}`);
+      if (item) {
+        addLog(`Yerel tedarik kaydı silindi: ${item.name}`);
+      }
+
+      return;
+    }
+
+    try {
+      await deleteProcurementRequest(id);
+      setProcurementError(null);
+      setProcurementItems((currentItems) =>
+        currentItems.filter((procurement) => procurement.id !== id)
+      );
+
+      if (item) {
+        addLog(`Tedarik kaydı API üzerinden silindi: ${item.name}`);
+      }
+    } catch (error) {
+      if (error.status === 404) {
+        setProcurementItems((currentItems) =>
+          currentItems.filter((procurement) => procurement.id !== id)
+        );
+
+        if (item) {
+          addLog(`Tedarik kaydı yerelde temizlendi: ${item.name}`);
+        }
+
+        return;
+      }
+
+      const reason = getApiFailureReason(error);
+      setProcurementError(
+        `Tedarik silme işlemi API üzerinde tamamlanamadı (${reason}).`
+      );
+      addLog(`Tedarik silme hatası: ${reason}`);
     }
   };
 
@@ -850,25 +1055,37 @@ function App() {
       ]);
       setSelectedOfferId(nextOffer.id);
       addLog(`Yeni teklif API üzerinden oluşturuldu: ${newOffer.title}`);
+      setOfferName("");
+      setOfferAmount("");
+      setOfferStatus("Hazırlanıyor");
+      setShowOfferForm(false);
     } catch (error) {
-      console.warn(
-        "Teklif API'ye kaydedilemedi, yerel kayıt oluşturuluyor:",
-        error.message
+      if (shouldUseLocalApiFallback) {
+        console.warn(
+          "Teklif API'ye kaydedilemedi, yerel kayıt oluşturuluyor:",
+          error.message
+        );
+
+        setOffers((currentOffers) => [
+          newOffer,
+          ...currentOffers,
+        ]);
+        setSelectedOfferId(newOffer.id);
+        setOffersError("Teklif API'ye kaydedilemedi. Yerel kayıt oluşturuldu.");
+        addLog(`Yeni teklif yerel olarak oluşturuldu: ${newOffer.title}`);
+        setOfferName("");
+        setOfferAmount("");
+        setOfferStatus("Hazırlanıyor");
+        setShowOfferForm(false);
+        return;
+      }
+
+      const reason = getApiFailureReason(error);
+      setOffersError(
+        `Teklif API'ye kaydedilemedi (${reason}). Form verileri korunuyor.`
       );
-
-      setOffers((currentOffers) => [
-        newOffer,
-        ...currentOffers,
-      ]);
-      setSelectedOfferId(newOffer.id);
-      setOffersError("Teklif API'ye kaydedilemedi. Yerel kayıt oluşturuldu.");
-      addLog(`Yeni teklif yerel olarak oluşturuldu: ${newOffer.title}`);
+      addLog(`Teklif oluşturma hatası: ${reason}`);
     }
-
-    setOfferName("");
-    setOfferAmount("");
-    setOfferStatus("Hazırlanıyor");
-    setShowOfferForm(false);
   };
 
   const deleteOffer = async (id) => {
@@ -1132,11 +1349,23 @@ function App() {
           <div className="panel-content">
             <div className="quick-status">
               <span>DDPro Core</span>
-              <strong>Hazır</strong>
+              <strong>
+                {backendHealthStatus === "ok"
+                  ? "Hazır"
+                  : backendHealthStatus === "loading"
+                    ? "Kontrol Ediliyor"
+                    : "Kontrol Gerekli"}
+              </strong>
             </div>
             <div className="quick-status">
               <span>Projeler API</span>
-              <strong>{projectsLoading ? "Yükleniyor" : "Hazır"}</strong>
+              <strong>
+                {projectsLoading
+                  ? "Yükleniyor"
+                  : projectsError
+                    ? "Kontrol Gerekli"
+                    : "Hazır"}
+              </strong>
             </div>
             <div className="quick-status">
               <span>Teklifler API</span>
@@ -1150,7 +1379,13 @@ function App() {
             </div>
             <div className="quick-status">
               <span>Tedarik Modülü</span>
-              <strong>{procurementLoading ? "Yükleniyor" : "Hazır"}</strong>
+              <strong>
+                {procurementLoading
+                  ? "Yükleniyor"
+                  : procurementError
+                    ? "Kontrol Gerekli"
+                    : "Hazır"}
+              </strong>
             </div>
           </div>
         </div>
@@ -1375,6 +1610,12 @@ function App() {
 
           <button type="submit">Projeyi Kaydet</button>
         </form>
+      )}
+
+      {projectsError && (
+        <p className="status-banner warning">
+          ⚠ {projectsError}
+        </p>
       )}
 
       <div className="data-list">

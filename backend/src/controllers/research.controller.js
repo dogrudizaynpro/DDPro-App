@@ -6,6 +6,33 @@
 
 import { getSupabaseClient, isSupabaseAvailable } from "../config/supabase.js";
 
+const getResearchPayload = (body = {}) => {
+  const name =
+    typeof body.name === "string"
+      ? body.name.trim()
+      : typeof body.title === "string"
+        ? body.title.trim()
+        : "";
+
+  if (!name) {
+    const error = new Error("Research item name is required");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  return {
+    name,
+    note:
+      typeof body.note === "string" && body.note.trim()
+        ? body.note.trim()
+        : typeof body.notes === "string" && body.notes.trim()
+          ? body.notes.trim()
+          : typeof body.description === "string" && body.description.trim()
+            ? body.description.trim()
+            : "Not eklenmedi.",
+  };
+};
+
 // ============================================================
 // GET RESEARCH ITEMS
 // ============================================================
@@ -93,6 +120,80 @@ export const getResearchItemById = async (req, res, next) => {
     });
   } catch (error) {
     console.error("Unexpected error in getResearchItemById:", error.message);
+    next(error);
+  }
+};
+
+export const createResearchItem = async (req, res, next) => {
+  try {
+    if (!isSupabaseAvailable()) {
+      return res.status(503).json({
+        status: "error",
+        message: "Database service is not configured",
+      });
+    }
+
+    const supabase = getSupabaseClient();
+    const payload = getResearchPayload(req.body);
+
+    const { data, error } = await supabase
+      .from("research_items")
+      .insert(payload)
+      .select("*")
+      .single();
+
+    if (error) {
+      console.error("Error creating research item:", error.message);
+      return next(error);
+    }
+
+    res.status(201).json({
+      status: "success",
+      data,
+    });
+  } catch (error) {
+    console.error("Unexpected error in createResearchItem:", error.message);
+    next(error);
+  }
+};
+
+export const deleteResearchItem = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    if (!isSupabaseAvailable()) {
+      return res.status(503).json({
+        status: "error",
+        message: "Database service is not configured",
+      });
+    }
+
+    const supabase = getSupabaseClient();
+    const { data, error } = await supabase
+      .from("research_items")
+      .delete()
+      .eq("id", id)
+      .select("*")
+      .single();
+
+    if (error) {
+      if (error.code === "PGRST116") {
+        return res.status(404).json({
+          status: "error",
+          message: "Research item not found",
+        });
+      }
+
+      console.error("Error deleting research item:", error.message);
+      return next(error);
+    }
+
+    res.status(200).json({
+      status: "success",
+      data,
+    });
+  } catch (error) {
+    console.error("Unexpected error in deleteResearchItem:", error.message);
     next(error);
   }
 };

@@ -41,12 +41,35 @@ jobs:
           fi
 
           if [ -z "$API_URL" ]; then
-            echo "::warning::VITE_API_URL is not set. Continuing without an injected API URL; configure it for production runtime."
-          else
-            echo "::add-mask::$API_URL"
+            echo "::error::VITE_API_URL is required for production deployment."
+            exit 1
           fi
 
+          API_URL="${API_URL%/}"
+
+          case "$API_URL" in
+            https://*)
+              ;;
+            *)
+              echo "::error::VITE_API_URL must be an https URL."
+              exit 1
+              ;;
+          esac
+
+          echo "::add-mask::$API_URL"
           echo "value=$API_URL" >> "$GITHUB_OUTPUT"
+
+      - name: Smoke test production API
+        env:
+          API_URL: ${{ steps.api_url.outputs.value }}
+        run: |
+          curl --fail --silent --show-error \
+            --max-time 20 \
+            --retry 3 \
+            --retry-connrefused \
+            "${API_URL}/health" > /tmp/ddpro-health.json
+
+          node -e 'const fs=require("fs"); const data=JSON.parse(fs.readFileSync("/tmp/ddpro-health.json","utf8")); if(!data || data.status !== "ok" || !data.service){console.error("Unexpected health response", data); process.exit(1)} console.log("Health OK:", data.service)'
 
       - name: Build DDPro
         run: npm run build

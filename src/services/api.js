@@ -11,6 +11,9 @@ const trimTrailingSlash = (value = "") => value.replace(/\/+$/, "");
 const isLocalHost = (hostname = "") =>
   ["localhost", "127.0.0.1", "::1"].includes(hostname);
 
+const isProductionEnvironment =
+  typeof window !== "undefined" && !isLocalHost(window.location.hostname);
+
 const resolveApiBaseUrl = () => {
   const envUrl = trimTrailingSlash(
     String(import.meta.env.VITE_API_URL || "").trim()
@@ -20,10 +23,7 @@ const resolveApiBaseUrl = () => {
     return envUrl;
   }
 
-  if (
-    typeof window !== "undefined" &&
-    isLocalHost(window.location.hostname)
-  ) {
+  if (!isProductionEnvironment) {
     return DEFAULT_LOCAL_API_URL;
   }
 
@@ -102,8 +102,10 @@ export const fetchAPI = async (endpoint, options = {}) => {
   }
 };
 
+export const getApiHealth = async () => fetchAPI("/health");
+
 // ============================================================
 // EXPORTS
 // ============================================================
 
-export { API_BASE_URL };
+export { API_BASE_URL, isProductionEnvironment };
