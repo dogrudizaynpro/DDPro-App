@@ -957,29 +957,33 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (products.length > 0 && !products.some((item) => item.id === selectedProductId)) {
+    if (products.length === 0) {
+      setSelectedProductId(null);
+    } else if (!products.some((item) => item.id === selectedProductId)) {
       setSelectedProductId(products[0].id);
     }
   }, [products, selectedProductId]);
 
   useEffect(() => {
-    if (systems.length > 0 && !systems.some((item) => item.id === selectedSystemId)) {
+    if (systems.length === 0) {
+      setSelectedSystemId(null);
+    } else if (!systems.some((item) => item.id === selectedSystemId)) {
       setSelectedSystemId(systems[0].id);
     }
   }, [systems, selectedSystemId]);
 
   useEffect(() => {
-    if (
-      priceAnalyses.length > 0 &&
-      !priceAnalyses.some((item) => item.id === selectedPriceAnalysisId)
-    ) {
+    if (priceAnalyses.length === 0) {
+      setSelectedPriceAnalysisId(null);
+    } else if (!priceAnalyses.some((item) => item.id === selectedPriceAnalysisId)) {
       setSelectedPriceAnalysisId(priceAnalyses[0].id);
     }
   }, [priceAnalyses, selectedPriceAnalysisId]);
 
   useEffect(() => {
-    if (
-      materialAnalyses.length > 0 &&
+    if (materialAnalyses.length === 0) {
+      setSelectedMaterialAnalysisId(null);
+    } else if (
       !materialAnalyses.some((item) => item.id === selectedMaterialAnalysisId)
     ) {
       setSelectedMaterialAnalysisId(materialAnalyses[0].id);
@@ -987,19 +991,25 @@ function App() {
   }, [materialAnalyses, selectedMaterialAnalysisId]);
 
   useEffect(() => {
-    if (projects.length > 0 && !projects.some((item) => item.id === selectedProjectId)) {
+    if (projects.length === 0) {
+      setSelectedProjectId(null);
+    } else if (!projects.some((item) => item.id === selectedProjectId)) {
       setSelectedProjectId(projects[0].id);
     }
   }, [projects, selectedProjectId]);
 
   useEffect(() => {
-    if (offers.length > 0 && !offers.some((item) => item.id === selectedOfferId)) {
+    if (offers.length === 0) {
+      setSelectedOfferId(null);
+    } else if (!offers.some((item) => item.id === selectedOfferId)) {
       setSelectedOfferId(offers[0].id);
     }
   }, [offers, selectedOfferId]);
 
   useEffect(() => {
-    if (customers.length > 0 && !customers.some((item) => item.id === selectedCustomerId)) {
+    if (customers.length === 0) {
+      setSelectedCustomerId(null);
+    } else if (!customers.some((item) => item.id === selectedCustomerId)) {
       setSelectedCustomerId(customers[0].id);
     }
   }, [customers, selectedCustomerId]);
@@ -1127,6 +1137,33 @@ function App() {
     [offerForm.analysisIds, priceAnalysesWithTotals]
   );
 
+  useEffect(() => {
+    const availableAnalysisIds = new Set(priceAnalysesWithTotals.map((analysis) => analysis.id));
+
+    setOfferForm((current) => {
+      const normalizedAnalysisIds = current.analysisIds.filter((id) =>
+        availableAnalysisIds.has(id)
+      );
+
+      if (
+        normalizedAnalysisIds.length === current.analysisIds.length &&
+        normalizedAnalysisIds.every((id, index) => id === current.analysisIds[index])
+      ) {
+        return current;
+      }
+
+      return {
+        ...current,
+        analysisIds:
+          normalizedAnalysisIds.length > 0
+            ? normalizedAnalysisIds
+            : priceAnalysesWithTotals[0]
+              ? [priceAnalysesWithTotals[0].id]
+              : [],
+      };
+    });
+  }, [priceAnalysesWithTotals]);
+
   const offerDraftSubtotal = useMemo(
     () =>
       selectedOfferAnalysisDrafts.reduce(
@@ -1153,7 +1190,7 @@ function App() {
   const createProduct = (event) => {
     event.preventDefault();
 
-    if (!productForm.name.trim()) {
+    if (!productForm.name.trim() || !productForm.systemId) {
       return;
     }
 
@@ -1170,7 +1207,7 @@ function App() {
     setProductForm({
       name: "",
       code: "",
-      systemId: systems[0]?.id || "",
+      systemId: newProduct.systemId || systems[0]?.id || "",
       unit: UNIT_OPTIONS[0],
       status: PRODUCT_STATUS_OPTIONS[0],
       description: "",
@@ -1247,7 +1284,7 @@ function App() {
   const createProject = (event) => {
     event.preventDefault();
 
-    if (!projectForm.name.trim()) {
+    if (!projectForm.name.trim() || !projectForm.customerId) {
       return;
     }
 
@@ -1270,8 +1307,10 @@ function App() {
       name: "",
       type: "",
       status: PROJECT_STATUS_OPTIONS[0],
-      customerId: customers[0]?.id || "",
-      systemIds: [systems[0]?.id].filter(Boolean),
+      customerId: newProject.customerId || customers[0]?.id || "",
+      systemIds: newProject.systemIds?.length
+        ? newProject.systemIds
+        : [systems[0]?.id].filter(Boolean),
       summary: "",
     });
     addLog(`Yeni proje taslağı oluşturuldu: ${newProject.name}`);
@@ -1280,7 +1319,12 @@ function App() {
   const createOffer = (event) => {
     event.preventDefault();
 
-    if (!offerForm.title.trim()) {
+    if (
+      !offerForm.title.trim() ||
+      !offerForm.customerId ||
+      !offerForm.projectId ||
+      offerForm.analysisIds.length === 0
+    ) {
       return;
     }
 
@@ -1318,11 +1362,15 @@ function App() {
     setOffersError(null);
     setOfferForm({
       title: "",
-      customerId: customers[0]?.id || "",
-      projectId: projects[0]?.id || "",
+      customerId: newOffer.customerId || customers[0]?.id || "",
+      projectId: newOffer.projectId || projects[0]?.id || "",
       status: OFFER_STATUS_OPTIONS[0],
       vatRate: DEFAULT_VAT_RATE,
-      analysisIds: priceAnalysesWithTotals[0] ? [priceAnalysesWithTotals[0].id] : [],
+      analysisIds: newOffer.analysisIds?.length
+        ? newOffer.analysisIds
+        : priceAnalysesWithTotals[0]
+          ? [priceAnalysesWithTotals[0].id]
+          : [],
       notes: "",
     });
     addLog(`Yeni teklif taslağı oluşturuldu: ${newOffer.title}`);
@@ -1401,6 +1449,7 @@ function App() {
   const deleteOffer = async (id) => {
     const offer = offers.find((item) => item.id === id);
     offersTouchedRef.current = true;
+    let shouldClearError = true;
 
     if (!offer) {
       return;
@@ -1411,7 +1460,11 @@ function App() {
         await deleteOfferRequest(id);
         addLog(`Teklif API üzerinden silindi: ${offer.title}`);
       } catch (error) {
-        if (error.status !== 404) {
+        if (error.status === 404) {
+          shouldClearError = false;
+          setOffersError("Teklif API kaydı bulunamadı; listeden kaldırıldı ve yenileme önerilir.");
+          addLog(`Teklif API üzerinde bulunamadı: ${offer.title}`);
+        } else {
           setOffersError("Teklif silme işlemi API üzerinde tamamlanamadı.");
           addLog(`Teklif silme hatası: ${offer.title}`);
           return;
@@ -1421,13 +1474,16 @@ function App() {
 
     setOffers((currentOffers) => currentOffers.filter((item) => item.id !== id));
     setSelectedOfferId((currentId) => (currentId === id ? null : currentId));
-    setOffersError(null);
+    if (shouldClearError) {
+      setOffersError(null);
+    }
     addLog(`${offer.source === "api" ? "Teklif" : "Yerel teklif"} listeden kaldırıldı: ${offer.title}`);
   };
 
-  const deleteSimpleRecord = (setter, items, id, label) => {
+  const deleteSimpleRecord = (setter, items, id, label, onDelete) => {
     const record = items.find((item) => item.id === id);
     setter((currentItems) => currentItems.filter((item) => item.id !== id));
+    onDelete?.(id);
     if (record) {
       addLog(`${label} silindi: ${record.name || record.title || record.companyName}`);
     }
@@ -1513,17 +1569,47 @@ function App() {
     setMaterialAnalyses((currentItems) =>
       currentItems.map((analysis) =>
         analysis.id === analysisId
-          ? {
-              ...analysis,
-              items: [
-                ...analysis.items,
-                createMaterialNode({
-                  parentId: parentNode?.id || null,
-                  level,
-                  title: parentNode ? "Alt malzeme" : "Yeni kök malzeme",
-                }),
-              ],
-            }
+          ? (() => {
+              const nextNode = createMaterialNode({
+                parentId: parentNode?.id || null,
+                level,
+                title: parentNode ? "Alt malzeme" : "Yeni kök malzeme",
+              });
+
+              if (!parentNode) {
+                return {
+                  ...analysis,
+                  items: [...analysis.items, nextNode],
+                };
+              }
+
+              const parentIndex = analysis.items.findIndex((item) => item.id === parentNode.id);
+
+              if (parentIndex === -1) {
+                return {
+                  ...analysis,
+                  items: [...analysis.items, nextNode],
+                };
+              }
+
+              let insertIndex = parentIndex + 1;
+
+              while (
+                insertIndex < analysis.items.length &&
+                Number(analysis.items[insertIndex].level || 0) > Number(parentNode.level || 0)
+              ) {
+                insertIndex += 1;
+              }
+
+              return {
+                ...analysis,
+                items: [
+                  ...analysis.items.slice(0, insertIndex),
+                  nextNode,
+                  ...analysis.items.slice(insertIndex),
+                ],
+              };
+            })()
           : analysis
       )
     );
@@ -1587,7 +1673,9 @@ function App() {
     setOfferForm((current) => ({
       ...current,
       analysisIds: current.analysisIds.includes(analysisId)
-        ? current.analysisIds.filter((item) => item !== analysisId)
+        ? current.analysisIds.length === 1
+          ? current.analysisIds
+          : current.analysisIds.filter((item) => item !== analysisId)
         : [...current.analysisIds, analysisId],
     }));
   };
@@ -1637,7 +1725,14 @@ function App() {
   };
 
   const renderStatusBadge = (label) => (
-    <span className={`offer-status-badge ${toStatusTone(label)}`}>{label}</span>
+    <span
+      className={`offer-status-badge ${toStatusTone(label)}`}
+      role="status"
+      aria-label={`Durum: ${label}`}
+      title={`Durum: ${label}`}
+    >
+      {label}
+    </span>
   );
 
   const renderSummaryCards = (items) => (
@@ -1777,11 +1872,15 @@ function App() {
             value={productForm.systemId}
             onChange={(event) => setProductForm((current) => ({ ...current, systemId: event.target.value }))}
           >
-            {systems.map((system) => (
-              <option key={system.id} value={system.id}>
-                {system.name}
-              </option>
-            ))}
+            {systems.length === 0 ? (
+              <option value="">Önce sistem oluşturun</option>
+            ) : (
+              systems.map((system) => (
+                <option key={system.id} value={system.id}>
+                  {system.name}
+                </option>
+              ))
+            )}
           </select>
           <select
             value={productForm.unit}
@@ -1806,7 +1905,9 @@ function App() {
               setProductForm((current) => ({ ...current, description: event.target.value }))
             }
           />
-          <button type="submit">Ürün Taslağını Kaydet</button>
+          <button type="submit" disabled={systems.length === 0}>
+            Ürün Taslağını Kaydet
+          </button>
           <p className="form-hint">Ürünler yerel katalog iskeleti olarak saklanır.</p>
         </form>
       )}
@@ -2546,21 +2647,29 @@ function App() {
               value={offerForm.customerId}
               onChange={(event) => setOfferForm((current) => ({ ...current, customerId: event.target.value }))}
             >
-              {customers.map((customer) => (
-                <option key={customer.id} value={customer.id}>
-                  {customer.companyName}
-                </option>
-              ))}
+              {customers.length === 0 ? (
+                <option value="">Önce müşteri oluşturun</option>
+              ) : (
+                customers.map((customer) => (
+                  <option key={customer.id} value={customer.id}>
+                    {customer.companyName}
+                  </option>
+                ))
+              )}
             </select>
             <select
               value={offerForm.projectId}
               onChange={(event) => setOfferForm((current) => ({ ...current, projectId: event.target.value }))}
             >
-              {projects.map((project) => (
-                <option key={project.id} value={project.id}>
-                  {project.name}
-                </option>
-              ))}
+              {projects.length === 0 ? (
+                <option value="">Önce proje oluşturun</option>
+              ) : (
+                projects.map((project) => (
+                  <option key={project.id} value={project.id}>
+                    {project.name}
+                  </option>
+                ))
+              )}
             </select>
             <select
               value={offerForm.status}
@@ -2586,18 +2695,22 @@ function App() {
             <div className="selection-block">
               <strong>Analiz Kalemleri</strong>
               <div className="selection-list">
-                {priceAnalysesWithTotals.map((analysis) => (
-                  <label key={analysis.id} className="selection-item">
-                    <input
-                      type="checkbox"
-                      checked={offerForm.analysisIds.includes(analysis.id)}
-                      onChange={() => toggleOfferAnalysisSelection(analysis.id)}
-                    />
-                    <span>
-                      {analysis.name} · {formatCurrency(analysis.items.reduce((sum, item) => sum + item.total, 0))}
-                    </span>
-                  </label>
-                ))}
+                {priceAnalysesWithTotals.length === 0 ? (
+                  <div className="selection-item">Önce fiyat analizi oluşturun</div>
+                ) : (
+                  priceAnalysesWithTotals.map((analysis) => (
+                    <label key={analysis.id} className="selection-item">
+                      <input
+                        type="checkbox"
+                        checked={offerForm.analysisIds.includes(analysis.id)}
+                        onChange={() => toggleOfferAnalysisSelection(analysis.id)}
+                      />
+                      <span>
+                        {analysis.name} · {formatCurrency(analysis.items.reduce((sum, item) => sum + item.total, 0))}
+                      </span>
+                    </label>
+                  ))
+                )}
               </div>
             </div>
             <div className="offer-draft-total-grid">
@@ -2614,7 +2727,17 @@ function App() {
                 <strong>{formatCurrency(offerDraftSubtotal + offerDraftVatAmount)}</strong>
               </div>
             </div>
-            <button type="submit">Teklif Taslağını Kaydet</button>
+            <button
+              type="submit"
+              disabled={
+                customers.length === 0 ||
+                projects.length === 0 ||
+                priceAnalysesWithTotals.length === 0 ||
+                offerForm.analysisIds.length === 0
+              }
+            >
+              Teklif Taslağını Kaydet
+            </button>
             <p className="form-hint">Bu form backend kaydı oluşturmaz; yalnızca yerel teklif taslağı üretir.</p>
           </form>
         )}
@@ -2657,7 +2780,7 @@ function App() {
                           Detay
                         </button>
                         <button type="button" onClick={() => deleteOffer(offer.id)}>
-                          {offer.source === "api" ? "Listeden Kaldır" : "Sil"}
+                          Sil
                         </button>
                       </div>
                     </article>
@@ -2785,11 +2908,15 @@ function App() {
               value={projectForm.customerId}
               onChange={(event) => setProjectForm((current) => ({ ...current, customerId: event.target.value }))}
             >
-              {customers.map((customer) => (
-                <option key={customer.id} value={customer.id}>
-                  {customer.companyName}
-                </option>
-              ))}
+              {customers.length === 0 ? (
+                <option value="">Önce müşteri oluşturun</option>
+              ) : (
+                customers.map((customer) => (
+                  <option key={customer.id} value={customer.id}>
+                    {customer.companyName}
+                  </option>
+                ))
+              )}
             </select>
             <div className="selection-block">
               <strong>Projeye bağlı sistemler</strong>
@@ -2811,7 +2938,9 @@ function App() {
               value={projectForm.summary}
               onChange={(event) => setProjectForm((current) => ({ ...current, summary: event.target.value }))}
             />
-            <button type="submit">Projeyi Taslak Olarak Kaydet</button>
+            <button type="submit" disabled={customers.length === 0}>
+              Projeyi Taslak Olarak Kaydet
+            </button>
           </form>
         )}
 
@@ -2889,7 +3018,17 @@ function App() {
                         <span className="tag-chip muted">Sistem ilişkisi yok</span>
                       ) : (
                         selectedProjectSystems.map((system) => (
-                          <span className="tag-chip" key={system.id}>{system.name}</span>
+                          <button
+                            type="button"
+                            className="tag-chip tag-action"
+                            key={system.id}
+                            onClick={() => {
+                              setSelectedSystemId(system.id);
+                              setActiveModule("systems");
+                            }}
+                          >
+                            {system.name}
+                          </button>
                         ))
                       )}
                     </div>
@@ -2899,7 +3038,17 @@ function App() {
                         <span className="tag-chip muted">Teklif ilişkisi yok</span>
                       ) : (
                         selectedProjectOffers.map((offer) => (
-                          <span className="tag-chip" key={offer.id}>{offer.title}</span>
+                          <button
+                            type="button"
+                            className="tag-chip tag-action"
+                            key={offer.id}
+                            onClick={() => {
+                              setSelectedOfferId(offer.id);
+                              setActiveModule("offers");
+                            }}
+                          >
+                            {offer.title}
+                          </button>
                         ))
                       )}
                     </div>

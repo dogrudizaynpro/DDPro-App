@@ -1647,6 +1647,10 @@ select {
   font-size: 11px;
 }
 
+.tag-action {
+  cursor: pointer;
+}
+
 .tag-chip.muted {
   color: #8094ae;
 }
@@ -1775,9 +1779,12 @@ select {
 @media (max-width: 1200px) {
   .stats-grid-large,
   .two-column-grid,
-  .split-layout,
   .offer-draft-total-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .split-layout {
+    grid-template-columns: 1fr;
   }
 }
 
