@@ -623,8 +623,6 @@ function App() {
               createdAt: record.createdAt,
               updatedAt: record.updatedAt,
               source: 'api',
-              items: [],
-              vatRate: '20',
               notes: record.notes || '',
             })
           )
@@ -940,17 +938,44 @@ function App() {
       return;
     }
 
+    const conflictingOffer = offerDrafts.find(
+      (offer) => projectForm.offerIds.includes(offer.id) && offer.projectId && offer.projectId !== projectForm.id
+    );
+
+    if (conflictingOffer) {
+      setProjectFormError('Seçilen teklif başka bir projeye bağlı. Önce teklif bağlantısını kaldırın.');
+      return;
+    }
+
     const now = new Date().toISOString();
+    const previousProject = projectDrafts.find((item) => item.id === projectForm.id);
     const nextRecord = normalizeProject({
       ...projectForm,
       id: projectForm.id || createLocalId('project'),
-      createdAt: projectForm.id ? projectDrafts.find((item) => item.id === projectForm.id)?.createdAt : now,
+      createdAt: projectForm.id ? previousProject?.createdAt : now,
       updatedAt: now,
       source: 'local',
     });
 
     setProjectDrafts((current) =>
       sortByRecent(projectForm.id ? current.map((item) => (item.id === nextRecord.id ? nextRecord : item)) : [nextRecord, ...current])
+    );
+    setOfferDrafts((current) =>
+      current.map((offer) => {
+        if (nextRecord.offerIds.includes(offer.id)) {
+          return normalizeOffer({
+            ...offer,
+            projectId: nextRecord.id,
+            customerId: nextRecord.customerId || offer.customerId,
+          });
+        }
+
+        if (offer.projectId === nextRecord.id) {
+          return normalizeOffer({ ...offer, projectId: '' });
+        }
+
+        return offer;
+      })
     );
     setSelectedProjectId(nextRecord.id);
     setShowProjectForm(false);
@@ -963,6 +988,13 @@ function App() {
     setOfferFormError('');
 
     const validItems = offerForm.items.filter((item) => item.description.trim());
+    const selectedProjectRecord = projects.find((item) => item.id === offerForm.projectId);
+    const derivedCustomerId = offerForm.customerId || selectedProjectRecord?.customerId || '';
+
+    if (offerForm.projectId && selectedProjectRecord?.customerId && offerForm.customerId && offerForm.customerId !== selectedProjectRecord.customerId) {
+      setOfferFormError('Seçilen proje ile müşteri kaydı eşleşmiyor. Aynı müşteriyi seçin veya proje bağlantısını kaldırın.');
+      return;
+    }
 
     if (!offerForm.title.trim()) {
       setOfferFormError('Teklif adı zorunludur.');
@@ -977,6 +1009,7 @@ function App() {
     const now = new Date().toISOString();
     const nextRecord = normalizeOffer({
       ...offerForm,
+      customerId: derivedCustomerId,
       items: validItems,
       id: offerForm.id || createLocalId('offer'),
       createdAt: offerForm.id ? offerDrafts.find((item) => item.id === offerForm.id)?.createdAt : now,
@@ -1147,7 +1180,17 @@ function App() {
             : item
         )
     );
-    setOfferDrafts((items) => items.map((item) => (item.projectId === id ? normalizeOffer({ ...item, projectId: '' }) : item)));
+    setOfferDrafts((items) =>
+      items.map((item) =>
+        item.projectId === id
+          ? normalizeOffer({
+              ...item,
+              projectId: '',
+              customerId: item.customerId === current.customerId ? '' : item.customerId,
+            })
+          : item
+      )
+    );
     if (selectedProjectId === id) setSelectedProjectId(null);
     addLog(`Proje taslağı silindi: ${current.name}`);
   };
@@ -1989,6 +2032,9 @@ function App() {
     const relatedSystems = selectedProject ? selectedProject.systemIds.map((id) => systemMap.get(id)).filter(Boolean) : [];
     const relatedOffers = selectedProject ? selectedProject.offerIds.map((id) => offerMap.get(id)).filter(Boolean) : [];
     const readOnlyOfferIds = projectForm.offerIds.filter((id) => !offerDrafts.some((offer) => offer.id === id));
+    const assignableLocalOffers = offers.filter(
+      (item) => item.source === 'local' && (!item.projectId || item.projectId === projectForm.id)
+    );
 
     return (
       <div className="module-page">
@@ -2036,7 +2082,7 @@ function App() {
               <div>
                 <strong>Projeye Teklif Bağla</strong>
                 <div className="checkbox-list">
-                  {offers.filter((item) => item.source === 'local').map((item) => (
+                  {assignableLocalOffers.map((item) => (
                     <label key={item.id}><input type="checkbox" checked={projectForm.offerIds.includes(item.id)} onChange={() => setProjectForm((current) => ({ ...current, offerIds: toggleMultiSelectValue(current.offerIds, item.id) }))} />{item.title}</label>
                   ))}
                   {readOnlyOfferIds.map((offerId) => (
