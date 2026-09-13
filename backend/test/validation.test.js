@@ -59,6 +59,38 @@ test("getResearchPayload requires a title", () => {
   assert.throws(() => getResearchPayload({ note: "Eksik" }), /Research title/);
 });
 
+test("getResearchPayload trims optional fields and normalizes blanks", () => {
+  assert.deepEqual(
+    getResearchPayload({
+      title: "  Araştırma  ",
+      category: "  Tedarik  ",
+      description: "  Ayrıntı  ",
+      status: "  Açık  ",
+    }),
+    {
+      title: "Araştırma",
+      category: "Tedarik",
+      description: "Ayrıntı",
+      status: "Açık",
+    }
+  );
+
+  assert.deepEqual(
+    getResearchPayload({
+      title: "Araştırma",
+      category: " ",
+      description: " ",
+      status: " ",
+    }),
+    {
+      title: "Araştırma",
+      category: null,
+      description: null,
+      status: null,
+    }
+  );
+});
+
 test("getOfferPayload uppercases currency and validates project id", () => {
   assert.deepEqual(
     getOfferPayload({

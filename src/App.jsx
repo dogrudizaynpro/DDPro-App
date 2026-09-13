@@ -536,7 +536,7 @@ function App() {
     const fetchProjectsFromApi = async () => {
       const localProjects = getStoredData(STORAGE_KEYS.projects);
       setProjectsLoading(true);
-    setProjectsError(null);
+      setProjectsError(null);
 
       try {
         const apiProjects = await getProjects();
@@ -1253,7 +1253,7 @@ function App() {
 
   const renderAI = () => (
     <div className="module-page ai-module">
-      <p className="status-banner warning">
+      <p className="status-banner warning" role="alert" aria-live="assertive">
         ⚠ Canlı AI servisi bağlı değil. Bu alan yalnızca kontrollü kayıt mesajı gösterir.
       </p>
 
@@ -1644,7 +1644,7 @@ function App() {
 
   const renderUnavailableModule = (moduleId) => (
     <div className="module-page">
-      <p className="status-banner warning">
+      <p className="status-banner warning" role="alert" aria-live="assertive">
         ⚠ Bu modül üretim için tamamlanmadı.
       </p>
       <div className="panel">

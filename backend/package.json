@@ -30,7 +30,12 @@
     "helmet": "7.2.0"
   },
   "overrides": {
-    "qs": "6.16.0"
+    "qs": "6.16.0",
+    "@supabase/functions-js": "2.1.5",
+    "@supabase/gotrue-js": "2.56.0",
+    "@supabase/postgrest-js": "1.8.5",
+    "@supabase/realtime-js": "2.8.4",
+    "@supabase/storage-js": "2.5.4"
   },
   "devDependencies": {}
 }
