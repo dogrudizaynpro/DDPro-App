@@ -1181,8 +1181,14 @@ textarea {
 }
 
 .status-footer-item strong {
-  display: block;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   margin-top: 8px;
+  font-size: 12px;
+}
+
+.status-footer-item strong b {
   font-size: 12px;
 }
 

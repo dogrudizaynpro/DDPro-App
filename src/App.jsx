@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AppShell from "./components/layout/AppShell.jsx";
 import Header from "./components/layout/Header.jsx";
 import Sidebar from "./components/layout/Sidebar.jsx";
@@ -211,12 +211,12 @@ function App() {
     },
   ]);
 
-  const closeCreateForms = () => {
+  const closeCreateForms = useCallback(() => {
     setShowProjectForm(false);
     setShowResearchForm(false);
     setShowOfferForm(false);
     setShowMemoryForm(false);
-  };
+  }, []);
 
   const addLog = (message) => {
     const newLog = {
@@ -677,12 +677,12 @@ function App() {
     }
   }, [activeModule, filteredModules]);
 
-  const openModule = (moduleId) => {
+  const openModule = useCallback((moduleId) => {
     closeCreateForms();
     setActiveModule(moduleId);
-  };
+  }, [closeCreateForms]);
 
-  const openModuleWithForm = (moduleId, form) => {
+  const openModuleWithForm = useCallback((moduleId, form) => {
     closeCreateForms();
     setActiveModule(moduleId);
 
@@ -690,7 +690,7 @@ function App() {
     if (form === "research") setShowResearchForm(true);
     if (form === "offer") setShowOfferForm(true);
     if (form === "memory") setShowMemoryForm(true);
-  };
+  }, [closeCreateForms]);
 
   const handleCommandSubmit = (event) => {
     event.preventDefault();
@@ -747,7 +747,7 @@ function App() {
         action: () => openModule("systems"),
       },
     ],
-    []
+    [openModule, openModuleWithForm]
   );
 
   const createProject = (event) => {
