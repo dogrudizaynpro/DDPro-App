@@ -29,15 +29,28 @@ const allowedOrigins = (
   .split(",")
   .map((origin) => origin.trim())
   .filter(Boolean);
+const allowRequestsWithoutOrigin = process.env.NODE_ENV !== "production";
 
 app.use(
   cors({
     origin(origin, callback) {
-      if (!origin || allowedOrigins.includes(origin)) {
+      if (!origin) {
+        if (allowRequestsWithoutOrigin) {
+          return callback(null, true);
+        }
+
+        const error = new Error("Origin header is required");
+        error.statusCode = 403;
+        return callback(error);
+      }
+
+      if (allowedOrigins.includes(origin)) {
         return callback(null, true);
       }
 
-      return callback(new Error("Origin not allowed by CORS"));
+      const error = new Error("Origin not allowed by CORS");
+      error.statusCode = 403;
+      return callback(error);
     },
     credentials: true,
   })

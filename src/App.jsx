@@ -717,9 +717,9 @@ function App() {
 
   const deleteProject = async (id) => {
     const project = projects.find((item) => item.id === id);
-    projectsTouchedRef.current = true;
 
     if (project?.source !== "api") {
+      projectsTouchedRef.current = true;
       setProjects((currentProjects) =>
         currentProjects.filter((item) => item.id !== id)
       );
@@ -734,6 +734,7 @@ function App() {
     try {
       await deleteProjectRequest(id);
       setProjectsError(null);
+      projectsTouchedRef.current = true;
       setProjects((currentProjects) =>
         currentProjects.filter((item) => item.id !== id)
       );
@@ -744,6 +745,7 @@ function App() {
     } catch (error) {
       if (getErrorStatus(error) === 404) {
         setProjectsError(null);
+        projectsTouchedRef.current = true;
         setProjects((currentProjects) =>
           currentProjects.filter((item) => item.id !== id)
         );
@@ -807,9 +809,9 @@ function App() {
     const item = researchItems.find(
       (research) => research.id === id
     );
-    researchTouchedRef.current = true;
 
     if (item?.source !== "api") {
+      researchTouchedRef.current = true;
       setResearchItems((currentItems) =>
         currentItems.filter((research) => research.id !== id)
       );
@@ -824,6 +826,7 @@ function App() {
     try {
       await deleteResearchItemRequest(id);
       setResearchError(null);
+      researchTouchedRef.current = true;
       setResearchItems((currentItems) =>
         currentItems.filter((research) => research.id !== id)
       );
@@ -834,6 +837,7 @@ function App() {
     } catch (error) {
       if (getErrorStatus(error) === 404) {
         setResearchError(null);
+        researchTouchedRef.current = true;
         setResearchItems((currentItems) =>
           currentItems.filter((research) => research.id !== id)
         );

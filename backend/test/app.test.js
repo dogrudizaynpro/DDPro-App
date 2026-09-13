@@ -237,6 +237,36 @@ test("offer update guards invalid ids and missing database", async () => {
   });
 });
 
+test("offer delete guards invalid ids and missing database", async () => {
+  await withServer(async (server) => {
+    const invalidResponse = await fetch(
+      `http://127.0.0.1:${server.address().port}/api/offers/not-a-uuid`,
+      {
+        method: "DELETE",
+      }
+    );
+    const invalidPayload = await invalidResponse.json();
+
+    assert.equal(invalidResponse.status, 400);
+    assert.match(invalidPayload.message, /valid UUID/);
+
+    const serviceUnavailableResponse = await fetch(
+      `http://127.0.0.1:${server.address().port}/api/offers/123e4567-e89b-12d3-a456-426614174000`,
+      {
+        method: "DELETE",
+      }
+    );
+    const serviceUnavailablePayload =
+      await serviceUnavailableResponse.json();
+
+    assert.equal(serviceUnavailableResponse.status, 503);
+    assert.equal(
+      serviceUnavailablePayload.message,
+      "Database service is not configured"
+    );
+  });
+});
+
 test("unknown routes return 404", async () => {
   await withServer(async (server) => {
     const response = await fetch(
