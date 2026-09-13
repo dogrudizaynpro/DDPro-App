@@ -6,6 +6,9 @@ on:
       - main
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   frontend:
     runs-on: ubuntu-latest
@@ -53,6 +56,9 @@ jobs:
       - name: Run backend tests
         run: npm test
         working-directory: backend
+        env:
+          SUPABASE_URL: https://example.com
+          SUPABASE_ANON_KEY: test-key
 
       - name: Run backend audit
         run: npm audit
