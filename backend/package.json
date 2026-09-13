@@ -30,6 +30,10 @@
     "helmet": "^7.1.0"
   },
   "overrides": {
+    "@supabase/functions-js": "2.1.5",
+    "@supabase/gotrue-js": "2.56.0",
+    "@supabase/realtime-js": "2.8.4",
+    "@supabase/storage-js": "2.5.4",
     "qs": "^6.16.0"
   },
   "devDependencies": {

@@ -44,25 +44,20 @@ if (SUPABASE_URL && SUPABASE_ANON_KEY) {
 
 export { supabaseClient, isConfigured };
 
-export const getSupabaseClient = () => {
-  if (!isConfigured) {
-    console.warn(
-      "⚠️  Attempted to use Supabase client, but it is not configured."
-    );
-    return null;
-  }
-  return supabaseClient;
+export const supabaseRuntime = {
+  getSupabaseClient: () => {
+    if (!isConfigured) {
+      console.warn(
+        "⚠️  Attempted to use Supabase client, but it is not configured."
+      );
+      return null;
+    }
+
+    return supabaseClient;
+  },
+  isSupabaseAvailable: () => isConfigured && supabaseClient !== null,
 };
 
-export const isSupabaseAvailable = () => {
-  return isConfigured && supabaseClient !== null;
-};
+export const getSupabaseClient = () => supabaseRuntime.getSupabaseClient();
 
-export const setSupabaseTestState = ({ client = null, configured = false } = {}) => {
-  if (process.env.NODE_ENV !== "test") {
-    throw new Error("setSupabaseTestState can only be used in test environment");
-  }
-
-  supabaseClient = client;
-  isConfigured = configured;
-};
+export const isSupabaseAvailable = () => supabaseRuntime.isSupabaseAvailable();

@@ -4,7 +4,7 @@
 // Business logic and database interactions for offers domain
 // ============================================================
 
-import { getSupabaseClient, isSupabaseAvailable } from "../config/supabase.js";
+import { supabaseRuntime } from "../config/supabase.js";
 
 const ALLOWED_OFFER_STATUSES = [
   "Hazırlanıyor",
@@ -73,14 +73,14 @@ const getOfferPayload = (body = {}) => {
 export const getOffers = async (req, res, next) => {
   try {
     // Check if Supabase is available
-    if (!isSupabaseAvailable()) {
+    if (!supabaseRuntime.isSupabaseAvailable()) {
       return res.status(503).json({
         status: "error",
         message: "Database service is not configured",
       });
     }
 
-    const supabase = getSupabaseClient();
+    const supabase = supabaseRuntime.getSupabaseClient();
 
     // Fetch all offers ordered by created_at descending
     const { data, error } = await supabase
@@ -115,14 +115,14 @@ export const getOfferById = async (req, res, next) => {
     const { id } = req.params;
 
     // Check if Supabase is available
-    if (!isSupabaseAvailable()) {
+    if (!supabaseRuntime.isSupabaseAvailable()) {
       return res.status(503).json({
         status: "error",
         message: "Database service is not configured",
       });
     }
 
-    const supabase = getSupabaseClient();
+    const supabase = supabaseRuntime.getSupabaseClient();
 
     // Fetch offer by id
     const { data, error } = await supabase
@@ -160,14 +160,14 @@ export const getOfferById = async (req, res, next) => {
 
 export const createOffer = async (req, res, next) => {
   try {
-    if (!isSupabaseAvailable()) {
+    if (!supabaseRuntime.isSupabaseAvailable()) {
       return res.status(503).json({
         status: "error",
         message: "Database service is not configured",
       });
     }
 
-    const supabase = getSupabaseClient();
+    const supabase = supabaseRuntime.getSupabaseClient();
     const payload = getOfferPayload(req.body);
 
     const { data, error } = await supabase
@@ -199,14 +199,14 @@ export const deleteOffer = async (req, res, next) => {
   try {
     const { id } = req.params;
 
-    if (!isSupabaseAvailable()) {
+    if (!supabaseRuntime.isSupabaseAvailable()) {
       return res.status(503).json({
         status: "error",
         message: "Database service is not configured",
       });
     }
 
-    const supabase = getSupabaseClient();
+    const supabase = supabaseRuntime.getSupabaseClient();
     const { data, error } = await supabase
       .from("offers")
       .delete()

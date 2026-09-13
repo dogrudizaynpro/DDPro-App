@@ -4,7 +4,7 @@
 // Business logic and database interactions for projects domain
 // ============================================================
 
-import { getSupabaseClient, isSupabaseAvailable } from "../config/supabase.js";
+import { supabaseRuntime } from "../config/supabase.js";
 
 // ============================================================
 // GET PROJECTS
@@ -16,14 +16,14 @@ import { getSupabaseClient, isSupabaseAvailable } from "../config/supabase.js";
 export const getProjects = async (req, res, next) => {
   try {
     // Check if Supabase is available
-    if (!isSupabaseAvailable()) {
+    if (!supabaseRuntime.isSupabaseAvailable()) {
       return res.status(503).json({
         status: "error",
         message: "Database service is not configured",
       });
     }
 
-    const supabase = getSupabaseClient();
+    const supabase = supabaseRuntime.getSupabaseClient();
 
     // Fetch all projects ordered by created_at descending
     const { data, error } = await supabase
@@ -58,14 +58,14 @@ export const getProjectById = async (req, res, next) => {
     const { id } = req.params;
 
     // Check if Supabase is available
-    if (!isSupabaseAvailable()) {
+    if (!supabaseRuntime.isSupabaseAvailable()) {
       return res.status(503).json({
         status: "error",
         message: "Database service is not configured",
       });
     }
 
-    const supabase = getSupabaseClient();
+    const supabase = supabaseRuntime.getSupabaseClient();
 
     // Fetch project by id
     const { data, error } = await supabase

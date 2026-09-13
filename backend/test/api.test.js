@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import request from "supertest";
 import app from "../src/app.js";
-import { setSupabaseTestState } from "../src/config/supabase.js";
+import { supabaseRuntime } from "../src/config/supabase.js";
 
 const createNotFoundClient = () => ({
   from() {
@@ -42,8 +42,12 @@ const createMutationErrorClient = () => ({
   },
 });
 
+const originalIsSupabaseAvailable = supabaseRuntime.isSupabaseAvailable;
+const originalGetSupabaseClient = supabaseRuntime.getSupabaseClient;
+
 test.afterEach(() => {
-  setSupabaseTestState({ client: null, configured: false });
+  supabaseRuntime.isSupabaseAvailable = originalIsSupabaseAvailable;
+  supabaseRuntime.getSupabaseClient = originalGetSupabaseClient;
 });
 
 test("GET /health returns service health", async () => {
@@ -56,7 +60,8 @@ test("GET /health returns service health", async () => {
 });
 
 test("GET /api/projects returns 503 when database configuration is missing", async () => {
-  setSupabaseTestState({ client: null, configured: false });
+  supabaseRuntime.isSupabaseAvailable = () => false;
+  supabaseRuntime.getSupabaseClient = () => null;
 
   const response = await request(app).get("/api/projects");
 
@@ -66,7 +71,8 @@ test("GET /api/projects returns 503 when database configuration is missing", asy
 });
 
 test("POST /api/offers returns 400 for invalid payload", async () => {
-  setSupabaseTestState({ client: {}, configured: true });
+  supabaseRuntime.isSupabaseAvailable = () => true;
+  supabaseRuntime.getSupabaseClient = () => ({});
 
   const response = await request(app).post("/api/offers").send({ amount: 1000 });
 
@@ -76,7 +82,8 @@ test("POST /api/offers returns 400 for invalid payload", async () => {
 });
 
 test("GET /api/offers/:id returns 404 when offer does not exist", async () => {
-  setSupabaseTestState({ client: createNotFoundClient(), configured: true });
+  supabaseRuntime.isSupabaseAvailable = () => true;
+  supabaseRuntime.getSupabaseClient = () => createNotFoundClient();
 
   const response = await request(app).get("/api/offers/non-existent-id");
 
@@ -86,7 +93,8 @@ test("GET /api/offers/:id returns 404 when offer does not exist", async () => {
 });
 
 test("POST /api/offers returns controlled 500 response on write errors", async () => {
-  setSupabaseTestState({ client: createMutationErrorClient(), configured: true });
+  supabaseRuntime.isSupabaseAvailable = () => true;
+  supabaseRuntime.getSupabaseClient = () => createMutationErrorClient();
 
   const response = await request(app).post("/api/offers").send({ title: "Teklif A" });
 
