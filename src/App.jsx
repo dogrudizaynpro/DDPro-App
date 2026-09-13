@@ -1296,6 +1296,7 @@ function App() {
       (records[moduleId] || []).map((record) => ({
         id: `${moduleId}-${record.id}`,
         moduleId,
+        recordId: record.id,
         title:
           record.name ||
           record.title ||
@@ -1365,6 +1366,7 @@ function App() {
   }, [filters, records]);
 
   const openCreateForm = (moduleId) => {
+    setActiveModule(moduleId);
     setEditorState({
       moduleId,
       mode: "create",
@@ -1374,6 +1376,7 @@ function App() {
   };
 
   const openEditForm = (moduleId, record) => {
+    setActiveModule(moduleId);
     setEditorState({
       moduleId,
       mode: "edit",
@@ -1538,9 +1541,10 @@ function App() {
       return sanitizeReferencesAfterDelete(nextRecords, moduleId, recordId);
     });
 
+    const remainingRecords = (records[moduleId] || []).filter((item) => item.id !== recordId);
     setSelectedIds((current) => ({
       ...current,
-      [moduleId]: current[moduleId] === recordId ? null : current[moduleId],
+      [moduleId]: current[moduleId] === recordId ? remainingRecords[0]?.id || null : current[moduleId],
     }));
 
     appendLog(
@@ -2112,7 +2116,7 @@ function App() {
             </div>
             <div className="panel-content recent-grid">
               {recentRecords.map((item) => (
-                <button key={item.id} type="button" className="recent-card" onClick={() => openLinkedRecord(item.moduleId, item.id.split("-").slice(1).join("-"))}>
+                <button key={item.id} type="button" className="recent-card" onClick={() => openLinkedRecord(item.moduleId, item.recordId)}>
                   <span>{MODULES.find((module) => module.id === item.moduleId)?.title}</span>
                   <strong>{item.title}</strong>
                   <small>{item.status} · {formatDate(item.updatedAt)}</small>
