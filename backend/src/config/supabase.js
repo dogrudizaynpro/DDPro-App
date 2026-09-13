@@ -57,3 +57,12 @@ export const getSupabaseClient = () => {
 export const isSupabaseAvailable = () => {
   return isConfigured && supabaseClient !== null;
 };
+
+export const setSupabaseTestState = ({ client = null, configured = false } = {}) => {
+  if (process.env.NODE_ENV !== "test") {
+    throw new Error("setSupabaseTestState can only be used in test environment");
+  }
+
+  supabaseClient = client;
+  isConfigured = configured;
+};
