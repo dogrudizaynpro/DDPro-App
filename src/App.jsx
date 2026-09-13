@@ -203,6 +203,18 @@ const OFFER_STATUS_TONES = {
 const getOfferStatusTone = (status) =>
   OFFER_STATUS_TONES[status] || "neutral";
 
+const getOfferCacheSignature = (offer) =>
+  [
+    offer?.id,
+    offer?.title,
+    offer?.amountDisplay,
+    offer?.status,
+    offer?.date,
+    offer?.source,
+    offer?.currency,
+    offer?.projectId,
+  ].join("::");
+
 const mergeOffers = (apiOffers, storedOffers) => {
   const storedViewModels = mapOffersToViewModel(storedOffers);
   const apiIds = new Set(apiOffers.map((offer) => offer.id));
@@ -540,9 +552,14 @@ function App() {
       return;
     }
 
-    const cachedOfferDetail = offerDetailsCacheRef.current.get(selectedOfferId);
-    if (cachedOfferDetail) {
-      setSelectedOfferDetail(cachedOfferDetail);
+    const cachedOfferEntry = offerDetailsCacheRef.current.get(selectedOfferId);
+    const selectedOfferSignature = getOfferCacheSignature(selectedOffer);
+    const cacheMatchesSelectedOffer =
+      cachedOfferEntry &&
+      cachedOfferEntry.signature === selectedOfferSignature;
+
+    if (cacheMatchesSelectedOffer) {
+      setSelectedOfferDetail(cachedOfferEntry.detail);
       setOfferDetailError(null);
       setOfferDetailLoading(false);
       return;
@@ -556,7 +573,10 @@ function App() {
       .then((offer) => {
         if (!cancelled) {
           const nextDetail = offer || selectedOffer;
-          offerDetailsCacheRef.current.set(selectedOfferId, nextDetail);
+          offerDetailsCacheRef.current.set(selectedOfferId, {
+            detail: nextDetail,
+            signature: selectedOfferSignature,
+          });
           setSelectedOfferDetail(nextDetail);
         }
       })
@@ -743,6 +763,11 @@ function App() {
     }
 
     setActiveModule(moduleId);
+  };
+
+  const handleOffersReload = () => {
+    offerDetailsCacheRef.current.clear();
+    setOffersReloadKey((value) => value + 1);
   };
 
   const createProject = (event) => {
@@ -1183,7 +1208,31 @@ function App() {
     </div>
   );
 
-  const skeletonModuleProps = {
+  const moduleCounts = useMemo(
+    () => ({
+      products: products.length,
+      priceAnalysis: priceAnalysisItems.length,
+      materialAnalysis: materialAnalysisItems.length,
+      customers: customerItems.length,
+      documents: documentItems.length,
+      finance: financeItems.length,
+      reports: reportItems.length,
+      integrations: integrations.length,
+    }),
+    [
+      products.length,
+      priceAnalysisItems.length,
+      materialAnalysisItems.length,
+      customerItems.length,
+      documentItems.length,
+      financeItems.length,
+      reportItems.length,
+      integrations.length,
+    ]
+  );
+
+  const skeletonModuleProps = useMemo(
+    () => ({
     products: {
       title: "Ürünler",
       description: "Ürün yönetimi modülü backend bağlantısına hazır.",
@@ -1192,7 +1241,7 @@ function App() {
           id: "products-catalog",
           title: "Ürün Kataloğu",
           description: "Ürün kartları ve temel ürün detayları.",
-          count: products.length,
+          count: moduleCounts.products,
         },
         {
           id: "products-categories",
@@ -1216,7 +1265,7 @@ function App() {
           id: "price-analysis-list",
           title: "Fiyat Analiz Kayıtları",
           description: "Ürün veya sistem bazlı fiyat analizi kayıtları.",
-          count: priceAnalysisItems.length,
+          count: moduleCounts.priceAnalysis,
         },
         {
           id: "price-analysis-comparison",
@@ -1235,7 +1284,7 @@ function App() {
           id: "material-analysis-list",
           title: "Malzeme Analiz Kayıtları",
           description: "Malzeme maliyet ve tüketim analiz kayıtları.",
-          count: materialAnalysisItems.length,
+          count: moduleCounts.materialAnalysis,
         },
         {
           id: "material-analysis-breakdown",
@@ -1253,7 +1302,7 @@ function App() {
           id: "crm-customers",
           title: "Müşteri Listesi",
           description: "Kurumsal ve bireysel müşteri kayıtları.",
-          count: customerItems.length,
+          count: moduleCounts.customers,
         },
         {
           id: "crm-opportunities",
@@ -1271,7 +1320,7 @@ function App() {
           id: "documents-library",
           title: "Belge Kütüphanesi",
           description: "Sözleşme, teklif ve teknik belge arşivi.",
-          count: documentItems.length,
+          count: moduleCounts.documents,
         },
         {
           id: "documents-approvals",
@@ -1289,7 +1338,7 @@ function App() {
           id: "finance-records",
           title: "Finans Kayıtları",
           description: "Gelir-gider, maliyet ve bütçe kayıtları.",
-          count: financeItems.length,
+          count: moduleCounts.finance,
         },
         {
           id: "finance-budget",
@@ -1307,7 +1356,7 @@ function App() {
           id: "reports-library",
           title: "Rapor Listesi",
           description: "Operasyonel ve finansal rapor kayıtları.",
-          count: reportItems.length,
+          count: moduleCounts.reports,
         },
         {
           id: "reports-scheduled",
@@ -1331,11 +1380,15 @@ function App() {
           id: "settings-integrations",
           title: "Sistem Yapılandırması",
           description: "API ve entegrasyon ayarları.",
-          count: integrations.length,
+          count: moduleCounts.integrations,
         },
       ],
     },
-  };
+  }),
+    [
+      moduleCounts,
+    ]
+  );
 
   const renderModule = () => {
     if (activeModule === "dashboard") {
@@ -1385,7 +1438,7 @@ function App() {
         <OffersModule
           offersFetchState={offersFetchState}
           offersLoading={offersLoading}
-          setOffersReloadKey={setOffersReloadKey}
+          onOffersReload={handleOffersReload}
           showOfferForm={showOfferForm}
           setShowOfferForm={setShowOfferForm}
           offersError={offersError}
@@ -1509,7 +1562,19 @@ function App() {
           </section>
 
           <section className="content-body">
-            <Suspense fallback={<p className="module-loading">Modül yükleniyor...</p>}>{renderModule()}</Suspense>
+            <Suspense
+              fallback={
+                <p
+                  className="module-loading"
+                  role="status"
+                  aria-live="polite"
+                >
+                  Modül yükleniyor...
+                </p>
+              }
+            >
+              {renderModule()}
+            </Suspense>
           </section>
         </main>
       </div>

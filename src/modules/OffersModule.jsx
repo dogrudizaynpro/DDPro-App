@@ -1,7 +1,7 @@
 function OffersModule({
   offersFetchState,
   offersLoading,
-  setOffersReloadKey,
+  onOffersReload,
   showOfferForm,
   setShowOfferForm,
   offersError,
@@ -36,7 +36,7 @@ function OffersModule({
             type="button"
             className="secondary-button"
             disabled={offersLoading}
-            onClick={() => setOffersReloadKey((value) => value + 1)}
+            onClick={onOffersReload}
           >
             {offersLoading ? "Yenileniyor..." : "Yenile"}
           </button>
