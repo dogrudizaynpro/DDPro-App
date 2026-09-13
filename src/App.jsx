@@ -264,9 +264,10 @@ const getModuleFromHash = (hash = "") => {
   const normalizedHash = String(hash)
     .trim()
     .replace(/^#\/?/, "")
-    .replace(/\/+$/, "");
+    .replace(/^\/+|\/+$/g, "");
+  const [moduleId] = normalizedHash.split("/");
 
-  return MODULE_IDS.has(normalizedHash) ? normalizedHash : DEFAULT_MODULE_ID;
+  return MODULE_IDS.has(moduleId) ? moduleId : DEFAULT_MODULE_ID;
 };
 
 const parseDecimalInput = (value) => {
@@ -275,6 +276,11 @@ const parseDecimalInput = (value) => {
     .replace(/\s+/g, "")
     .replace(/\.(?=\d{3}(\D|$))/g, "")
     .replace(/,/g, ".");
+
+  if (!normalized) {
+    return null;
+  }
+
   const parsed = Number(normalized);
 
   return Number.isFinite(parsed) ? parsed : null;
@@ -408,7 +414,18 @@ function App() {
     }
 
     const syncModuleFromHash = () => {
-      setActiveModule(getModuleFromHash(window.location.hash));
+      const nextModule = getModuleFromHash(window.location.hash);
+      const nextHash = `#/${nextModule}`;
+
+      if (window.location.hash !== nextHash) {
+        window.history.replaceState(
+          null,
+          "",
+          `${window.location.pathname}${window.location.search}${nextHash}`
+        );
+      }
+
+      setActiveModule(nextModule);
     };
 
     syncModuleFromHash();
@@ -418,22 +435,6 @@ function App() {
       window.removeEventListener("hashchange", syncModuleFromHash);
     };
   }, []);
-
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    const nextHash = `#/${activeModule}`;
-
-    if (window.location.hash !== nextHash) {
-      window.history.replaceState(
-        null,
-        "",
-        `${window.location.pathname}${window.location.search}${nextHash}`
-      );
-    }
-  }, [activeModule]);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.projects, JSON.stringify(projects));
