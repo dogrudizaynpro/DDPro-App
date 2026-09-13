@@ -164,10 +164,13 @@ const moduleRouteMap = Object.fromEntries(
 const routeModuleMap = Object.fromEntries(
   modules.map((module) => [module.path, module.id])
 );
+const moduleIds = new Set(modules.map((module) => module.id));
 
 const resolveModuleFromHash = (hashValue) => {
   const rawPath = (hashValue || "").replace(/^#/, "").trim();
-  const normalizedPath = rawPath.startsWith("/") ? rawPath : `/${rawPath}`;
+  const [pathOnly] = rawPath.split("?");
+  const basePath = pathOnly.replace(/\/+$/, "");
+  const normalizedPath = (basePath.startsWith("/") ? basePath : `/${basePath}`) || "/dashboard";
   return routeModuleMap[normalizedPath] || "dashboard";
 };
 
@@ -354,9 +357,20 @@ function App() {
   }, []);
 
   useEffect(() => {
-    const expectedHash = `#${moduleRouteMap[activeModule] || "/dashboard"}`;
-    if (window.location.hash !== expectedHash) {
-      window.history.replaceState(null, "", expectedHash);
+    if (!moduleIds.has(activeModule)) {
+      setActiveModule("dashboard");
+      return;
+    }
+
+    const rawHash = window.location.hash.replace(/^#/, "");
+    const [hashPath] = rawHash.split("?");
+    const normalizedHashPath =
+      (hashPath.startsWith("/") ? hashPath : `/${hashPath}`).replace(/\/+$/, "") ||
+      "/dashboard";
+    const expectedPath = moduleRouteMap[activeModule] || "/dashboard";
+
+    if (normalizedHashPath !== expectedPath) {
+      window.location.hash = expectedPath;
     }
   }, [activeModule]);
 
@@ -1039,9 +1053,10 @@ function App() {
                   type="button"
                   className="quick-link-card"
                   key={module.id}
+                  aria-label={`${module.title} modülüne git`}
                   onClick={() => handleModuleNavigation(module.id)}
                 >
-                  <span>{module.icon}</span>
+                  <span aria-hidden="true">{module.icon}</span>
                   <strong>{module.title}</strong>
                 </button>
               ))}
@@ -1718,9 +1733,29 @@ function App() {
 
   const renderSystems = () => (
     <div className="module-page">
-      {systemInventory.length === 0 && (
-        <p className="empty-state">Henüz veri bulunmuyor.</p>
-      )}
+      <div className="panel">
+        <div className="panel-header">
+          <h2>Sistem Envanteri</h2>
+        </div>
+
+        <div className="panel-content">
+          {systemInventory.length === 0 ? (
+            <p className="empty-state">Henüz veri bulunmuyor.</p>
+          ) : (
+            <div className="systems-grid">
+              {systemInventory.map((item, index) => (
+                <div
+                  className="system-card"
+                  key={item.id || `${item.name || "system"}-${index}`}
+                >
+                  <h3>{item.name || "Sistem Kaydı"}</h3>
+                  <p>{item.description || "Sistem detay açıklaması bulunmuyor."}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
 
       <div className="panel memory-panel">
         <div className="panel-header">
@@ -1906,7 +1941,7 @@ function App() {
           <div className="sidebar-footer">
             <div className="sidebar-system">
               <span className="status-dot"></span>
-              DDPro Core v1.0
+              DDPro Core v1.1
             </div>
           </div>
         </aside>
