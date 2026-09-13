@@ -221,18 +221,6 @@ const mergeOffers = (apiOffers, storedOffers) => {
 const EMPTY_ITEMS = Object.freeze([]);
 const LOCAL_ONLY_MODULE_MESSAGE =
   "Bu modül production API'ye bağlı değil. Bu sürümde yalnızca arayüz ve tarayıcı içi kayıt alanı hazır.";
-const INTEGRATION_PENDING_MODULES = new Set([
-  "products",
-  "systems",
-  "price-analysis",
-  "material-analysis",
-  "crm",
-  "documents",
-  "ai-assistant",
-  "finance",
-  "reports",
-  "settings",
-]);
 
 const getStoredData = (key, fallback = EMPTY_ITEMS) => {
   try {
@@ -861,40 +849,6 @@ function App() {
     }
   };
 
-  const moduleConnectionStates = useMemo(() => {
-    const states = {
-      projects: {
-        state: projectsFetchState,
-        message: projectsError,
-      },
-      procurement: {
-        state: procurementFetchState,
-        message: procurementError,
-      },
-      offers: {
-        state: offersFetchState,
-        message: offersError,
-      },
-    };
-
-    INTEGRATION_PENDING_MODULES.forEach((moduleId) => {
-      states[moduleId] = {
-        state: "planned",
-        message: LOCAL_ONLY_MODULE_MESSAGE,
-      };
-    });
-
-    return states;
-  }, [
-    offersError,
-    offersFetchState,
-    procurementError,
-    procurementFetchState,
-    projectsError,
-    projectsFetchState,
-  ]);
-
-  const currentModuleConnection = moduleConnectionStates[activeModule] || null;
   const headerStatusTone = getConnectionTone(apiHealthState.status);
   const headerStatusLabel =
     apiHealthState.status === "success"

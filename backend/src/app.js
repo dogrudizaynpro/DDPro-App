@@ -6,7 +6,7 @@ import { errorHandler } from "./middleware/errorHandler.js";
 import projectsRouter from "./routes/projects.routes.js";
 import researchRouter from "./routes/research.routes.js";
 import offersRouter from "./routes/offers.routes.js";
-import { isSupabaseAvailable } from "./config/supabase.js";
+import { getSupabaseClient, isSupabaseAvailable } from "./config/supabase.js";
 
 const app = express();
 
@@ -43,18 +43,57 @@ app.use("/api/offers", offersRouter);
 // HEALTH CHECK ENDPOINT
 // ============================================================
 
-app.get("/health", (req, res) => {
-  const databaseReady = isSupabaseAvailable();
+app.get("/health", async (req, res) => {
+  if (!isSupabaseAvailable()) {
+    return res.status(503).json({
+      status: "degraded",
+      service: "ddpro-backend",
+      database: {
+        provider: "supabase",
+        ready: false,
+      },
+      timestamp: new Date().toISOString(),
+    });
+  }
 
-  res.status(databaseReady ? 200 : 503).json({
-    status: databaseReady ? "ok" : "degraded",
-    service: "ddpro-backend",
-    database: {
-      provider: "supabase",
-      ready: databaseReady,
-    },
-    timestamp: new Date().toISOString(),
-  });
+  try {
+    const supabase = getSupabaseClient();
+    const { error } = await supabase
+      .from("projects")
+      .select("id", { head: true, count: "exact" });
+
+    if (error) {
+      return res.status(503).json({
+        status: "degraded",
+        service: "ddpro-backend",
+        database: {
+          provider: "supabase",
+          ready: false,
+        },
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    return res.status(200).json({
+      status: "ok",
+      service: "ddpro-backend",
+      database: {
+        provider: "supabase",
+        ready: true,
+      },
+      timestamp: new Date().toISOString(),
+    });
+  } catch {
+    return res.status(503).json({
+      status: "degraded",
+      service: "ddpro-backend",
+      database: {
+        provider: "supabase",
+        ready: false,
+      },
+      timestamp: new Date().toISOString(),
+    });
+  }
 });
 
 // ============================================================
