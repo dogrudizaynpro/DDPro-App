@@ -439,7 +439,8 @@ function App() {
     getApiHealth()
       .then((data) => {
         if (cancelled) return;
-        const databaseReady = data?.database?.ready !== false;
+        const databaseReady =
+          data?.status === "ok" && data?.database?.ready === true;
         setApiHealthState({
           status: databaseReady ? "success" : "warning",
           message: databaseReady
