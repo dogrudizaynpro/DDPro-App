@@ -199,6 +199,23 @@ export const mapOfferToViewModel = (offer = {}) => {
     createdAt,
     updatedAt,
     projectId: offer.project_id || offer.projectId || null,
+    projectName: offer.project_name || offer.projectName || null,
+    customerName: offer.customer_name || offer.customerName || null,
+    analysisItems: Array.isArray(offer.analysisItems)
+      ? offer.analysisItems
+      : [],
+    subtotalDisplay:
+      typeof offer.subtotalDisplay === "string" && offer.subtotalDisplay.trim()
+        ? offer.subtotalDisplay
+        : null,
+    vatDisplay:
+      typeof offer.vatDisplay === "string" && offer.vatDisplay.trim()
+        ? offer.vatDisplay
+        : null,
+    totalDisplay:
+      typeof offer.totalDisplay === "string" && offer.totalDisplay.trim()
+        ? offer.totalDisplay
+        : null,
     notes: offer.notes || "",
     source,
     raw: offer,

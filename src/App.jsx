@@ -30,85 +30,86 @@ const modules = [
       "Tüm DDPro operasyonlarını, kayıtları ve sistem hareketlerini tek merkezden takip et.",
   },
   {
-    id: "projects",
-    icon: "▣",
-    title: "Projeler",
-    short: "Proje Yönetimi",
+    id: "products",
+    icon: "◫",
+    title: "Ürünler",
+    short: "Ürün Yönetimi",
     description:
-      "Aktif projelerini oluştur, yönet, düzenle ve tüm süreçlerini merkezi olarak takip et.",
-  },
-  {
-    id: "research",
-    icon: "⌕",
-    title: "Tedarik & Araştırma",
-    short: "Araştırma Merkezi",
-    description:
-      "Ürün, malzeme, fiyat ve tedarikçi araştırmalarını merkezi araştırma havuzunda topla.",
-  },
-  {
-    id: "ai",
-    icon: "✦",
-    title: "DDPro AI",
-    short: "Yapay Zeka Sistemi",
-    description:
-      "Araştırma, analiz ve operasyon süreçlerinde yapay zeka destekli merkezi çalışma alanı.",
-  },
-  {
-    id: "offers",
-    icon: "€",
-    title: "Teklif Merkezi",
-    short: "Teklif Sistemi",
-    description:
-      "Tekliflerini oluştur, kayıt altına al, takip et ve proje süreçleriyle ilişkilendir.",
+      "Ürün listesi, filtreleme ve detay iskeleti ile ürün ana verisini yönet.",
   },
   {
     id: "systems",
     icon: "⚙",
     title: "Sistemler",
-    short: "Altyapı Merkezi",
+    short: "Sistem Yönetimi",
     description:
-      "DDPro altyapısı, entegrasyonlar, kayıtlar ve merkezi sistem bileşenlerini yönet.",
+      "Sistem listesi, sistem detayları ve bağlı ürün ilişkilerini takip et.",
+  },
+  {
+    id: "price-analysis",
+    icon: "₺",
+    title: "Fiyat Analizi",
+    short: "Bağımsız Analiz",
+    description:
+      "Fiyat analiz kalemlerini bağımsız analiz ekranında yönet.",
+  },
+  {
+    id: "material-analysis",
+    icon: "⎇",
+    title: "Malzeme Analizi",
+    short: "Bağımsız Analiz",
+    description:
+      "Malzeme ağacı ve maliyet kalemlerini bağımsız olarak yönet.",
+  },
+  {
+    id: "offers",
+    icon: "€",
+    title: "Teklifler",
+    short: "Teklif Sistemi",
+    description:
+      "Teklif listesi, yeni teklif iskeleti ve toplam alanlarını takip et.",
+  },
+  {
+    id: "projects",
+    icon: "▣",
+    title: "Projeler",
+    short: "Proje Yönetimi",
+    description:
+      "Proje listesi, proje detayı ve sistem/teklif ilişkilerini yönet.",
+  },
+  {
+    id: "crm",
+    icon: "☰",
+    title: "CRM",
+    short: "Müşteri Yönetimi",
+    description:
+      "Müşteri listesi ve müşteri-proje-teklif ilişkilerini takip et.",
   },
 ];
 
 const systemModules = [
   {
-    id: "project-system",
-    title: "Proje Sistemi",
+    id: "sys-001",
+    code: "SYS-001",
+    category: "Elektrik",
+    title: "Aydınlatma Altyapısı",
     description:
-      "Projelerin oluşturulması, merkezi takibi ve operasyon kayıtlarının yönetimi.",
+      "Aydınlatma grubu ve ana kontrol hattı sistemi.",
   },
   {
-    id: "research-system",
-    title: "Araştırma Sistemi",
+    id: "sys-002",
+    code: "SYS-002",
+    category: "Mekanik",
+    title: "İklimlendirme Hattı",
     description:
-      "Ürün, malzeme, fiyat ve tedarikçi araştırmalarının merkezi havuzda toplanması.",
-  },
-  {
-    id: "offer-system",
-    title: "Teklif Sistemi",
-    description:
-      "Teklif oluşturma, kayıt, takip ve proje süreçleriyle ilişkilendirme altyapısı.",
-  },
-  {
-    id: "ai-system",
-    title: "DDPro AI Sistemi",
-    description:
-      "Yapay zeka destekli analiz, araştırma ve karar süreçlerinin merkezi çalışma alanı.",
-  },
-  {
-    id: "memory-system",
-    title: "Merkezi Hafıza",
-    description:
-      "Önemli notların, kararların ve sistem bilgisinin kalıcı olarak merkezi hafızada tutulması.",
-  },
-  {
-    id: "integration-system",
-    title: "Entegrasyon Sistemi",
-    description:
-      "Harici servisler ve gelecekteki API bağlantıları için merkezi entegrasyon altyapısı.",
+      "Mekanik dağıtım ve iklimlendirme kontrol altyapısı.",
   },
 ];
+
+const moduleByRoute = modules.reduce((accumulator, module) => {
+  accumulator[module.id] = module.id;
+  return accumulator;
+}, {});
 
 const OFFER_STATUS_TONES = {
   Hazırlanıyor: "pending",
@@ -148,6 +149,29 @@ const isUuid = (value) =>
     value
   );
 
+const productsSeed = [
+  {
+    id: "prd-001",
+    name: "Panel Armatür",
+    productCode: "PRD-001",
+    systemCode: "SYS-001",
+    unit: "Adet",
+    status: "Aktif",
+  },
+  {
+    id: "prd-002",
+    name: "Kanal Tipi Klima",
+    productCode: "PRD-002",
+    systemCode: "SYS-002",
+    unit: "Adet",
+    status: "Taslak",
+  },
+];
+
+const priceAnalysisSeed = [];
+const materialAnalysisSeed = [];
+const crmCustomersSeed = [];
+
 const formatDate = () =>
   new Date().toLocaleString("tr-TR", {
     dateStyle: "short",
@@ -179,7 +203,17 @@ const getApiFailureReason = (error) => {
 };
 
 function App() {
-  const [activeModule, setActiveModule] = useState("dashboard");
+  const [activeModule, setActiveModule] = useState(() => {
+    const hashValue =
+      typeof window !== "undefined"
+        ? window.location.hash.replace(/^#/, "").trim()
+        : "";
+    return moduleByRoute[hashValue] || "dashboard";
+  });
+  const [productSearch, setProductSearch] = useState("");
+  const [productStatusFilter, setProductStatusFilter] = useState("Tümü");
+  const [selectedProductId, setSelectedProductId] = useState(null);
+  const [selectedSystemId, setSelectedSystemId] = useState(null);
 
   const [projects, setProjects] = useState(() =>
     getStoredData(STORAGE_KEYS.projects)
@@ -248,6 +282,9 @@ function App() {
 
   const [offerName, setOfferName] = useState("");
   const [offerAmount, setOfferAmount] = useState("");
+  const [offerCustomer, setOfferCustomer] = useState("");
+  const [offerProjectName, setOfferProjectName] = useState("");
+  const [offerAnalysisItems, setOfferAnalysisItems] = useState("");
   const [offerStatus, setOfferStatus] = useState("Hazırlanıyor");
 
   const [memoryTitle, setMemoryTitle] = useState("");
@@ -463,6 +500,31 @@ function App() {
   }, []);
 
   useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+
+    const applyHashModule = () => {
+      const hashValue = window.location.hash.replace(/^#/, "").trim();
+      const nextModule = moduleByRoute[hashValue] || "dashboard";
+      setActiveModule(nextModule);
+    };
+
+    window.addEventListener("hashchange", applyHashModule);
+    applyHashModule();
+
+    return () => {
+      window.removeEventListener("hashchange", applyHashModule);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const expectedHash = `#${activeModule}`;
+    if (window.location.hash !== expectedHash) {
+      window.location.hash = expectedHash;
+    }
+  }, [activeModule]);
+
+  useEffect(() => {
     localStorage.setItem(
       STORAGE_KEYS.memory,
       JSON.stringify(memoryItems)
@@ -550,20 +612,65 @@ function App() {
         ).length,
       },
       {
-        label: "ARAŞTIRMALAR",
-        value: researchItems.length,
+        label: "ÜRÜNLER",
+        value: productsSeed.length,
       },
       {
         label: "TEKLİFLER",
         value: offers.length,
       },
       {
-        label: "SİSTEM KAYITLARI",
-        value: systemLogs.length,
+        label: "SİSTEMLER",
+        value: systemModules.length,
       },
     ],
-    [projects, researchItems, offers, systemLogs]
+    [projects, offers]
   );
+
+  const filteredProducts = useMemo(
+    () =>
+      productsSeed.filter((product) => {
+        const search = productSearch.trim().toLowerCase();
+        const matchesSearch =
+          !search ||
+          [product.name, product.productCode, product.systemCode]
+            .join(" ")
+            .toLowerCase()
+            .includes(search);
+        const matchesStatus =
+          productStatusFilter === "Tümü" ||
+          product.status === productStatusFilter;
+        return matchesSearch && matchesStatus;
+      }),
+    [productSearch, productStatusFilter]
+  );
+
+  const selectedProduct =
+    filteredProducts.find((product) => product.id === selectedProductId) ||
+    filteredProducts[0] ||
+    null;
+
+  const selectedSystem =
+    systemModules.find((system) => system.id === selectedSystemId) ||
+    systemModules[0] ||
+    null;
+
+  useEffect(() => {
+    if (filteredProducts.length === 0) {
+      setSelectedProductId(null);
+      return;
+    }
+
+    if (!filteredProducts.some((product) => product.id === selectedProductId)) {
+      setSelectedProductId(filteredProducts[0].id);
+    }
+  }, [filteredProducts, selectedProductId]);
+
+  useEffect(() => {
+    if (!selectedSystemId && systemModules[0]) {
+      setSelectedSystemId(systemModules[0].id);
+    }
+  }, [selectedSystemId]);
 
   const createProject = (event) => {
     event.preventDefault();
@@ -658,6 +765,15 @@ function App() {
       status: offerStatus,
       statusRaw: offerStatus,
       date: formatDate(),
+      customerName: offerCustomer.trim() || null,
+      projectName: offerProjectName.trim() || null,
+      analysisItems: offerAnalysisItems
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean),
+      subtotalDisplay: offerAmount.trim() || null,
+      vatDisplay: null,
+      totalDisplay: offerAmount.trim() || null,
       source: "local",
     });
 
@@ -690,6 +806,9 @@ function App() {
 
     setOfferName("");
     setOfferAmount("");
+    setOfferCustomer("");
+    setOfferProjectName("");
+    setOfferAnalysisItems("");
     setOfferStatus("Hazırlanıyor");
     setShowOfferForm(false);
   };
@@ -893,20 +1012,200 @@ function App() {
 
           <div className="panel-content">
             <div className="quick-status">
-              <span>Proje Sistemi</span>
+              <span>Ürün Sistemi</span>
               <strong>Hazır</strong>
             </div>
             <div className="quick-status">
-              <span>Araştırma Sistemi</span>
+              <span>Fiyat Analizi</span>
               <strong>Hazır</strong>
             </div>
             <div className="quick-status">
-              <span>Teklif Sistemi</span>
+              <span>Malzeme Analizi</span>
               <strong>Hazır</strong>
             </div>
             <div className="quick-status">
-              <span>Merkezi Hafıza</span>
+              <span>CRM Sistemi</span>
               <strong>Hazır</strong>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderProducts = () => (
+    <div className="module-page">
+      <div className="module-toolbar split">
+        <input
+          type="search"
+          placeholder="Ürün adı / ürün kodu / sistem kodu ara"
+          value={productSearch}
+          onChange={(event) => setProductSearch(event.target.value)}
+        />
+        <select
+          value={productStatusFilter}
+          onChange={(event) => setProductStatusFilter(event.target.value)}
+        >
+          <option>Tümü</option>
+          <option>Aktif</option>
+          <option>Taslak</option>
+          <option>Pasif</option>
+        </select>
+      </div>
+
+      <div className="split-layout">
+        <div className="panel">
+          <div className="panel-header">
+            <h2>Ürün Listesi</h2>
+            <span className="panel-meta">{filteredProducts.length} kayıt</span>
+          </div>
+          <div className="panel-content">
+            {filteredProducts.length === 0 ? (
+              <p className="empty-state">Henüz veri bulunmuyor.</p>
+            ) : (
+              <div className="table-scroll">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Ürün</th>
+                      <th>Ürün Kodu</th>
+                      <th>Sistem</th>
+                      <th>Birim</th>
+                      <th>Durum</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredProducts.map((product) => (
+                      <tr key={product.id}>
+                        <td>{product.name}</td>
+                        <td>{product.productCode}</td>
+                        <td>{product.systemCode}</td>
+                        <td>{product.unit}</td>
+                        <td>{product.status}</td>
+                        <td>
+                          <button
+                            type="button"
+                            className="secondary-button"
+                            onClick={() => setSelectedProductId(product.id)}
+                          >
+                            Detay
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="panel">
+          <div className="panel-header">
+            <h2>Ürün Detay İskeleti</h2>
+          </div>
+          <div className="panel-content">
+            {!selectedProduct ? (
+              <p className="empty-state">Henüz veri bulunmuyor.</p>
+            ) : (
+              <div className="detail-grid">
+                <div className="offer-detail-item">
+                  <span>Ürün Kodu</span>
+                  <strong>{selectedProduct.productCode}</strong>
+                </div>
+                <div className="offer-detail-item">
+                  <span>Sistem İlişkisi</span>
+                  <strong>{selectedProduct.systemCode}</strong>
+                </div>
+                <div className="offer-detail-item">
+                  <span>Birim</span>
+                  <strong>{selectedProduct.unit}</strong>
+                </div>
+                <div className="offer-detail-item">
+                  <span>Durum</span>
+                  <strong>{selectedProduct.status}</strong>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderPriceAnalysis = () => (
+    <div className="module-page">
+      <div className="panel">
+        <div className="panel-header">
+          <h2>Bağımsız Fiyat Analiz Ekranı</h2>
+        </div>
+        <div className="panel-content">
+          <div className="table-scroll">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Analiz Kalemi</th>
+                  <th>Miktar</th>
+                  <th>Birim</th>
+                  <th>Birim Fiyat</th>
+                  <th>Katsayı</th>
+                  <th>Toplam</th>
+                </tr>
+              </thead>
+              <tbody>
+                {priceAnalysisSeed.length === 0 && (
+                  <tr>
+                    <td colSpan="6" className="empty-cell">
+                      Henüz veri bulunmuyor.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderMaterialAnalysis = () => (
+    <div className="module-page">
+      <div className="split-layout">
+        <div className="panel">
+          <div className="panel-header">
+            <h2>Bağımsız Malzeme Analiz Ekranı</h2>
+          </div>
+          <div className="panel-content">
+            <p className="empty-state">Malzeme ağacı için henüz veri bulunmuyor.</p>
+          </div>
+        </div>
+        <div className="panel">
+          <div className="panel-header">
+            <h2>Malzeme Maliyet Kalemleri</h2>
+          </div>
+          <div className="panel-content">
+            <div className="table-scroll">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Malzeme</th>
+                    <th>Miktar</th>
+                    <th>Birim</th>
+                    <th>Birim Maliyet</th>
+                    <th>Toplam Malzeme Maliyeti</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {materialAnalysisSeed.length === 0 && (
+                    <tr>
+                      <td colSpan="5" className="empty-cell">
+                        Henüz veri bulunmuyor.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
@@ -954,128 +1253,114 @@ function App() {
         </form>
       )}
 
-      <div className="data-list">
-        {projectsLoading ? (
-          <p className="empty-state">Projeler yükleniyor...</p>
-        ) : projects.length === 0 ? (
-          <p className="empty-state">Henüz proje kaydı bulunmuyor.</p>
-        ) : (
-          projects.map((project) => (
-            <div className="data-card" key={project.id}>
-              <div>
-                <h3>{project.name}</h3>
-                <p>{project.type}</p>
-                <small>
-                  {project.status} · {project.date}
-                </small>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => deleteProject(project.id)}
-              >
-                Sil
-              </button>
-            </div>
-          ))
-        )}
-      </div>
-    </div>
-  );
-
-  const renderResearch = () => (
-    <div className="module-page">
-      <div className="module-toolbar">
-        <button
-          type="button"
-          onClick={() => setShowResearchForm((value) => !value)}
-        >
-          {showResearchForm ? "Formu Kapat" : "+ Yeni Araştırma"}
-        </button>
-      </div>
-
-      {showResearchForm && (
-        <form className="data-form" onSubmit={createResearch}>
-          <input
-            type="text"
-            placeholder="Araştırma başlığı"
-            value={researchName}
-            onChange={(event) => setResearchName(event.target.value)}
-          />
-
-          <textarea
-            placeholder="Araştırma notu"
-            value={researchNote}
-            onChange={(event) => setResearchNote(event.target.value)}
-          />
-
-          <button type="submit">Araştırmayı Kaydet</button>
-        </form>
-      )}
-
-      {researchError && (
-        <p className="empty-state" style={{ color: "#f59e0b" }}>
-          ⚠ {researchError}
-        </p>
-      )}
-
-      <div className="data-list">
-        {researchLoading ? (
-          <p className="empty-state">Araştırmalar yükleniyor…</p>
-        ) : researchItems.length === 0 ? (
-          <p className="empty-state">
-            Henüz araştırma kaydı bulunmuyor.
-          </p>
-        ) : (
-          researchItems.map((item) => (
-            <div className="data-card" key={item.id}>
-              <div>
-                <h3>{item.name}</h3>
-                <p>{item.note}</p>
-                <small>{item.date}</small>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => deleteResearch(item.id)}
-              >
-                Sil
-              </button>
-            </div>
-          ))
-        )}
-      </div>
-    </div>
-  );
-
-  const renderAI = () => (
-    <div className="module-page ai-module">
-      <div className="ai-chat">
-        {aiMessages.map((message) => (
-          <div
-            key={message.id}
-            className={`ai-message ${message.role}`}
-          >
-            <strong>
-              {message.role === "assistant"
-                ? "DDPro AI"
-                : "Sen"}
-            </strong>
-            <p>{message.text}</p>
-            <small>{message.date}</small>
+      <div className="split-layout">
+        <div className="panel">
+          <div className="panel-header">
+            <h2>Proje Listesi</h2>
+            <span className="panel-meta">{projects.length} kayıt</span>
           </div>
-        ))}
+          <div className="panel-content">
+            {projectsLoading ? (
+              <p className="empty-state">Projeler yükleniyor...</p>
+            ) : projects.length === 0 ? (
+              <p className="empty-state">Henüz veri bulunmuyor.</p>
+            ) : (
+              <div className="data-list">
+                {projects.map((project) => (
+                  <div className="data-card" key={project.id}>
+                    <div>
+                      <h3>{project.name}</h3>
+                      <p>{project.type}</p>
+                      <small>
+                        {project.status} · {project.date}
+                      </small>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => deleteProject(project.id)}
+                    >
+                      Sil
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="panel">
+          <div className="panel-header">
+            <h2>Proje Detay</h2>
+          </div>
+          <div className="panel-content">
+            {projects.length === 0 ? (
+              <p className="empty-state">Henüz veri bulunmuyor.</p>
+            ) : (
+              <div className="detail-grid">
+                <div className="offer-detail-item">
+                  <span>Sistem İlişkileri</span>
+                  <strong>
+                    {systemModules.map((system) => system.code).join(", ")}
+                  </strong>
+                </div>
+                <div className="offer-detail-item">
+                  <span>Teklif İlişkileri</span>
+                  <strong>
+                    {offers.length > 0
+                      ? offers
+                          .slice(0, 3)
+                          .map((offer) => offer.title)
+                          .join(", ")
+                      : "Henüz veri bulunmuyor"}
+                  </strong>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
+    </div>
+  );
 
-      <form className="ai-form" onSubmit={sendAiMessage}>
-        <textarea
-          placeholder="DDPro AI için mesajını yaz..."
-          value={aiInput}
-          onChange={(event) => setAiInput(event.target.value)}
-        />
-
-        <button type="submit">Gönder</button>
-      </form>
+  const renderCrm = () => (
+    <div className="module-page">
+      <div className="split-layout">
+        <div className="panel">
+          <div className="panel-header">
+            <h2>Müşteri Listesi</h2>
+            <span className="panel-meta">{crmCustomersSeed.length} kayıt</span>
+          </div>
+          <div className="panel-content">
+            {crmCustomersSeed.length === 0 ? (
+              <p className="empty-state">Henüz veri bulunmuyor.</p>
+            ) : (
+              <div className="data-list"></div>
+            )}
+          </div>
+        </div>
+        <div className="panel">
+          <div className="panel-header">
+            <h2>Müşteri Detay</h2>
+          </div>
+          <div className="panel-content">
+            <div className="detail-grid">
+              <div className="offer-detail-item">
+                <span>İletişim Bilgileri</span>
+                <strong>Henüz veri bulunmuyor</strong>
+              </div>
+              <div className="offer-detail-item">
+                <span>Proje İlişkisi</span>
+                <strong>Henüz veri bulunmuyor</strong>
+              </div>
+              <div className="offer-detail-item">
+                <span>Teklif İlişkisi</span>
+                <strong>Henüz veri bulunmuyor</strong>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 
@@ -1137,6 +1422,26 @@ function App() {
             placeholder="Teklif tutarı"
             value={offerAmount}
             onChange={(event) => setOfferAmount(event.target.value)}
+          />
+
+          <input
+            type="text"
+            placeholder="Müşteri"
+            value={offerCustomer}
+            onChange={(event) => setOfferCustomer(event.target.value)}
+          />
+
+          <input
+            type="text"
+            placeholder="Proje"
+            value={offerProjectName}
+            onChange={(event) => setOfferProjectName(event.target.value)}
+          />
+
+          <textarea
+            placeholder="Analiz kalemleri (virgülle ayır)"
+            value={offerAnalysisItems}
+            onChange={(event) => setOfferAnalysisItems(event.target.value)}
           />
 
           <select
@@ -1297,30 +1602,66 @@ function App() {
 
                 <div className="offer-detail-grid">
                   <div className="offer-detail-item">
+                    <span>Müşteri</span>
+                    <strong>
+                      {selectedOfferDetail.customerName || "Henüz veri bulunmuyor"}
+                    </strong>
+                  </div>
+
+                  <div className="offer-detail-item">
+                    <span>Proje</span>
+                    <strong>
+                      {selectedOfferDetail.projectName ||
+                        selectedOfferDetail.projectId ||
+                        "Henüz veri bulunmuyor"}
+                    </strong>
+                  </div>
+
+                  <div className="offer-detail-item">
+                    <span>Analiz Kalemleri</span>
+                    <strong>
+                      {Array.isArray(selectedOfferDetail.analysisItems) &&
+                      selectedOfferDetail.analysisItems.length > 0
+                        ? selectedOfferDetail.analysisItems.join(", ")
+                        : "Henüz veri bulunmuyor"}
+                    </strong>
+                  </div>
+
+                  <div className="offer-detail-item">
+                    <span>Ara Toplam</span>
+                    <strong>
+                      {selectedOfferDetail.subtotalDisplay ||
+                        selectedOfferDetail.amountDisplay ||
+                        "Henüz veri bulunmuyor"}
+                    </strong>
+                  </div>
+
+                  <div className="offer-detail-item">
+                    <span>KDV</span>
+                    <strong>{selectedOfferDetail.vatDisplay || "Henüz veri bulunmuyor"}</strong>
+                  </div>
+
+                  <div className="offer-detail-item">
+                    <span>Genel Toplam</span>
+                    <strong>{selectedOfferDetail.totalDisplay || "Henüz veri bulunmuyor"}</strong>
+                  </div>
+
+                  <div className="offer-detail-item">
+                    <span>Durum</span>
+                    <strong>{selectedOfferDetail.status || "Henüz veri bulunmuyor"}</strong>
+                  </div>
+
+                  <div className="offer-detail-item">
+                    <span>Teklif Tarihi</span>
+                    <strong>{selectedOfferDetail.date || "Henüz veri bulunmuyor"}</strong>
+                  </div>
+
+                  <div className="offer-detail-item">
                     <span>Kaynak</span>
                     <strong>
                       {selectedOfferDetail.source === "api"
                         ? "Teklifler API"
                         : "Yerel taslak"}
-                    </strong>
-                  </div>
-
-                  <div className="offer-detail-item">
-                    <span>Teklif Tarihi</span>
-                    <strong>{selectedOfferDetail.date}</strong>
-                  </div>
-
-                  <div className="offer-detail-item">
-                    <span>Para Birimi</span>
-                    <strong>
-                      {selectedOfferDetail.currency || "Belirtilmedi"}
-                    </strong>
-                  </div>
-
-                  <div className="offer-detail-item">
-                    <span>Proje Bağlantısı</span>
-                    <strong>
-                      {selectedOfferDetail.projectId || "Atanmadı"}
                     </strong>
                   </div>
                 </div>
@@ -1342,94 +1683,66 @@ function App() {
 
   const renderSystems = () => (
     <div className="module-page">
-      <div className="systems-grid">
-        {systemModules.map((system) => (
-          <div className="system-card" key={system.id}>
-            <h3>{system.title}</h3>
-            <p>{system.description}</p>
+      <div className="split-layout">
+        <div className="panel">
+          <div className="panel-header">
+            <h2>Sistem Listesi</h2>
+            <span className="panel-meta">{systemModules.length} kayıt</span>
           </div>
-        ))}
-      </div>
-
-      <div className="panel memory-panel">
-        <div className="panel-header">
-          <h2>Merkezi Hafıza</h2>
-
-          <button
-            type="button"
-            onClick={() => setShowMemoryForm((value) => !value)}
-          >
-            {showMemoryForm ? "Kapat" : "+ Yeni Kayıt"}
-          </button>
-        </div>
-
-        {showMemoryForm && (
-          <form className="data-form" onSubmit={createMemory}>
-            <input
-              type="text"
-              placeholder="Hafıza başlığı"
-              value={memoryTitle}
-              onChange={(event) => setMemoryTitle(event.target.value)}
-            />
-
-            <textarea
-              placeholder="Hafıza içeriği"
-              value={memoryContent}
-              onChange={(event) => setMemoryContent(event.target.value)}
-            />
-
-            <button type="submit">Hafızaya Kaydet</button>
-          </form>
-        )}
-
-        <div className="data-list">
-          {memoryItems.length === 0 ? (
-            <p className="empty-state">
-              Merkezi hafızada henüz kayıt bulunmuyor.
-            </p>
-          ) : (
-            memoryItems.map((item) => (
-              <div className="data-card" key={item.id}>
-                <div>
-                  <h3>{item.title}</h3>
-                  <p>{item.content}</p>
-                  <small>{item.date}</small>
-                </div>
-
+          <div className="panel-content">
+            <div className="systems-grid">
+              {systemModules.map((system) => (
                 <button
+                  key={system.id}
                   type="button"
-                  onClick={() => deleteMemory(item.id)}
+                  className={`system-card${
+                    selectedSystem?.id === system.id ? " selected" : ""
+                  }`}
+                  onClick={() => setSelectedSystemId(system.id)}
                 >
-                  Sil
+                  <h3>{system.title}</h3>
+                  <p>{system.description}</p>
+                  <small>
+                    {system.code} · {system.category}
+                  </small>
                 </button>
-              </div>
-            ))
-          )}
-        </div>
-      </div>
-
-      <div className="panel">
-        <div className="panel-header">
-          <h2>Entegrasyonlar</h2>
-        </div>
-
-        <div className="data-list">
-          {integrations.map((item) => (
-            <div className="data-card" key={item.id}>
-              <div>
-                <h3>{item.name}</h3>
-                <p>{item.description}</p>
-                <small>Durum: {item.status}</small>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => toggleIntegration(item.id)}
-              >
-                {item.status === "Aktif" ? "Pasifleştir" : "Aktifleştir"}
-              </button>
+              ))}
             </div>
-          ))}
+          </div>
+        </div>
+
+        <div className="panel">
+          <div className="panel-header">
+            <h2>Sistem Detayı</h2>
+          </div>
+          <div className="panel-content">
+            {!selectedSystem ? (
+              <p className="empty-state">Henüz veri bulunmuyor.</p>
+            ) : (
+              <div className="detail-grid">
+                <div className="offer-detail-item">
+                  <span>Sistem Kodu</span>
+                  <strong>{selectedSystem.code}</strong>
+                </div>
+                <div className="offer-detail-item">
+                  <span>Kategori</span>
+                  <strong>{selectedSystem.category}</strong>
+                </div>
+                <div className="offer-detail-item full">
+                  <span>Bağlı Ürünler</span>
+                  <strong>
+                    {productsSeed
+                      .filter(
+                        (product) =>
+                          product.systemCode === selectedSystem.code
+                      )
+                      .map((product) => product.productCode)
+                      .join(", ") || "Henüz veri bulunmuyor"}
+                  </strong>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -1437,20 +1750,26 @@ function App() {
 
   const renderModule = () => {
     switch (activeModule) {
-      case "projects":
-        return renderProjects();
-
-      case "research":
-        return renderResearch();
-
-      case "ai":
-        return renderAI();
-
-      case "offers":
-        return renderOffers();
+      case "products":
+        return renderProducts();
 
       case "systems":
         return renderSystems();
+
+      case "price-analysis":
+        return renderPriceAnalysis();
+
+      case "material-analysis":
+        return renderMaterialAnalysis();
+
+      case "crm":
+        return renderCrm();
+
+      case "projects":
+        return renderProjects();
+
+      case "offers":
+        return renderOffers();
 
       case "dashboard":
       default:
