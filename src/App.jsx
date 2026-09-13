@@ -219,6 +219,9 @@ const getApiFailureReason = (error) => {
   return "Bilinmeyen hata";
 };
 
+const getErrorStatus = (error) =>
+  error?.status ?? error?.response?.status ?? error?.data?.statusCode ?? null;
+
 const prependUniqueRecord = (items, nextItem, matcher = () => false) => [
   nextItem,
   ...items.filter((item) => item.id !== nextItem.id && !matcher(item)),
@@ -739,7 +742,7 @@ function App() {
         addLog(`Proje API üzerinden silindi: ${project.name}`);
       }
     } catch (error) {
-      if (error.status === 404) {
+      if (getErrorStatus(error) === 404) {
         setProjectsError(null);
         setProjects((currentProjects) =>
           currentProjects.filter((item) => item.id !== id)
@@ -829,7 +832,7 @@ function App() {
         addLog(`Araştırma API üzerinden silindi: ${item.name}`);
       }
     } catch (error) {
-      if (error.status === 404) {
+      if (getErrorStatus(error) === 404) {
         setResearchError(null);
         setResearchItems((currentItems) =>
           currentItems.filter((research) => research.id !== id)
@@ -933,7 +936,7 @@ function App() {
     } catch (error) {
       console.warn("Teklif API üzerinden silinemedi:", error.message);
 
-      if (error.status === 404) {
+      if (getErrorStatus(error) === 404) {
         setOffers((currentOffers) =>
           currentOffers.filter((item) => item.id !== id)
         );
