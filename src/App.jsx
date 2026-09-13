@@ -270,6 +270,16 @@ const getModuleFromHash = (hash = "") => {
   return MODULE_IDS.has(moduleId) ? moduleId : DEFAULT_MODULE_ID;
 };
 
+const hasValidModuleHash = (hash = "") => {
+  const normalizedHash = String(hash)
+    .trim()
+    .replace(/^#\/?/, "")
+    .replace(/^\/+|\/+$/g, "");
+  const [moduleId] = normalizedHash.split("/");
+
+  return MODULE_IDS.has(moduleId);
+};
+
 const parseDecimalInput = (value) => {
   const normalized = String(value || "")
     .trim()
@@ -417,7 +427,7 @@ function App() {
       const nextModule = getModuleFromHash(window.location.hash);
       const nextHash = `#/${nextModule}`;
 
-      if (window.location.hash !== nextHash) {
+      if (!hasValidModuleHash(window.location.hash)) {
         window.history.replaceState(
           null,
           "",
@@ -767,6 +777,11 @@ function App() {
   );
 
   const openModule = (moduleId) => {
+    if (typeof window === "undefined") {
+      setActiveModule(moduleId);
+      return;
+    }
+
     if (typeof window !== "undefined") {
       const nextHash = `#/${moduleId}`;
 
@@ -774,8 +789,6 @@ function App() {
         window.location.hash = nextHash;
       }
     }
-
-    setActiveModule(moduleId);
   };
 
   const createProject = (event) => {
@@ -1032,6 +1045,7 @@ function App() {
       status: productForm.status,
       note: productForm.note.trim() || "Not eklenmedi.",
       date: existingProduct?.date || formatDate(),
+      updatedAt: editingProductId ? formatDate() : existingProduct?.updatedAt || null,
       source: "local",
     };
 
@@ -1104,6 +1118,7 @@ function App() {
       totalAmount,
       note: priceForm.note.trim() || "Not eklenmedi.",
       date: existingItem?.date || formatDate(),
+      updatedAt: editingPriceId ? formatDate() : existingItem?.updatedAt || null,
       source: "local",
     };
 
@@ -1170,6 +1185,8 @@ function App() {
       usageArea: materialForm.usageArea.trim() || "Kullanım alanı belirtilmedi",
       note: materialForm.note.trim() || "Not eklenmedi.",
       date: existingItem?.date || formatDate(),
+      updatedAt:
+        editingMaterialId ? formatDate() : existingItem?.updatedAt || null,
       source: "local",
     };
 
@@ -1232,6 +1249,7 @@ function App() {
       stage: crmForm.stage,
       note: crmForm.note.trim() || "Not eklenmedi.",
       date: existingItem?.date || formatDate(),
+      updatedAt: editingCrmId ? formatDate() : existingItem?.updatedAt || null,
       source: "local",
     };
 
@@ -1447,7 +1465,8 @@ function App() {
                 </p>
                 <p>{product.note}</p>
                 <small>
-                  {product.status} · {product.date}
+                  {product.status} · Oluşturma: {product.date}
+                  {product.updatedAt ? ` · Güncelleme: ${product.updatedAt}` : ""}
                 </small>
               </div>
 
@@ -1650,7 +1669,8 @@ function App() {
                 </p>
                 <p>{item.note}</p>
                 <small>
-                  Toplam: {item.totalAmount !== null ? formatCurrency(item.totalAmount) : "Hesaplanamadı"} · {item.date}
+                  Toplam: {item.totalAmount !== null ? formatCurrency(item.totalAmount) : "Hesaplanamadı"} · Oluşturma: {item.date}
+                  {item.updatedAt ? ` · Güncelleme: ${item.updatedAt}` : ""}
                 </small>
               </div>
 
@@ -1791,7 +1811,10 @@ function App() {
                   Kullanım: {item.usageArea} · Miktar: {item.quantity} {item.unit}
                 </p>
                 <p>{item.note}</p>
-                <small>{item.date}</small>
+                <small>
+                  Oluşturma: {item.date}
+                  {item.updatedAt ? ` · Güncelleme: ${item.updatedAt}` : ""}
+                </small>
               </div>
 
               <div className="data-card-actions">
@@ -2128,7 +2151,8 @@ function App() {
                 </p>
                 <p>{item.note}</p>
                 <small>
-                  {item.stage} · {item.date}
+                  {item.stage} · Oluşturma: {item.date}
+                  {item.updatedAt ? ` · Güncelleme: ${item.updatedAt}` : ""}
                 </small>
               </div>
 
