@@ -23,7 +23,7 @@ export default function HierarchyItemsEditor({ items, onAddItem, onRemoveItem, o
             const descendantIds = new Set(collectDescendantIds(items, item.id));
 
             return (
-            <div className="line-item-row material-row" key={item.id}>
+              <div className="line-item-row material-row" key={item.id}>
               <input
                 type="text"
                 placeholder="Malzeme adı"
@@ -72,7 +72,7 @@ export default function HierarchyItemsEditor({ items, onAddItem, onRemoveItem, o
               <button type="button" className="danger-button" onClick={() => onRemoveItem(item.id)}>
                 Kaldır
               </button>
-            </div>
+              </div>
             );
           })}
         </div>
