@@ -439,12 +439,12 @@ function App() {
     getApiHealth()
       .then((data) => {
         if (cancelled) return;
+        const databaseReady = data?.database?.ready !== false;
         setApiHealthState({
-          status: "success",
-          message:
-            data?.database?.ready === false
-              ? "Production backend yanıt veriyor ancak veritabanı hazır değil."
-              : "",
+          status: databaseReady ? "success" : "warning",
+          message: databaseReady
+            ? ""
+            : "Production backend yanıt veriyor ancak veritabanı hazır değil.",
         });
       })
       .catch((error) => {
