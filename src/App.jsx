@@ -219,6 +219,11 @@ const getApiFailureReason = (error) => {
   return "Bilinmeyen hata";
 };
 
+const prependUniqueRecord = (items, nextItem, matcher = () => false) => [
+  nextItem,
+  ...items.filter((item) => item.id !== nextItem.id && !matcher(item)),
+];
+
 function App() {
   const [activeModule, setActiveModule] = useState("dashboard");
 
@@ -680,10 +685,17 @@ function App() {
       const createdProject = await createProjectRequest(newProject);
       const nextProject = createdProject || newProject;
 
-      setProjects((currentProjects) => [
-        nextProject,
-        ...currentProjects,
-      ]);
+      setProjects((currentProjects) =>
+        prependUniqueRecord(
+          currentProjects,
+          nextProject,
+          (item) =>
+            item.source !== "api" &&
+            item.name === newProject.name &&
+            item.type === newProject.type &&
+            item.status === newProject.status
+        )
+      );
       addLog(`Yeni proje API üzerinden oluşturuldu: ${nextProject.name}`);
     } catch (error) {
       setProjects((currentProjects) => [
@@ -704,7 +716,7 @@ function App() {
     const project = projects.find((item) => item.id === id);
     projectsTouchedRef.current = true;
 
-    if (!isUuid(id)) {
+    if (project?.source !== "api") {
       setProjects((currentProjects) =>
         currentProjects.filter((item) => item.id !== id)
       );
@@ -762,10 +774,16 @@ function App() {
       const createdResearchItem = await createResearchItemRequest(newResearch);
       const nextResearchItem = createdResearchItem || newResearch;
 
-      setResearchItems((currentItems) => [
-        nextResearchItem,
-        ...currentItems,
-      ]);
+      setResearchItems((currentItems) =>
+        prependUniqueRecord(
+          currentItems,
+          nextResearchItem,
+          (item) =>
+            item.source !== "api" &&
+            item.name === newResearch.name &&
+            item.note === newResearch.note
+        )
+      );
       addLog(`Yeni araştırma API üzerinden oluşturuldu: ${nextResearchItem.name}`);
     } catch (error) {
       setResearchItems((currentItems) => [
@@ -787,7 +805,7 @@ function App() {
     );
     researchTouchedRef.current = true;
 
-    if (!isUuid(id)) {
+    if (item?.source !== "api") {
       setResearchItems((currentItems) =>
         currentItems.filter((research) => research.id !== id)
       );
@@ -879,7 +897,7 @@ function App() {
     const offer = offers.find((item) => item.id === id);
     offersTouchedRef.current = true;
 
-    if (!isUuid(id)) {
+    if (offer?.source !== "api") {
       setOffersError(null);
       setOffers((currentOffers) =>
         currentOffers.filter((item) => item.id !== id)
