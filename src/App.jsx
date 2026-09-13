@@ -427,11 +427,7 @@ function App() {
     const nextHash = `#/${activeModule}`;
 
     if (window.location.hash !== nextHash) {
-      window.history.replaceState(
-        null,
-        "",
-        `${window.location.pathname}${window.location.search}${nextHash}`
-      );
+      window.location.hash = nextHash;
     }
   }, [activeModule]);
 
@@ -1128,10 +1124,10 @@ function App() {
       title: item.title || "",
       materialName: item.materialName || "",
       specification: item.specification || "",
-      quantity: item.quantity || "",
-      unit: item.unit || "",
-      usageArea: item.usageArea || "",
-      note: item.note || "",
+      quantity: item.quantity ?? "",
+      unit: item.unit ?? "",
+      usageArea: item.usageArea ?? "",
+      note: item.note ?? "",
     });
     setEditingMaterialId(item.id);
     setShowMaterialForm(true);
