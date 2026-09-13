@@ -12,6 +12,7 @@ import {
 import { getResearchItems } from "./services/research.service.js";
 import {
   getModuleById,
+  getModuleIdFromHash,
   modules,
   placeholderModules,
   systemModules,
@@ -193,17 +194,17 @@ function App() {
         return;
       }
 
-      const matchedModule = modules.find(
-        (module) => module.path === window.location.hash
+      const nextModule = getModuleById(
+        getModuleIdFromHash(window.location.hash)
       );
 
-      if (!matchedModule) {
-        window.location.hash = modules[0].path;
-        setActiveModule(modules[0].id);
+      if (window.location.hash !== nextModule.path) {
+        window.location.hash = nextModule.path;
+        setActiveModule(nextModule.id);
         return;
       }
 
-      setActiveModule(matchedModule.id);
+      setActiveModule(nextModule.id);
     };
 
     window.addEventListener("hashchange", syncModuleFromHash);
@@ -979,7 +980,7 @@ function App() {
           </div>
 
           <div className="panel-content">
-            {offersLoading ? (
+            {offersFetchState === "loading" ? (
               <p className="empty-state">Teklifler yükleniyor...</p>
             ) : pendingOffers.length === 0 ? (
               <p className="empty-state">Bekleyen teklif bulunmuyor.</p>
