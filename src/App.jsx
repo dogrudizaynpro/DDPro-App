@@ -23,53 +23,139 @@ const STORAGE_KEYS = {
 const modules = [
   {
     id: "dashboard",
+    path: "#/dashboard",
     icon: "◉",
-    title: "Genel Bakış",
+    title: "Dashboard",
     short: "Sistem Merkezi",
     description:
-      "Tüm DDPro operasyonlarını, kayıtları ve sistem hareketlerini tek merkezden takip et.",
+      "Tüm DDPro operasyonlarını, kayıtları ve sistem durumunu tek merkezden takip et.",
   },
   {
     id: "projects",
+    path: "#/projeler",
     icon: "▣",
     title: "Projeler",
     short: "Proje Yönetimi",
     description:
-      "Aktif projelerini oluştur, yönet, düzenle ve tüm süreçlerini merkezi olarak takip et.",
+      "Aktif projelerini oluştur, yönet ve süreçlerini DDPro içinde merkezi olarak takip et.",
   },
   {
-    id: "research",
-    icon: "⌕",
-    title: "Tedarik & Araştırma",
-    short: "Araştırma Merkezi",
+    id: "products",
+    path: "#/urunler",
+    icon: "◫",
+    title: "Ürünler",
+    short: "Ürün Yönetimi",
     description:
-      "Ürün, malzeme, fiyat ve tedarikçi araştırmalarını merkezi araştırma havuzunda topla.",
+      "Ürün veri modeli için ayrılmış modül alanını bağımsız olarak yönet.",
   },
   {
-    id: "ai",
-    icon: "✦",
-    title: "DDPro AI",
-    short: "Yapay Zeka Sistemi",
+    id: "systems",
+    path: "#/sistemler",
+    icon: "⚙",
+    title: "Sistemler",
+    short: "Sistem Yönetimi",
     description:
-      "Araştırma, analiz ve operasyon süreçlerinde yapay zeka destekli merkezi çalışma alanı.",
+      "DDPro sistem bileşenlerini, merkezi hafızayı ve entegrasyon durumunu takip et.",
+  },
+  {
+    id: "price-analysis",
+    path: "#/fiyat-analizi",
+    icon: "₺",
+    title: "Fiyat Analizi",
+    short: "Fiyat İnceleme",
+    description:
+      "Fiyat analiz süreçleri için ayrılmış çalışma alanını ayrı modül yapısında yönet.",
+  },
+  {
+    id: "material-analysis",
+    path: "#/malzeme-analizi",
+    icon: "⬢",
+    title: "Malzeme Analizi",
+    short: "Malzeme İnceleme",
+    description:
+      "Malzeme analiz süreçlerini fiyat analizinden bağımsız modül yapısında takip et.",
   },
   {
     id: "offers",
+    path: "#/teklifler",
     icon: "€",
-    title: "Teklif Merkezi",
-    short: "Teklif Sistemi",
+    title: "Teklifler",
+    short: "Teklif Yönetimi",
     description:
       "Tekliflerini oluştur, kayıt altına al, takip et ve proje süreçleriyle ilişkilendir.",
   },
   {
-    id: "systems",
-    icon: "⚙",
-    title: "Sistemler",
-    short: "Altyapı Merkezi",
+    id: "customers",
+    path: "#/musteriler-crm",
+    icon: "☰",
+    title: "Müşteriler / CRM",
+    short: "İlişki Yönetimi",
     description:
-      "DDPro altyapısı, entegrasyonlar, kayıtlar ve merkezi sistem bileşenlerini yönet.",
+      "Müşteri ilişkileri ve CRM süreçleri için ayrılmış modül alanını yönet.",
+  },
+  {
+    id: "procurement",
+    path: "#/tedarik",
+    icon: "⌕",
+    title: "Tedarik",
+    short: "Araştırma Merkezi",
+    description:
+      "Tedarik ve araştırma kayıtlarını merkezi havuzda topla ve yönet.",
+  },
+  {
+    id: "documents",
+    path: "#/belgeler",
+    icon: "⎙",
+    title: "Belgeler",
+    short: "Doküman Yönetimi",
+    description:
+      "Doküman akışı için ayrılmış belge modülünü ortak DDPro layout içinde kullan.",
+  },
+  {
+    id: "ai",
+    path: "#/ai-asistan",
+    icon: "✦",
+    title: "AI Asistan",
+    short: "Yapay Zeka",
+    description:
+      "Araştırma, analiz ve operasyon süreçlerinde yapay zeka destekli çalışma alanını kullan.",
+  },
+  {
+    id: "finance",
+    path: "#/finans-maliyet",
+    icon: "◌",
+    title: "Finans / Maliyet",
+    short: "Finans Yönetimi",
+    description:
+      "Finans ve maliyet süreçleri için ayrılmış modül iskeletini yönet.",
+  },
+  {
+    id: "reports",
+    path: "#/raporlar",
+    icon: "▤",
+    title: "Raporlar",
+    short: "Raporlama",
+    description:
+      "Operasyon, teklif ve yönetim raporları için ayrılmış raporlama alanını kullan.",
+  },
+  {
+    id: "settings",
+    path: "#/ayarlar",
+    icon: "⋯",
+    title: "Ayarlar",
+    short: "Yapılandırma",
+    description:
+      "Uygulama ayarlarını, entegrasyonları ve merkezi yapılandırmaları tek ekranda yönet.",
   },
 ];
+
+const defaultModuleId = "dashboard";
+
+const getModuleById = (moduleId) =>
+  modules.find((module) => module.id === moduleId) || modules[0];
+
+const getModuleIdFromHash = (hash) =>
+  modules.find((module) => module.path === hash)?.id || defaultModuleId;
 
 const systemModules = [
   {
@@ -109,6 +195,184 @@ const systemModules = [
       "Harici servisler ve gelecekteki API bağlantıları için merkezi entegrasyon altyapısı.",
   },
 ];
+
+const placeholderModules = {
+  products: {
+    heading: "Ürün modülü iskeleti hazır",
+    badge: "Boş durum",
+    summary: [
+      {
+        title: "Bağımsız veri modeli",
+        description:
+          "Ürün alanı sistem kayıtlarından bağımsız tutulur ve ayrı veri kaynağına hazırlanır.",
+      },
+      {
+        title: "Liste görünümü",
+        description:
+          "Ürün listesi bu ekran için hazır; canlı veri bağlanana kadar boş durum korunur.",
+      },
+      {
+        title: "Operasyon sınırı",
+        description:
+          "Ürün alanı yalnızca ürün kayıtları için ayrılmıştır; sistem kartlarıyla karıştırılmaz.",
+      },
+    ],
+    emptyTitle: "Henüz ürün verisi bağlı değil",
+    emptyDescription:
+      "Ürün modülü ortak DDPro layout ve gerçek route içinde hazır. Backend veya merkezi veri akışı bağlandığında listeleme alanı bu yapı üzerinde açılacak.",
+    relatedModules: ["projects", "systems", "offers"],
+  },
+  "price-analysis": {
+    heading: "Fiyat analizi alanı hazır",
+    badge: "Ayrı modül",
+    summary: [
+      {
+        title: "Ayrı süreç",
+        description:
+          "Fiyat analizi modülü malzeme analizinden bağımsız tutulur ve kendi veri akışını bekler.",
+      },
+      {
+        title: "Karar katmanı",
+        description:
+          "Bu alan teklif ve tedarik kararlarını destekleyecek analiz çıktıları için ayrılmıştır.",
+      },
+      {
+        title: "Boş durum koruması",
+        description:
+          "Canlı backend olmadığı için sahte analiz verisi üretilmeden boş durum gösterilir.",
+      },
+    ],
+    emptyTitle: "Fiyat analizi veri kaynağı bekleniyor",
+    emptyDescription:
+      "Gerçek fiyat verisi bağlanana kadar bu modül yalnızca route ve layout içinde hazır tutulur.",
+    relatedModules: ["offers", "procurement", "finance"],
+  },
+  "material-analysis": {
+    heading: "Malzeme analizi alanı hazır",
+    badge: "Ayrı modül",
+    summary: [
+      {
+        title: "Malzeme odağı",
+        description:
+          "Bu modül malzeme seçimi, bileşen notları ve teknik analiz akışı için ayrılmıştır.",
+      },
+      {
+        title: "Fiyat analizinden ayrı",
+        description:
+          "Malzeme analiz ekranı fiyat analiz ekranından tamamen ayrı route ve sayfa yapısında tutulur.",
+      },
+      {
+        title: "Gerçek veri ilkesi",
+        description:
+          "Backend bulunmayan alanda sahte malzeme listesi yerine boş durum kullanılır.",
+      },
+    ],
+    emptyTitle: "Malzeme analizi veri kaynağı bekleniyor",
+    emptyDescription:
+      "Canlı malzeme verisi bağlandığında bu modül bağımsız veri modeliyle doldurulacak.",
+    relatedModules: ["products", "procurement", "systems"],
+  },
+  customers: {
+    heading: "CRM modülü iskeleti hazır",
+    badge: "Boş durum",
+    summary: [
+      {
+        title: "Müşteri odağı",
+        description:
+          "Müşteri temasları, hesaplar ve CRM süreçleri için ayrı bir çalışma alanı ayrıldı.",
+      },
+      {
+        title: "Route ve layout hazır",
+        description:
+          "Modül DDPro ana layout yapısı içinde çalışır ve navigasyondan erişilebilir durumdadır.",
+      },
+      {
+        title: "Merkezi akış koruması",
+        description:
+          "Mevcut proje, teklif ve tedarik veri akışlarına dokunulmadan modül boş durumda tutulur.",
+      },
+    ],
+    emptyTitle: "CRM verisi henüz bağlı değil",
+    emptyDescription:
+      "Müşteri ve CRM veri kaynağı bağlanana kadar bu ekran boş durum komponenti ile çalışır.",
+    relatedModules: ["projects", "offers", "documents"],
+  },
+  documents: {
+    heading: "Belge modülü iskeleti hazır",
+    badge: "Boş durum",
+    summary: [
+      {
+        title: "Doküman akışı",
+        description:
+          "Sözleşme, teklif eki ve operasyon dosyaları için ayrı belge çalışma alanı ayrıldı.",
+      },
+      {
+        title: "Profesyonel görünüm",
+        description:
+          "Belge modülü kart tabanlı DDPro yapısı içinde aynı tipografi ve boşluk sistemiyle sunulur.",
+      },
+      {
+        title: "Veri güvenliği",
+        description:
+          "Backend entegrasyonu hazır olmayınca sahte dosya kayıtları yerine boş durum korunur.",
+      },
+    ],
+    emptyTitle: "Henüz belge kaynağı bağlı değil",
+    emptyDescription:
+      "Belge servisi bağlandığında bu ekran liste, filtre ve detay alanlarını aynı layout içinde kullanacak.",
+    relatedModules: ["offers", "customers", "settings"],
+  },
+  finance: {
+    heading: "Finans / maliyet modülü hazır",
+    badge: "Boş durum",
+    summary: [
+      {
+        title: "Finans odağı",
+        description:
+          "Maliyet ve finans süreçleri için bağımsız modül alanı ayrıldı.",
+      },
+      {
+        title: "Teklif ilişkisi",
+        description:
+          "Teklif verileriyle ilişki kurulabilecek yapı korunur ancak yeni sahte maliyet verisi üretilmez.",
+      },
+      {
+        title: "Genişleme noktası",
+        description:
+          "Canlı finans servisleri bağlandığında aynı ekran kartları ve paneller genişletilebilir.",
+      },
+    ],
+    emptyTitle: "Finans verisi henüz bağlı değil",
+    emptyDescription:
+      "Bu modül canlı maliyet verisi veya backend servisi hazır olana kadar boş durumla çalışır.",
+    relatedModules: ["offers", "price-analysis", "reports"],
+  },
+  reports: {
+    heading: "Raporlama modülü hazır",
+    badge: "Boş durum",
+    summary: [
+      {
+        title: "Yönetim raporları",
+        description:
+          "Proje, teklif ve operasyon çıktıları için raporlama alanı bağımsız route olarak açıldı.",
+      },
+      {
+        title: "Ortak layout",
+        description:
+          "Rapor ekranı mevcut DDPro kart sistemi ve responsive yerleşimiyle aynı arayüzde çalışır.",
+      },
+      {
+        title: "Gerçek veri ilkesi",
+        description:
+          "Canlı rapor servisleri hazır olana kadar temsili rapor üretmek yerine boş durum korunur.",
+      },
+    ],
+    emptyTitle: "Rapor verisi henüz hazır değil",
+    emptyDescription:
+      "Gerçek rapor veri kaynağı bağlandığında bu ekran mevcut iskelet üzerinden genişletilecek.",
+    relatedModules: ["dashboard", "offers", "finance"],
+  },
+};
 
 const OFFER_STATUS_TONES = {
   Hazırlanıyor: "pending",
@@ -264,6 +528,44 @@ function App() {
       date: formatDate(),
     },
   ]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return undefined;
+    }
+
+    const syncModuleFromHash = () => {
+      const nextModuleId = getModuleIdFromHash(window.location.hash);
+      setActiveModule(nextModuleId);
+
+      if (!window.location.hash) {
+        window.history.replaceState(null, "", modules[0].path);
+      }
+    };
+
+    syncModuleFromHash();
+    window.addEventListener("hashchange", syncModuleFromHash);
+
+    return () => {
+      window.removeEventListener("hashchange", syncModuleFromHash);
+    };
+  }, []);
+
+  const navigateToModule = (moduleId) => {
+    if (typeof window === "undefined") {
+      setActiveModule(moduleId);
+      return;
+    }
+
+    const nextModule = getModuleById(moduleId);
+
+    if (window.location.hash === nextModule.path) {
+      setActiveModule(nextModule.id);
+      return;
+    }
+
+    window.location.hash = nextModule.path;
+  };
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.projects, JSON.stringify(projects));
@@ -427,26 +729,26 @@ function App() {
 
         if (researchTouchedRef.current) {
           addLog(
-            "Araştırmalarda yerel değişiklik algılandı, API yanıtı üzerine yazmadı."
+            "Tedarik kayıtlarında yerel değişiklik algılandı, API yanıtı üzerine yazmadı."
           );
           return;
         }
 
         if (apiResearchItems && apiResearchItems.length > 0) {
           setResearchItems(apiResearchItems);
-          addLog("Araştırmalar API üzerinden yüklendi.");
+          addLog("Tedarik kayıtları API üzerinden yüklendi.");
         } else {
           setResearchItems(localResearchItems);
-          addLog("Araştırmalar API boş döndü, yerel veriler kullanıldı.");
+          addLog("Tedarik API boş döndü, yerel veriler kullanıldı.");
         }
       } catch (error) {
         const reason = getApiFailureReason(error);
         if (!cancelled) {
           setResearchItems(localResearchItems);
           setResearchError(
-            `Araştırma API erişimi başarısız (${reason}). Yerel araştırma verileri gösteriliyor.`
+            `Tedarik API erişimi başarısız (${reason}). Yerel araştırma verileri gösteriliyor.`
           );
-          addLog(`Araştırmalar API bağlantı hatası: ${reason}. Yerel veriler kullanıldı.`);
+          addLog(`Tedarik API bağlantı hatası: ${reason}. Yerel veriler kullanıldı.`);
         }
       } finally {
         if (!cancelled) {
@@ -541,28 +843,89 @@ function App() {
     );
   };
 
+  const activeProjects = useMemo(
+    () => projects.filter((project) => project.status === "Aktif"),
+    [projects]
+  );
+
+  const pendingOffers = useMemo(
+    () =>
+      offers.filter(
+        (offer) => !["Onaylandı", "Reddedildi", "İptal"].includes(offer.status)
+      ),
+    [offers]
+  );
+
+  const activeIntegrations = useMemo(
+    () => integrations.filter((item) => item.status === "Aktif"),
+    [integrations]
+  );
+
   const dashboardStats = useMemo(
     () => [
       {
         label: "AKTİF PROJELER",
-        value: projects.filter(
-          (project) => project.status === "Aktif"
-        ).length,
+        value: activeProjects.length,
       },
       {
-        label: "ARAŞTIRMALAR",
-        value: researchItems.length,
+        label: "BEKLEYEN TEKLİFLER",
+        value: pendingOffers.length,
       },
       {
-        label: "TEKLİFLER",
-        value: offers.length,
+        label: "AKTİF ENTEGRASYON",
+        value: activeIntegrations.length,
       },
       {
-        label: "SİSTEM KAYITLARI",
+        label: "SON İŞLEM KAYDI",
         value: systemLogs.length,
       },
     ],
-    [projects, researchItems, offers, systemLogs]
+    [activeIntegrations.length, activeProjects.length, pendingOffers.length, systemLogs.length]
+  );
+
+  const dashboardSystemStatus = useMemo(
+    () => [
+      {
+        label: "Projeler veri akışı",
+        value: projectsLoading ? "Yükleniyor" : "Hazır",
+        tone: projectsLoading ? "loading" : "success",
+      },
+      {
+        label: "Tedarik veri akışı",
+        value: researchLoading ? "Yükleniyor" : researchError ? "Yerel mod" : "Hazır",
+        tone: researchLoading ? "loading" : researchError ? "warning" : "success",
+      },
+      {
+        label: "Teklif veri akışı",
+        value:
+          offersFetchState === "success"
+            ? "API bağlı"
+            : offersFetchState === "loading"
+              ? "Yükleniyor"
+              : offersFetchState === "empty"
+                ? "Boş veri"
+                : "Yerel mod",
+        tone:
+          offersFetchState === "success"
+            ? "success"
+            : offersFetchState === "loading"
+              ? "loading"
+              : offersFetchState === "empty"
+                ? "info"
+                : "warning",
+      },
+      {
+        label: "Yerel kayıt sistemi",
+        value: "Aktif",
+        tone: "success",
+      },
+    ],
+    [offersFetchState, projectsLoading, researchError, researchLoading]
+  );
+
+  const dashboardQuickAccess = useMemo(
+    () => modules.filter((module) => ["projects", "products", "offers", "procurement", "ai", "reports"].includes(module.id)),
+    []
   );
 
   const createProject = (event) => {
@@ -623,7 +986,7 @@ function App() {
       ...currentItems,
     ]);
 
-    addLog(`Yeni araştırma kaydı oluşturuldu: ${newResearch.name}`);
+    addLog(`Yeni tedarik kaydı oluşturuldu: ${newResearch.name}`);
 
     setResearchName("");
     setResearchNote("");
@@ -641,7 +1004,7 @@ function App() {
     );
 
     if (item) {
-      addLog(`Araştırma kaydı silindi: ${item.name}`);
+      addLog(`Tedarik kaydı silindi: ${item.name}`);
     }
   };
 
@@ -851,6 +1214,62 @@ function App() {
     setAiInput("");
   };
 
+  const renderPlaceholderModule = (config) => (
+    <div className="module-page">
+      <div className="module-shell-grid">
+        <div className="panel">
+          <div className="panel-header">
+            <h2>{config.heading}</h2>
+            <span className="panel-meta">{config.badge}</span>
+          </div>
+
+          <div className="panel-content">
+            <div className="module-overview-grid">
+              {config.summary.map((item) => (
+                <article className="module-overview-card" key={item.title}>
+                  <h3>{item.title}</h3>
+                  <p>{item.description}</p>
+                </article>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="panel">
+          <div className="panel-header">
+            <h2>{config.emptyTitle}</h2>
+          </div>
+
+          <div className="panel-content">
+            <div className="empty-state module-empty-state">
+              <strong>{config.emptyTitle}</strong>
+              <p>{config.emptyDescription}</p>
+            </div>
+
+            <div className="quick-access-grid compact">
+              {config.relatedModules.map((moduleId) => {
+                const module = getModuleById(moduleId);
+
+                return (
+                  <button
+                    key={module.id}
+                    type="button"
+                    className="quick-access-button"
+                    onClick={() => navigateToModule(module.id)}
+                  >
+                    <span>{module.icon}</span>
+                    <strong>{module.title}</strong>
+                    <small>{module.short}</small>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
   const renderDashboard = () => (
     <div className="dashboard-module">
       <div className="stats-grid">
@@ -862,17 +1281,108 @@ function App() {
         ))}
       </div>
 
-      <div className="dashboard-grid">
+      <div className="dashboard-panels-grid">
         <div className="panel">
           <div className="panel-header">
-            <h2>Son Sistem Hareketleri</h2>
+            <h2>Aktif Projeler</h2>
+            <span className="panel-meta">{activeProjects.length} kayıt</span>
+          </div>
+
+          <div className="panel-content">
+            {projectsLoading ? (
+              <p className="empty-state">Projeler yükleniyor...</p>
+            ) : activeProjects.length === 0 ? (
+              <p className="empty-state">Aktif proje bulunmuyor.</p>
+            ) : (
+              <div className="data-list compact-list">
+                {activeProjects.slice(0, 5).map((project) => (
+                  <article className="mini-data-card" key={project.id}>
+                    <div>
+                      <h3>{project.name}</h3>
+                      <p>{project.type}</p>
+                    </div>
+                    <small>{project.date}</small>
+                  </article>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="panel">
+          <div className="panel-header">
+            <h2>Bekleyen Teklifler</h2>
+            <span className="panel-meta">{pendingOffers.length} kayıt</span>
+          </div>
+
+          <div className="panel-content">
+            {offersLoading ? (
+              <p className="empty-state">Teklifler yükleniyor...</p>
+            ) : pendingOffers.length === 0 ? (
+              <p className="empty-state">Bekleyen teklif bulunmuyor.</p>
+            ) : (
+              <div className="data-list compact-list">
+                {pendingOffers.slice(0, 5).map((offer) => (
+                  <article className="mini-data-card" key={offer.id}>
+                    <div>
+                      <h3>{offer.title}</h3>
+                      <p>{offer.amountDisplay}</p>
+                    </div>
+                    <small>{offer.status}</small>
+                  </article>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="panel">
+          <div className="panel-header">
+            <h2>Ürün / Sistem Özeti</h2>
+          </div>
+
+          <div className="panel-content">
+            <div className="module-overview-grid dashboard-overview-grid">
+              <article className="module-overview-card">
+                <h3>Ürün modülü</h3>
+                <p>Ürün veri kaynağı henüz bağlı değil; ürün alanı sistemlerden bağımsız hazırlandı.</p>
+              </article>
+              <article className="module-overview-card">
+                <h3>Sistem modülleri</h3>
+                <p>{systemModules.length} sistem bileşeni ve {activeIntegrations.length} aktif entegrasyon takip ediliyor.</p>
+              </article>
+              <article className="module-overview-card">
+                <h3>Analiz ayrımı</h3>
+                <p>Fiyat Analizi ve Malzeme Analizi ayrı route ve bağımsız boş durum yapısıyla korunuyor.</p>
+              </article>
+            </div>
+          </div>
+        </div>
+
+        <div className="panel">
+          <div className="panel-header">
+            <h2>Sistem Durumu</h2>
+          </div>
+
+          <div className="panel-content">
+            {dashboardSystemStatus.map((item) => (
+              <div className="quick-status" key={item.label}>
+                <span>{item.label}</span>
+                <strong className={item.tone}>{item.value}</strong>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="panel panel-wide">
+          <div className="panel-header">
+            <h2>Son İşlemler</h2>
+            <span className="panel-meta">{systemLogs.length} kayıt</span>
           </div>
 
           <div className="panel-content">
             {systemLogs.length === 0 ? (
-              <p className="empty-state">
-                Henüz sistem kaydı bulunmuyor.
-              </p>
+              <p className="empty-state">Henüz sistem kaydı bulunmuyor.</p>
             ) : (
               <div className="log-list">
                 {systemLogs.slice(0, 8).map((log) => (
@@ -886,27 +1396,25 @@ function App() {
           </div>
         </div>
 
-        <div className="panel">
+        <div className="panel panel-wide">
           <div className="panel-header">
-            <h2>Hızlı Durum</h2>
+            <h2>Hızlı Erişim</h2>
           </div>
 
           <div className="panel-content">
-            <div className="quick-status">
-              <span>Proje Sistemi</span>
-              <strong>Hazır</strong>
-            </div>
-            <div className="quick-status">
-              <span>Araştırma Sistemi</span>
-              <strong>Hazır</strong>
-            </div>
-            <div className="quick-status">
-              <span>Teklif Sistemi</span>
-              <strong>Hazır</strong>
-            </div>
-            <div className="quick-status">
-              <span>Merkezi Hafıza</span>
-              <strong>Hazır</strong>
+            <div className="quick-access-grid">
+              {dashboardQuickAccess.map((module) => (
+                <button
+                  key={module.id}
+                  type="button"
+                  className="quick-access-button"
+                  onClick={() => navigateToModule(module.id)}
+                >
+                  <span>{module.icon}</span>
+                  <strong>{module.title}</strong>
+                  <small>{module.short}</small>
+                </button>
+              ))}
             </div>
           </div>
         </div>
@@ -990,7 +1498,7 @@ function App() {
           type="button"
           onClick={() => setShowResearchForm((value) => !value)}
         >
-          {showResearchForm ? "Formu Kapat" : "+ Yeni Araştırma"}
+          {showResearchForm ? "Formu Kapat" : "+ Yeni Tedarik Kaydı"}
         </button>
       </div>
 
@@ -998,18 +1506,18 @@ function App() {
         <form className="data-form" onSubmit={createResearch}>
           <input
             type="text"
-            placeholder="Araştırma başlığı"
+            placeholder="Tedarik / araştırma başlığı"
             value={researchName}
             onChange={(event) => setResearchName(event.target.value)}
           />
 
           <textarea
-            placeholder="Araştırma notu"
+            placeholder="Tedarik notu"
             value={researchNote}
             onChange={(event) => setResearchNote(event.target.value)}
           />
 
-          <button type="submit">Araştırmayı Kaydet</button>
+          <button type="submit">Kaydı Kaydet</button>
         </form>
       )}
 
@@ -1021,10 +1529,10 @@ function App() {
 
       <div className="data-list">
         {researchLoading ? (
-          <p className="empty-state">Araştırmalar yükleniyor…</p>
+          <p className="empty-state">Tedarik kayıtları yükleniyor…</p>
         ) : researchItems.length === 0 ? (
           <p className="empty-state">
-            Henüz araştırma kaydı bulunmuyor.
+            Henüz tedarik kaydı bulunmuyor.
           </p>
         ) : (
           researchItems.map((item) => (
@@ -1340,6 +1848,22 @@ function App() {
     </div>
   );
 
+  const renderProducts = () => renderPlaceholderModule(placeholderModules.products);
+
+  const renderPriceAnalysis = () =>
+    renderPlaceholderModule(placeholderModules["price-analysis"]);
+
+  const renderMaterialAnalysis = () =>
+    renderPlaceholderModule(placeholderModules["material-analysis"]);
+
+  const renderCustomers = () => renderPlaceholderModule(placeholderModules.customers);
+
+  const renderDocuments = () => renderPlaceholderModule(placeholderModules.documents);
+
+  const renderFinance = () => renderPlaceholderModule(placeholderModules.finance);
+
+  const renderReports = () => renderPlaceholderModule(placeholderModules.reports);
+
   const renderSystems = () => (
     <div className="module-page">
       <div className="systems-grid">
@@ -1435,22 +1959,136 @@ function App() {
     </div>
   );
 
+  const renderSettings = () => (
+    <div className="module-page">
+      <div className="module-shell-grid">
+        <div className="panel">
+          <div className="panel-header">
+            <h2>Uygulama Ayarları</h2>
+            <span className="panel-meta">{integrations.length} entegrasyon</span>
+          </div>
+
+          <div className="panel-content">
+            <div className="data-list">
+              {integrations.map((item) => (
+                <div className="data-card" key={item.id}>
+                  <div>
+                    <h3>{item.name}</h3>
+                    <p>{item.description}</p>
+                    <small>Durum: {item.status}</small>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => toggleIntegration(item.id)}
+                  >
+                    {item.status === "Aktif" ? "Pasifleştir" : "Aktifleştir"}
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="panel memory-panel">
+          <div className="panel-header">
+            <h2>Merkezi Hafıza</h2>
+            <button
+              type="button"
+              onClick={() => setShowMemoryForm((value) => !value)}
+            >
+              {showMemoryForm ? "Kapat" : "+ Yeni Kayıt"}
+            </button>
+          </div>
+
+          {showMemoryForm && (
+            <form className="data-form" onSubmit={createMemory}>
+              <input
+                type="text"
+                placeholder="Hafıza başlığı"
+                value={memoryTitle}
+                onChange={(event) => setMemoryTitle(event.target.value)}
+              />
+
+              <textarea
+                placeholder="Hafıza içeriği"
+                value={memoryContent}
+                onChange={(event) => setMemoryContent(event.target.value)}
+              />
+
+              <button type="submit">Hafızaya Kaydet</button>
+            </form>
+          )}
+
+          <div className="data-list">
+            {memoryItems.length === 0 ? (
+              <p className="empty-state">
+                Merkezi hafızada henüz kayıt bulunmuyor.
+              </p>
+            ) : (
+              memoryItems.map((item) => (
+                <div className="data-card" key={item.id}>
+                  <div>
+                    <h3>{item.title}</h3>
+                    <p>{item.content}</p>
+                    <small>{item.date}</small>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => deleteMemory(item.id)}
+                  >
+                    Sil
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
   const renderModule = () => {
     switch (activeModule) {
       case "projects":
         return renderProjects();
 
-      case "research":
-        return renderResearch();
+      case "products":
+        return renderProducts();
 
-      case "ai":
-        return renderAI();
+      case "systems":
+        return renderSystems();
+
+      case "price-analysis":
+        return renderPriceAnalysis();
+
+      case "material-analysis":
+        return renderMaterialAnalysis();
 
       case "offers":
         return renderOffers();
 
-      case "systems":
-        return renderSystems();
+      case "customers":
+        return renderCustomers();
+
+      case "procurement":
+        return renderResearch();
+
+      case "documents":
+        return renderDocuments();
+
+      case "ai":
+        return renderAI();
+
+      case "finance":
+        return renderFinance();
+
+      case "reports":
+        return renderReports();
+
+      case "settings":
+        return renderSettings();
 
       case "dashboard":
       default:
@@ -1458,9 +2096,7 @@ function App() {
     }
   };
 
-  const currentModule =
-    modules.find((module) => module.id === activeModule) ||
-    modules[0];
+  const currentModule = getModuleById(activeModule);
 
   return (
     <div className="ddpro-app">
@@ -1488,13 +2124,17 @@ function App() {
 
           <nav className="module-nav">
             {modules.map((module) => (
-              <button
+              <a
                 key={module.id}
-                type="button"
+                href={module.path}
                 className={`module-button ${
                   activeModule === module.id ? "active" : ""
                 }`}
-                onClick={() => setActiveModule(module.id)}
+                aria-current={activeModule === module.id ? "page" : undefined}
+                onClick={(event) => {
+                  event.preventDefault();
+                  navigateToModule(module.id);
+                }}
               >
                 <span className="module-icon">
                   {module.icon}
@@ -1504,7 +2144,7 @@ function App() {
                   <strong>{module.title}</strong>
                   <small>{module.short}</small>
                 </span>
-              </button>
+              </a>
             ))}
           </nav>
 

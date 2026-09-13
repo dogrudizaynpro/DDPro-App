@@ -259,6 +259,7 @@ select {
   background: transparent;
   color: #8498b2;
   text-align: left;
+  text-decoration: none;
   transition:
     background 0.2s ease,
     border-color 0.2s ease,
@@ -460,6 +461,17 @@ select {
   margin-top: 18px;
 }
 
+.dashboard-panels-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  margin-top: 18px;
+}
+
+.panel-wide {
+  grid-column: 1 / -1;
+}
+
 /* =========================================================
    PANELS
 ========================================================= */
@@ -606,6 +618,31 @@ select {
   border-radius: 50%;
   background: #46c880;
 }
+
+.quick-status strong.loading {
+  color: #9dc4ff;
+}
+
+.quick-status strong.loading::before {
+  background: #4c93ff;
+}
+
+.quick-status strong.warning {
+  color: #f6c677;
+}
+
+.quick-status strong.warning::before {
+  background: #f59e0b;
+}
+
+.quick-status strong.info {
+  color: #9bddf5;
+}
+
+.quick-status strong.info::before {
+  background: #38bdf8;
+}
+
 
 /* =========================================================
    MODULE PAGES
@@ -1149,6 +1186,106 @@ select {
   line-height: 1.65;
 }
 
+.compact-list {
+  gap: 10px;
+}
+
+.mini-data-card,
+.module-overview-card,
+.quick-access-button {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.1);
+  border-radius: 15px;
+  background: rgba(5, 14, 26, 0.38);
+}
+
+.mini-data-card h3,
+.module-overview-card h3,
+.quick-access-button strong {
+  margin: 0;
+  color: #edf3ff;
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.mini-data-card p,
+.module-overview-card p,
+.module-empty-state p {
+  margin: 8px 0 0;
+  color: #88a0bc;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.mini-data-card small {
+  display: block;
+  margin-top: 12px;
+  color: #60738d;
+  font-size: 10px;
+}
+
+.module-shell-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.module-overview-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.dashboard-overview-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.module-empty-state {
+  text-align: left;
+}
+
+.module-empty-state strong {
+  display: block;
+  color: #edf3ff;
+  font-size: 13px;
+  font-weight: 760;
+}
+
+.quick-access-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.quick-access-grid.compact {
+  margin-top: 16px;
+}
+
+.quick-access-button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  text-align: left;
+  transition: border-color 0.2s ease, transform 0.2s ease;
+}
+
+.quick-access-button:hover {
+  border-color: rgba(76, 147, 255, 0.22);
+  transform: translateY(-1px);
+}
+
+.quick-access-button span {
+  color: #91bdfc;
+  font-size: 18px;
+}
+
+.quick-access-button small {
+  color: #61758f;
+  font-size: 10px;
+}
+
 .module-page > .panel {
   margin-top: 18px;
 }
@@ -1292,6 +1429,17 @@ select {
   .dashboard-grid {
     grid-template-columns: 1fr;
   }
+
+  .dashboard-panels-grid,
+  .module-shell-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .module-overview-grid,
+  .dashboard-overview-grid,
+  .quick-access-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 /* =========================================================
@@ -1370,6 +1518,12 @@ select {
   .offer-detail-grid {
     grid-template-columns: 1fr;
   }
+
+  .module-overview-grid,
+  .dashboard-overview-grid,
+  .quick-access-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* =========================================================
@@ -1422,7 +1576,12 @@ select {
 
   .stats-grid,
   .systems-grid,
-  .offers-summary-grid {
+  .offers-summary-grid,
+  .dashboard-panels-grid,
+  .module-shell-grid,
+  .module-overview-grid,
+  .dashboard-overview-grid,
+  .quick-access-grid {
     grid-template-columns: 1fr;
   }
 
