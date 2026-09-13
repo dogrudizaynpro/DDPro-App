@@ -950,6 +950,10 @@ function App() {
 
     const now = new Date().toISOString();
     const previousProject = projectDrafts.find((item) => item.id === projectForm.id);
+    const editableOfferIds = new Set(offerDrafts.map((offer) => offer.id));
+    const removedEditableOfferIds = (previousProject?.offerIds || []).filter(
+      (offerId) => editableOfferIds.has(offerId) && !projectForm.offerIds.includes(offerId)
+    );
     const nextRecord = normalizeProject({
       ...projectForm,
       id: projectForm.id || createLocalId('project'),
@@ -974,7 +978,7 @@ function App() {
           });
         }
 
-        if (offer.projectId === nextRecord.id) {
+        if (removedEditableOfferIds.includes(offer.id)) {
           return normalizeOffer({
             ...offer,
             projectId: '',
@@ -1017,6 +1021,7 @@ function App() {
     }
 
     const now = new Date().toISOString();
+    const previousOffer = offerDrafts.find((item) => item.id === offerForm.id);
     const nextRecord = normalizeOffer({
       ...offerForm,
       customerId: derivedCustomerId,
@@ -1030,6 +1035,24 @@ function App() {
 
     setOfferDrafts((current) =>
       sortByRecent(offerForm.id ? current.map((item) => (item.id === nextRecord.id ? nextRecord : item)) : [nextRecord, ...current])
+    );
+    setProjectDrafts((current) =>
+      current.map((project) => {
+        const nextOfferIds = project.offerIds.filter((offerId) => offerId !== nextRecord.id);
+
+        if (project.id === nextRecord.projectId) {
+          return normalizeProject({
+            ...project,
+            offerIds: nextOfferIds.includes(nextRecord.id) ? nextOfferIds : [...nextOfferIds, nextRecord.id],
+          });
+        }
+
+        if (previousOffer?.projectId === project.id) {
+          return normalizeProject({ ...project, offerIds: nextOfferIds });
+        }
+
+        return project;
+      })
     );
     setSelectedOfferId(nextRecord.id);
     setShowOfferForm(false);
@@ -1509,11 +1532,12 @@ function App() {
           <div className="toolbar-search-grid">
             <input
               type="search"
+              aria-label="Ürün ara"
               placeholder="Ürün ara"
               value={productSearch}
               onChange={(event) => setProductSearch(event.target.value)}
             />
-            <select value={productStatusFilter} onChange={(event) => setProductStatusFilter(event.target.value)}>
+            <select aria-label="Ürün durum filtresi" value={productStatusFilter} onChange={(event) => setProductStatusFilter(event.target.value)}>
               <option>Tümü</option>
               <option>Aktif</option>
               <option>Pasif</option>
@@ -1529,20 +1553,20 @@ function App() {
 
         {showProductForm && (
           <form className="data-form" onSubmit={handleSaveProduct}>
-            <input type="text" placeholder="Ürün adı" value={productForm.name} onChange={(event) => setProductForm((current) => ({ ...current, name: event.target.value }))} />
-            <input type="text" placeholder="Ürün kodu" value={productForm.code} onChange={(event) => setProductForm((current) => ({ ...current, code: event.target.value }))} />
-            <input type="text" placeholder="Birim" value={productForm.unit} onChange={(event) => setProductForm((current) => ({ ...current, unit: event.target.value }))} />
-            <select value={productForm.systemId} onChange={(event) => setProductForm((current) => ({ ...current, systemId: event.target.value }))}>
+            <input type="text" aria-label="Ürün adı" placeholder="Ürün adı" value={productForm.name} onChange={(event) => setProductForm((current) => ({ ...current, name: event.target.value }))} />
+            <input type="text" aria-label="Ürün kodu" placeholder="Ürün kodu" value={productForm.code} onChange={(event) => setProductForm((current) => ({ ...current, code: event.target.value }))} />
+            <input type="text" aria-label="Ürün birimi" placeholder="Birim" value={productForm.unit} onChange={(event) => setProductForm((current) => ({ ...current, unit: event.target.value }))} />
+            <select aria-label="Bağlı sistem" value={productForm.systemId} onChange={(event) => setProductForm((current) => ({ ...current, systemId: event.target.value }))}>
               <option value="">Sistem bağlantısı yok</option>
               {systems.map((item) => (
                 <option key={item.id} value={item.id}>{item.name}</option>
               ))}
             </select>
-            <select value={productForm.status} onChange={(event) => setProductForm((current) => ({ ...current, status: event.target.value }))}>
+            <select aria-label="Ürün durumu" value={productForm.status} onChange={(event) => setProductForm((current) => ({ ...current, status: event.target.value }))}>
               <option>Aktif</option>
               <option>Pasif</option>
             </select>
-            <textarea placeholder="Ürün açıklaması" value={productForm.description} onChange={(event) => setProductForm((current) => ({ ...current, description: event.target.value }))} />
+            <textarea aria-label="Ürün açıklaması" placeholder="Ürün açıklaması" value={productForm.description} onChange={(event) => setProductForm((current) => ({ ...current, description: event.target.value }))} />
             {productFormError ? <p className="form-error">{productFormError}</p> : null}
             <button type="submit">{productForm.id ? 'Ürünü Güncelle' : 'Ürünü Kaydet'}</button>
           </form>
@@ -1613,8 +1637,8 @@ function App() {
       <div className="module-page">
         {renderToolbar(
           <div className="toolbar-search-grid">
-            <input type="search" placeholder="Sistem ara" value={systemSearch} onChange={(event) => setSystemSearch(event.target.value)} />
-            <select value={systemCategoryFilter} onChange={(event) => setSystemCategoryFilter(event.target.value)}>
+            <input type="search" aria-label="Sistem ara" placeholder="Sistem ara" value={systemSearch} onChange={(event) => setSystemSearch(event.target.value)} />
+            <select aria-label="Sistem kategori filtresi" value={systemCategoryFilter} onChange={(event) => setSystemCategoryFilter(event.target.value)}>
               {uniqueSystemCategories.map((category) => (
                 <option key={category}>{category}</option>
               ))}
@@ -1918,7 +1942,7 @@ function App() {
       <div className="module-page">
         {renderToolbar(
           <div className="toolbar-search-grid">
-            <input type="search" placeholder="Teklif ara" value={offerSearch} onChange={(event) => setOfferSearch(event.target.value)} />
+            <input type="search" aria-label="Teklif ara" placeholder="Teklif ara" value={offerSearch} onChange={(event) => setOfferSearch(event.target.value)} />
             <StatusPill live tone={offersFetchState === 'success' ? 'success' : offersFetchState === 'loading' ? 'info' : offersFetchState === 'empty' ? 'neutral' : 'warning'}>
               {offersFetchState === 'success' ? 'API bağlı' : offersFetchState === 'loading' ? 'API yükleniyor' : offersFetchState === 'empty' ? 'API boş veri' : 'API hatası'}
             </StatusPill>
@@ -2052,7 +2076,7 @@ function App() {
       <div className="module-page">
         {renderToolbar(
           <div className="toolbar-search-grid">
-            <input type="search" placeholder="Proje ara" value={projectSearch} onChange={(event) => setProjectSearch(event.target.value)} />
+            <input type="search" aria-label="Proje ara" placeholder="Proje ara" value={projectSearch} onChange={(event) => setProjectSearch(event.target.value)} />
             <StatusPill live tone={projectsFetchState === 'success' ? 'success' : projectsFetchState === 'loading' ? 'info' : projectsFetchState === 'empty' ? 'neutral' : 'warning'}>
               {projectsFetchState === 'success' ? 'API proje listesi hazır' : projectsFetchState === 'loading' ? 'API yükleniyor' : projectsFetchState === 'empty' ? 'API boş veri' : 'API hatası'}
             </StatusPill>
@@ -2170,7 +2194,7 @@ function App() {
       <div className="module-page">
         {renderToolbar(
           <div className="toolbar-search-grid">
-            <input type="search" placeholder="Müşteri ara" value={customerSearch} onChange={(event) => setCustomerSearch(event.target.value)} />
+            <input type="search" aria-label="Müşteri ara" placeholder="Müşteri ara" value={customerSearch} onChange={(event) => setCustomerSearch(event.target.value)} />
             <StatusPill tone="info">{LOCAL_ONLY_MODULE_NOTE}</StatusPill>
           </div>,
           <button type="button" onClick={() => { setShowCustomerForm((value) => !value); setCustomerForm(emptyCustomerForm()); }}>

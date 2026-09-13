@@ -19,7 +19,10 @@ export default function HierarchyItemsEditor({ items, onAddItem, onRemoveItem, o
         <div className="line-items-empty">Henüz malzeme eklenmedi.</div>
       ) : (
         <div className="line-items-table">
-          {items.map((item, index) => (
+          {items.map((item, index) => {
+            const descendantIds = new Set(collectDescendantIds(items, item.id));
+
+            return (
             <div className="line-item-row material-row" key={item.id}>
               <input
                 type="text"
@@ -33,7 +36,7 @@ export default function HierarchyItemsEditor({ items, onAddItem, onRemoveItem, o
               >
                 <option value="">Ana düğüm</option>
                 {items
-                  .filter((candidate) => candidate.id !== item.id && !collectDescendantIds(items, item.id).includes(candidate.id))
+                  .filter((candidate) => candidate.id !== item.id && !descendantIds.has(candidate.id))
                   .map((candidate) => (
                     <option key={candidate.id} value={candidate.id}>
                       {candidate.name || `Malzeme ${index + 1}`}
@@ -70,7 +73,8 @@ export default function HierarchyItemsEditor({ items, onAddItem, onRemoveItem, o
                 Kaldır
               </button>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
