@@ -11,6 +11,7 @@ import {
   deleteOffer,
   getOfferById,
   getOffers,
+  updateOffer,
 } from "../controllers/offers.controller.js";
 
 const router = express.Router();
@@ -27,6 +28,9 @@ router.get("/:id", getOfferById);
 
 // POST / - Create new offer
 router.post("/", createOffer);
+
+// PUT /:id - Update offer by ID
+router.put("/:id", updateOffer);
 
 // DELETE /:id - Delete offer by ID
 router.delete("/:id", deleteOffer);

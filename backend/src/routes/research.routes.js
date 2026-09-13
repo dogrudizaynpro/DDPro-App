@@ -6,7 +6,13 @@
 // ============================================================
 
 import express from "express";
-import { getResearchItems, getResearchItemById } from "../controllers/research.controller.js";
+import {
+  createResearchItem,
+  deleteResearchItem,
+  getResearchItemById,
+  getResearchItems,
+  updateResearchItem,
+} from "../controllers/research.controller.js";
 
 const router = express.Router();
 
@@ -19,5 +25,14 @@ router.get("/", getResearchItems);
 
 // GET /:id - Get research item by ID
 router.get("/:id", getResearchItemById);
+
+// POST / - Create research item
+router.post("/", createResearchItem);
+
+// PUT /:id - Update research item
+router.put("/:id", updateResearchItem);
+
+// DELETE /:id - Delete research item
+router.delete("/:id", deleteResearchItem);
 
 export default router;

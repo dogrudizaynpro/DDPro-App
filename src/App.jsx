@@ -1,5 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { getProjects } from "./services/projects.service.js";
+import {
+  createProject as createProjectRequest,
+  deleteProject as deleteProjectRequest,
+  getProjects,
+} from "./services/projects.service.js";
 import "./styles.css";
 import {
   createOffer as createOfferRequest,
@@ -9,7 +13,12 @@ import {
   mapOfferToViewModel,
   mapOffersToViewModel,
 } from "./services/offers.service.js";
-import { getResearchItems } from "./services/research.service.js";
+import { API_CONFIGURATION_ERROR } from "./services/api.js";
+import {
+  createResearchItem as createResearchItemRequest,
+  deleteResearchItem as deleteResearchItemRequest,
+  getResearchItems,
+} from "./services/research.service.js";
 
 const STORAGE_KEYS = {
   projects: "ddpro_projects_v1",
@@ -46,6 +55,22 @@ const modules = [
       "Ürün, malzeme, fiyat ve tedarikçi araştırmalarını merkezi araştırma havuzunda topla.",
   },
   {
+    id: "documents",
+    icon: "▤",
+    title: "Belgeler",
+    short: "Belge Yönetimi",
+    description:
+      "Belge, sözleşme ve dosya akışlarının merkezi olarak yönetileceği alan.",
+  },
+  {
+    id: "crm",
+    icon: "☍",
+    title: "Müşteri & İş Takibi",
+    short: "CRM Merkezi",
+    description:
+      "Müşteri ilişkileri, iş fırsatları ve takip süreçlerinin yönetim alanı.",
+  },
+  {
     id: "ai",
     icon: "✦",
     title: "DDPro AI",
@@ -60,6 +85,22 @@ const modules = [
     short: "Teklif Sistemi",
     description:
       "Tekliflerini oluştur, kayıt altına al, takip et ve proje süreçleriyle ilişkilendir.",
+  },
+  {
+    id: "finance",
+    icon: "∑",
+    title: "Finans & Maliyet",
+    short: "Finans Kontrol",
+    description:
+      "Maliyet, fiyatlandırma ve ticari hesaplamaların güvenli olarak yönetileceği modül.",
+  },
+  {
+    id: "reporting",
+    icon: "▦",
+    title: "Raporlama",
+    short: "Rapor Merkezi",
+    description:
+      "Operasyon, finans ve teklif çıktılarının izlenebilir raporlara dönüştürüleceği alan.",
   },
   {
     id: "systems",
@@ -186,6 +227,7 @@ function App() {
   );
 
   const [projectsLoading, setProjectsLoading] = useState(true);
+  const [projectsError, setProjectsError] = useState(null);
 
   const [researchItems, setResearchItems] = useState(() =>
     getStoredData(STORAGE_KEYS.research)
@@ -222,14 +264,14 @@ function App() {
       {
         id: "ddpro-core",
         name: "DDPro Core",
-        status: "Aktif",
-        description: "Merkezi uygulama ve veri yönetim katmanı.",
+        status: "Yerel",
+        description: "Merkezi uygulama katmanı; canlı entegrasyon henüz tanımlı değil.",
       },
       {
         id: "local-storage",
-        name: "Local Storage",
-        status: "Aktif",
-        description: "Tarayıcı içi kalıcı kayıt sistemi.",
+        name: "Tarayıcı Depolaması",
+        status: "Yerel",
+        description: "API erişimi olmadığında kullanılan tarayıcı içi kayıt yedeği.",
       },
     ])
   );
@@ -489,6 +531,7 @@ function App() {
     const fetchProjectsFromApi = async () => {
       const localProjects = getStoredData(STORAGE_KEYS.projects);
       setProjectsLoading(true);
+    setProjectsError(null);
 
       try {
         const apiProjects = await getProjects();
@@ -513,6 +556,9 @@ function App() {
         const reason = getApiFailureReason(error);
         if (!cancelled) {
           setProjects(localProjects);
+          setProjectsError(
+            `Proje API erişimi başarısız (${reason}). Yerel proje verileri gösteriliyor.`
+          );
           addLog(`Projelerde API bağlantı hatası: ${reason}. Yerel veriler kullanıldı.`);
         }
       } finally {
@@ -565,7 +611,56 @@ function App() {
     [projects, researchItems, offers, systemLogs]
   );
 
-  const createProject = (event) => {
+  const quickStatusItems = useMemo(
+    () => [
+      {
+        label: "Proje Sistemi",
+        value: projectsError ? "Yerel Yedek" : "API / Yerel",
+      },
+      {
+        label: "Araştırma Sistemi",
+        value: researchError ? "Yerel Yedek" : "API / Yerel",
+      },
+      {
+        label: "Teklif Sistemi",
+        value:
+          offersFetchState === "success"
+            ? "API Bağlı"
+            : offersFetchState === "loading"
+              ? "Kontrol Ediliyor"
+              : "Kısıtlı",
+      },
+      {
+        label: "AI Katmanı",
+        value: "Canlı Entegrasyon Yok",
+      },
+    ],
+    [offersFetchState, projectsError, researchError]
+  );
+
+  const unavailableModules = useMemo(
+    () => ({
+      documents: [
+        "Canlı belge API endpoint'i bulunmuyor.",
+        "Veritabanında belge modeli ve migration akışı tanımlı değil.",
+      ],
+      crm: [
+        "Müşteri ve iş takibi için frontend akışı bulunmuyor.",
+        "Backend'de customer/activities endpoint'leri uygulanmamış durumda.",
+      ],
+      finance: [
+        "İş kalemi bazlı fiyat/maliyet veri modeli bulunmuyor.",
+        "Eksik ticari veri için kontrollü hesaplama servisi henüz tanımlı değil.",
+      ],
+      reporting: [
+        "Rapor üretimi için API ve export altyapısı bulunmuyor.",
+        "Modüller arası birleşik metrik akışı tamamlanmamış durumda.",
+      ],
+    }),
+    []
+  );
+
+  const createProject = async (event) => {
     event.preventDefault();
 
     if (!projectName.trim()) return;
@@ -579,12 +674,25 @@ function App() {
       date: formatDate(),
     };
 
-    setProjects((currentProjects) => [
-      newProject,
-      ...currentProjects,
-    ]);
+    setProjectsError(null);
 
-    addLog(`Yeni proje oluşturuldu: ${newProject.name}`);
+    try {
+      const createdProject = await createProjectRequest(newProject);
+      const nextProject = createdProject || newProject;
+
+      setProjects((currentProjects) => [
+        nextProject,
+        ...currentProjects,
+      ]);
+      addLog(`Yeni proje API üzerinden oluşturuldu: ${nextProject.name}`);
+    } catch (error) {
+      setProjects((currentProjects) => [
+        newProject,
+        ...currentProjects,
+      ]);
+      setProjectsError("Proje API'ye kaydedilemedi. Yerel kayıt oluşturuldu.");
+      addLog(`Yeni proje yerel olarak oluşturuldu: ${newProject.name}`);
+    }
 
     setProjectName("");
     setProjectType("");
@@ -592,20 +700,50 @@ function App() {
     setShowProjectForm(false);
   };
 
-  const deleteProject = (id) => {
+  const deleteProject = async (id) => {
     const project = projects.find((item) => item.id === id);
     projectsTouchedRef.current = true;
 
-    setProjects((currentProjects) =>
-      currentProjects.filter((item) => item.id !== id)
-    );
+    if (!isUuid(id)) {
+      setProjects((currentProjects) =>
+        currentProjects.filter((item) => item.id !== id)
+      );
 
-    if (project) {
-      addLog(`Proje silindi: ${project.name}`);
+      if (project) {
+        addLog(`Yerel proje silindi: ${project.name}`);
+      }
+
+      return;
+    }
+
+    try {
+      await deleteProjectRequest(id);
+      setProjectsError(null);
+      setProjects((currentProjects) =>
+        currentProjects.filter((item) => item.id !== id)
+      );
+
+      if (project) {
+        addLog(`Proje API üzerinden silindi: ${project.name}`);
+      }
+    } catch (error) {
+      if (error.status === 404) {
+        setProjects((currentProjects) =>
+          currentProjects.filter((item) => item.id !== id)
+        );
+
+        if (project) {
+          addLog(`Proje yerelde temizlendi: ${project.name}`);
+        }
+
+        return;
+      }
+
+      setProjectsError("Proje silme işlemi API üzerinde tamamlanamadı.");
     }
   };
 
-  const createResearch = (event) => {
+  const createResearch = async (event) => {
     event.preventDefault();
 
     if (!researchName.trim()) return;
@@ -618,30 +756,73 @@ function App() {
       date: formatDate(),
     };
 
-    setResearchItems((currentItems) => [
-      newResearch,
-      ...currentItems,
-    ]);
+    setResearchError(null);
 
-    addLog(`Yeni araştırma kaydı oluşturuldu: ${newResearch.name}`);
+    try {
+      const createdResearchItem = await createResearchItemRequest(newResearch);
+      const nextResearchItem = createdResearchItem || newResearch;
+
+      setResearchItems((currentItems) => [
+        nextResearchItem,
+        ...currentItems,
+      ]);
+      addLog(`Yeni araştırma API üzerinden oluşturuldu: ${nextResearchItem.name}`);
+    } catch (error) {
+      setResearchItems((currentItems) => [
+        newResearch,
+        ...currentItems,
+      ]);
+      setResearchError("Araştırma API'ye kaydedilemedi. Yerel kayıt oluşturuldu.");
+      addLog(`Yeni araştırma yerel olarak oluşturuldu: ${newResearch.name}`);
+    }
 
     setResearchName("");
     setResearchNote("");
     setShowResearchForm(false);
   };
 
-  const deleteResearch = (id) => {
+  const deleteResearch = async (id) => {
     const item = researchItems.find(
       (research) => research.id === id
     );
     researchTouchedRef.current = true;
 
-    setResearchItems((currentItems) =>
-      currentItems.filter((research) => research.id !== id)
-    );
+    if (!isUuid(id)) {
+      setResearchItems((currentItems) =>
+        currentItems.filter((research) => research.id !== id)
+      );
 
-    if (item) {
-      addLog(`Araştırma kaydı silindi: ${item.name}`);
+      if (item) {
+        addLog(`Yerel araştırma kaydı silindi: ${item.name}`);
+      }
+
+      return;
+    }
+
+    try {
+      await deleteResearchItemRequest(id);
+      setResearchError(null);
+      setResearchItems((currentItems) =>
+        currentItems.filter((research) => research.id !== id)
+      );
+
+      if (item) {
+        addLog(`Araştırma API üzerinden silindi: ${item.name}`);
+      }
+    } catch (error) {
+      if (error.status === 404) {
+        setResearchItems((currentItems) =>
+          currentItems.filter((research) => research.id !== id)
+        );
+
+        if (item) {
+          addLog(`Araştırma yerelde temizlendi: ${item.name}`);
+        }
+
+        return;
+      }
+
+      setResearchError("Araştırma silme işlemi API üzerinde tamamlanamadı.");
     }
   };
 
@@ -834,9 +1015,8 @@ function App() {
       id: createId(),
       role: "assistant",
       text:
-        `Mesaj alındı: "${message}". ` +
-        "DDPro AI çalışma alanı bu mesajı kayıt altına aldı. " +
-        "Gelişmiş AI/API entegrasyonu sonraki altyapı aşamasında bu alana bağlanabilir.",
+        `Mesaj kaydedildi: "${message}". ` +
+        "Canlı AI entegrasyonu bu ortamda yapılandırılmadı; sistem yeni karar veya finansal sonuç üretmedi.",
       date: formatDate(),
     };
 
@@ -893,20 +1073,12 @@ function App() {
 
           <div className="panel-content">
             <div className="quick-status">
-              <span>Proje Sistemi</span>
-              <strong>Hazır</strong>
-            </div>
-            <div className="quick-status">
-              <span>Araştırma Sistemi</span>
-              <strong>Hazır</strong>
-            </div>
-            <div className="quick-status">
-              <span>Teklif Sistemi</span>
-              <strong>Hazır</strong>
-            </div>
-            <div className="quick-status">
-              <span>Merkezi Hafıza</span>
-              <strong>Hazır</strong>
+              {quickStatusItems.map((item) => (
+                <div className="quick-status" key={item.label}>
+                  <span>{item.label}</span>
+                  <strong>{item.value}</strong>
+                </div>
+              ))}
             </div>
           </div>
         </div>
@@ -952,6 +1124,12 @@ function App() {
 
           <button type="submit">Projeyi Kaydet</button>
         </form>
+      )}
+
+      {projectsError && (
+        <p className="status-banner warning">
+          ⚠ {projectsError}
+        </p>
       )}
 
       <div className="data-list">
@@ -1050,6 +1228,10 @@ function App() {
 
   const renderAI = () => (
     <div className="module-page ai-module">
+      <p className="status-banner warning">
+        ⚠ Canlı AI servisi bağlı değil. Bu alan yalnızca kontrollü kayıt mesajı gösterir.
+      </p>
+
       <div className="ai-chat">
         {aiMessages.map((message) => (
           <div
@@ -1152,7 +1334,7 @@ function App() {
           <button type="submit">Teklifi Kaydet</button>
 
           <p className="form-hint">
-            Yeni kayıtlar bu sürümde yerel taslak olarak eklenir.
+            API erişimi varsa kayıt backend'e yazılır; başarısız olursa yerel taslak korunur.
           </p>
         </form>
       )}
@@ -1435,6 +1617,28 @@ function App() {
     </div>
   );
 
+  const renderUnavailableModule = (moduleId) => (
+    <div className="module-page">
+      <p className="status-banner warning">
+        ⚠ Bu modül üretim için tamamlanmadı.
+      </p>
+      <div className="panel">
+        <div className="panel-header">
+          <h2>Ana Engeller</h2>
+        </div>
+        <div className="panel-content">
+          <div className="log-list">
+            {(unavailableModules[moduleId] || []).map((item) => (
+              <div className="log-item" key={item}>
+                <strong>{item}</strong>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
   const renderModule = () => {
     switch (activeModule) {
       case "projects":
@@ -1443,11 +1647,23 @@ function App() {
       case "research":
         return renderResearch();
 
+      case "documents":
+        return renderUnavailableModule("documents");
+
+      case "crm":
+        return renderUnavailableModule("crm");
+
       case "ai":
         return renderAI();
 
       case "offers":
         return renderOffers();
+
+      case "finance":
+        return renderUnavailableModule("finance");
+
+      case "reporting":
+        return renderUnavailableModule("reporting");
 
       case "systems":
         return renderSystems();
@@ -1522,6 +1738,11 @@ function App() {
               <h1>{currentModule.title}</h1>
               <p>{currentModule.description}</p>
             </div>
+            {API_CONFIGURATION_ERROR && (
+              <p className="status-banner warning">
+                ⚠ {API_CONFIGURATION_ERROR}
+              </p>
+            )}
           </section>
 
           <section className="content-body">

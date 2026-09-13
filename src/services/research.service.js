@@ -58,6 +58,33 @@ export const mapResearchItemToViewModel = (item = {}) => {
 export const mapResearchItemsToViewModel = (items = []) =>
   items.filter(Boolean).map((item) => mapResearchItemToViewModel(item));
 
+const toResearchPayload = (item) => {
+  const title =
+    typeof item?.name === "string" && item.name.trim()
+      ? item.name.trim()
+      : typeof item?.title === "string" && item.title.trim()
+        ? item.title.trim()
+        : "";
+
+  if (!title) {
+    throw new Error("Research title is required");
+  }
+
+  return {
+    title,
+    description:
+      typeof item?.note === "string" && item.note.trim()
+        ? item.note.trim()
+        : typeof item?.description === "string" && item.description.trim()
+          ? item.description.trim()
+          : null,
+    status:
+      typeof item?.status === "string" && item.status.trim()
+        ? item.status.trim()
+        : null,
+  };
+};
+
 // ============================================================
 // GET ALL RESEARCH ITEMS
 // ============================================================
@@ -95,6 +122,39 @@ export const getResearchItemById = async (id) => {
       return null;
     }
     console.error("Failed to fetch research item:", error.message);
+    throw error;
+  }
+};
+
+export const createResearchItem = async (item) => {
+  const payload = toResearchPayload(item);
+
+  try {
+    const data = await fetchAPI("/api/research", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+
+    return data.data ? mapResearchItemToViewModel(data.data) : null;
+  } catch (error) {
+    console.error("Failed to create research item:", error.message);
+    throw error;
+  }
+};
+
+export const deleteResearchItem = async (id) => {
+  if (!id) {
+    throw new Error("Research item ID is required");
+  }
+
+  try {
+    const data = await fetchAPI(`/api/research/${id}`, {
+      method: "DELETE",
+    });
+
+    return data.data ? mapResearchItemToViewModel(data.data) : null;
+  } catch (error) {
+    console.error("Failed to delete research item:", error.message);
     throw error;
   }
 };

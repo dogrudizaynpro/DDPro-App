@@ -106,4 +106,4 @@ export const fetchAPI = async (endpoint, options = {}) => {
 // EXPORTS
 // ============================================================
 
-export { API_BASE_URL };
+export { API_BASE_URL, API_CONFIGURATION_ERROR };

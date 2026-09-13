@@ -8,6 +8,7 @@ import researchRouter from "./routes/research.routes.js";
 import offersRouter from "./routes/offers.routes.js";
 
 const app = express();
+app.disable("x-powered-by");
 
 // ============================================================
 // MIDDLEWARE
@@ -16,19 +17,35 @@ const app = express();
 // Security headers
 app.use(helmet());
 
-// CORS
+const DEFAULT_ALLOWED_ORIGINS = [
+  "http://localhost:3000",
+  "http://localhost:5173",
+];
+
+const allowedOrigins = (
+  process.env.ALLOWED_ORIGINS ||
+  DEFAULT_ALLOWED_ORIGINS.join(",")
+)
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
 app.use(
   cors({
-    origin: process.env.ALLOWED_ORIGINS
-      ? process.env.ALLOWED_ORIGINS.split(",")
-      : ["http://localhost:3000", "http://localhost:5173"],
+    origin(origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      return callback(new Error("Origin not allowed by CORS"));
+    },
     credentials: true,
   })
 );
 
 // Body parser
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: "250kb" }));
+app.use(express.urlencoded({ extended: true, limit: "250kb" }));
 
 // ============================================================
 // API ROUTES

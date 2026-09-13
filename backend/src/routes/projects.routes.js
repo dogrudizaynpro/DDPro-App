@@ -6,7 +6,13 @@
 // ============================================================
 
 import express from "express";
-import { getProjects, getProjectById } from "../controllers/projects.controller.js";
+import {
+  createProject,
+  deleteProject,
+  getProjectById,
+  getProjects,
+  updateProject,
+} from "../controllers/projects.controller.js";
 
 const router = express.Router();
 
@@ -19,5 +25,14 @@ router.get("/", getProjects);
 
 // GET /:id - Get project by ID
 router.get("/:id", getProjectById);
+
+// POST / - Create project
+router.post("/", createProject);
+
+// PUT /:id - Update project
+router.put("/:id", updateProject);
+
+// DELETE /:id - Delete project
+router.delete("/:id", deleteProject);
 
 export default router;

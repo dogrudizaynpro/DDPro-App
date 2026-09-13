@@ -7,17 +7,18 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "test": "npm --prefix backend test",
     "preview": "vite preview",
     "predeploy": "npm run build",
     "deploy": "gh-pages -d dist"
   },
   "dependencies": {
-    "react": "latest",
-    "react-dom": "latest"
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
   },
   "devDependencies": {
-    "@vitejs/plugin-react": "latest",
-    "vite": "latest",
-    "gh-pages": "latest"
+    "@vitejs/plugin-react": "6.1.1",
+    "vite": "8.2.2",
+    "gh-pages": "6.3.0"
   }
 }

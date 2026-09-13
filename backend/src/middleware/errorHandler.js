@@ -28,12 +28,11 @@ export const errorHandler = (err, req, res, next) => {
   // Prepare error message
   let errorMessage = "Internal server error";
 
-  if (isDevelopment) {
+  if (statusCode < 500) {
+    errorMessage = err.message || "Request could not be processed";
+  } else if (isDevelopment) {
     // In development, provide more descriptive error messages
     errorMessage = err.message || "Internal server error";
-  } else {
-    // In production, generic error message
-    errorMessage = "Internal server error";
   }
 
   // Send JSON response

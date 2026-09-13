@@ -5,63 +5,7 @@
 // ============================================================
 
 import { getSupabaseClient, isSupabaseAvailable } from "../config/supabase.js";
-
-const ALLOWED_OFFER_STATUSES = [
-  "Hazırlanıyor",
-  "Gönderildi",
-  "Onaylandı",
-  "Reddedildi",
-];
-
-const getOfferPayload = (body = {}) => {
-  const title =
-    typeof body.title === "string"
-      ? body.title.trim()
-      : typeof body.name === "string"
-        ? body.name.trim()
-        : "";
-
-  if (!title) {
-    const error = new Error("Offer title is required");
-    error.statusCode = 400;
-    throw error;
-  }
-
-  const rawStatus =
-    typeof body.status === "string" ? body.status.trim() : "";
-  const status = ALLOWED_OFFER_STATUSES.includes(rawStatus)
-    ? rawStatus
-    : "Hazırlanıyor";
-
-  const amount =
-    body.amount === null ||
-    body.amount === undefined ||
-    body.amount === ""
-      ? null
-      : Number(body.amount);
-
-  if (amount !== null && Number.isNaN(amount)) {
-    const error = new Error("Offer amount must be a valid number");
-    error.statusCode = 400;
-    throw error;
-  }
-
-  const currency =
-    typeof body.currency === "string" && body.currency.trim()
-      ? body.currency.trim().toUpperCase()
-      : null;
-
-  return {
-    title,
-    amount,
-    currency,
-    status,
-    project_id:
-      typeof body.project_id === "string" && body.project_id.trim()
-        ? body.project_id.trim()
-        : null,
-  };
-};
+import { getOfferPayload, validateUuidParam } from "../utils/validation.js";
 
 // ============================================================
 // GET OFFERS
@@ -112,7 +56,7 @@ export const getOffers = async (req, res, next) => {
 
 export const getOfferById = async (req, res, next) => {
   try {
-    const { id } = req.params;
+    const id = validateUuidParam(req.params.id, "Offer ID");
 
     // Check if Supabase is available
     if (!isSupabaseAvailable()) {
@@ -191,13 +135,58 @@ export const createOffer = async (req, res, next) => {
   }
 };
 
+export const updateOffer = async (req, res, next) => {
+  try {
+    const id = validateUuidParam(req.params.id, "Offer ID");
+    const payload = getOfferPayload(req.body);
+
+    if (!isSupabaseAvailable()) {
+      return res.status(503).json({
+        status: "error",
+        message: "Database service is not configured",
+      });
+    }
+
+    const supabase = getSupabaseClient();
+    const { data, error } = await supabase
+      .from("offers")
+      .update({
+        ...payload,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", id)
+      .select("*")
+      .single();
+
+    if (error) {
+      if (error.code === "PGRST116") {
+        return res.status(404).json({
+          status: "error",
+          message: "Offer not found",
+        });
+      }
+
+      console.error("Error updating offer:", error.message);
+      return next(error);
+    }
+
+    res.status(200).json({
+      status: "success",
+      data,
+    });
+  } catch (error) {
+    console.error("Unexpected error in updateOffer:", error.message);
+    next(error);
+  }
+};
+
 // ============================================================
 // DELETE OFFER
 // ============================================================
 
 export const deleteOffer = async (req, res, next) => {
   try {
-    const { id } = req.params;
+    const id = validateUuidParam(req.params.id, "Offer ID");
 
     if (!isSupabaseAvailable()) {
       return res.status(503).json({
