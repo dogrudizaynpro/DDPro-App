@@ -462,7 +462,13 @@ function App() {
     getApiHealth()
       .then((data) => {
         if (!cancelled) {
-          setBackendHealthStatus(data?.status === "ok" ? "ok" : "error");
+          setBackendHealthStatus(
+            data?.status === "ok"
+              ? "ok"
+              : data?.status === "degraded"
+                ? "degraded"
+                : "error"
+          );
         }
       })
       .catch(() => {
@@ -908,14 +914,20 @@ function App() {
       }
     } catch (error) {
       if (error.status === 404) {
-        setProjects((currentProjects) =>
-          currentProjects.filter((item) => item.id !== id)
-        );
+        if (shouldUseLocalApiFallback) {
+          setProjects((currentProjects) =>
+            currentProjects.filter((item) => item.id !== id)
+          );
 
-        if (project) {
-          addLog(`Proje yerelde temizlendi: ${project.name}`);
+          if (project) {
+            addLog(`Proje yerelde temizlendi: ${project.name}`);
+          }
+
+          return;
         }
 
+        setProjectsError("Proje silme işlemi API üzerinde bulunamadı.");
+        addLog("Proje silme hatası: API 404 döndü.");
         return;
       }
 
@@ -1005,14 +1017,20 @@ function App() {
       }
     } catch (error) {
       if (error.status === 404) {
-        setProcurementItems((currentItems) =>
-          currentItems.filter((procurement) => procurement.id !== id)
-        );
+        if (shouldUseLocalApiFallback) {
+          setProcurementItems((currentItems) =>
+            currentItems.filter((procurement) => procurement.id !== id)
+          );
 
-        if (item) {
-          addLog(`Tedarik kaydı yerelde temizlendi: ${item.name}`);
+          if (item) {
+            addLog(`Tedarik kaydı yerelde temizlendi: ${item.name}`);
+          }
+
+          return;
         }
 
+        setProcurementError("Tedarik silme işlemi API üzerinde bulunamadı.");
+        addLog("Tedarik silme hatası: API 404 döndü.");
         return;
       }
 

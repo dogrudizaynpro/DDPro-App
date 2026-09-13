@@ -48,6 +48,24 @@ const API_CONFIGURATION_ERROR = (() => {
   return "";
 })();
 
+const buildApiUrl = (endpoint) => {
+  const normalizedEndpoint = endpoint.startsWith("/")
+    ? endpoint
+    : `/${endpoint}`;
+
+  return `${API_BASE_URL}${normalizedEndpoint}`;
+};
+
+const parseResponseBody = async (response) => {
+  const contentType = response.headers.get("content-type");
+
+  if (contentType && contentType.includes("application/json")) {
+    return response.json();
+  }
+
+  return response.text();
+};
+
 // ============================================================
 // FETCH WRAPPER
 // ============================================================
@@ -61,10 +79,7 @@ export const fetchAPI = async (endpoint, options = {}) => {
   }
 
   try {
-    const normalizedEndpoint = endpoint.startsWith("/")
-      ? endpoint
-      : `/${endpoint}`;
-    const url = `${API_BASE_URL}${normalizedEndpoint}`;
+    const url = buildApiUrl(endpoint);
 
     const response = await fetch(url, {
       headers: {
@@ -73,16 +88,7 @@ export const fetchAPI = async (endpoint, options = {}) => {
       },
       ...options,
     });
-
-    // Handle non-JSON responses
-    const contentType = response.headers.get("content-type");
-    let data;
-
-    if (contentType && contentType.includes("application/json")) {
-      data = await response.json();
-    } else {
-      data = await response.text();
-    }
+    const data = await parseResponseBody(response);
 
     // Handle HTTP errors
     if (!response.ok) {
@@ -102,7 +108,31 @@ export const fetchAPI = async (endpoint, options = {}) => {
   }
 };
 
-export const getApiHealth = async () => fetchAPI("/health");
+export const getApiHealth = async () => {
+  if (API_CONFIGURATION_ERROR) {
+    return {
+      status: "error",
+      message: API_CONFIGURATION_ERROR,
+    };
+  }
+
+  try {
+    const response = await fetch(buildApiUrl("/health"), {
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+    const data = await parseResponseBody(response);
+
+    return {
+      httpStatus: response.status,
+      ...data,
+    };
+  } catch (error) {
+    console.error("API Health Error:", error.message);
+    throw error;
+  }
+};
 
 // ============================================================
 // EXPORTS
