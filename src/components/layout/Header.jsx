@@ -9,14 +9,13 @@ export default function Header({
   filteredCount,
   totalCount,
   systemStatusItems,
-  logoSrc,
 }) {
   return (
     <header className="workspace-header">
       <div className="header-top">
         <div className="brand-area">
           <div className="brand-logo" aria-hidden="true">
-            {logoSrc ? <img src={logoSrc} alt="" /> : <span>DD</span>}
+            <span>DD</span>
           </div>
 
           <div className="brand-content">

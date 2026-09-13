@@ -1075,6 +1075,7 @@ textarea {
 }
 
 .ai-message {
+  width: min(100%, 820px);
   padding: 16px;
   border: 1px solid rgba(217, 223, 220, 0.08);
   border-radius: 18px;
@@ -1082,8 +1083,14 @@ textarea {
 }
 
 .ai-message.assistant {
+  align-self: flex-start;
   border-color: rgba(77, 196, 134, 0.14);
   background: rgba(77, 196, 134, 0.06);
+}
+
+.ai-message.user {
+  align-self: flex-end;
+  background: rgba(217, 223, 220, 0.06);
 }
 
 .ai-message strong {
@@ -1219,8 +1226,14 @@ textarea {
   }
 
   .module-nav {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    display: flex;
+    flex-direction: row;
+    overflow-x: auto;
+    padding-bottom: 4px;
+  }
+
+  .module-button {
+    min-width: 250px;
   }
 
   .workspace-header {
@@ -1278,10 +1291,6 @@ textarea {
   .status-footer,
   .stats-grid,
   .offers-summary-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .module-nav {
     grid-template-columns: 1fr;
   }
 

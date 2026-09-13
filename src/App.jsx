@@ -649,7 +649,7 @@ function App() {
     [offers, projects, researchItems]
   );
 
-  const filteredModules = useMemo(() => {
+  const matchedModules = useMemo(() => {
     const query = commandQuery.trim().toLocaleLowerCase("tr-TR");
 
     if (!query) {
@@ -664,18 +664,18 @@ function App() {
     );
   }, [commandQuery]);
 
+  const filteredModules = useMemo(() => {
+    if (matchedModules.some((module) => module.id === activeModule)) {
+      return matchedModules;
+    }
+
+    const activeModuleEntry = MASTER_MODULES.find((module) => module.id === activeModule);
+
+    return activeModuleEntry ? [activeModuleEntry, ...matchedModules] : matchedModules;
+  }, [activeModule, matchedModules]);
+
   const currentModule =
     MASTER_MODULES.find((module) => module.id === activeModule) || MASTER_MODULES[0];
-
-  useEffect(() => {
-    if (filteredModules.length === 0) {
-      return;
-    }
-
-    if (!filteredModules.some((module) => module.id === activeModule)) {
-      setActiveModule(filteredModules[0].id);
-    }
-  }, [activeModule, filteredModules]);
 
   const openModule = useCallback((moduleId) => {
     closeCreateForms();
@@ -1119,7 +1119,7 @@ function App() {
           commandQuery={commandQuery}
           onCommandChange={setCommandQuery}
           onCommandSubmit={handleCommandSubmit}
-          filteredCount={filteredModules.length}
+          filteredCount={matchedModules.length}
           totalCount={MASTER_MODULES.length}
           systemStatusItems={systemStatusItems.slice(0, 3)}
         />
