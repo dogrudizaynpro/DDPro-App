@@ -197,7 +197,7 @@ export default function OffersModule({
           </div>
 
           <div className="panel-content">
-            {loading ? (
+            {!selectedOfferDetail && loading ? (
               <EmptyState
                 title="Detay alanı hazırlanıyor"
                 description="Teklif verileri geldikten sonra detay paneli aktif olur."

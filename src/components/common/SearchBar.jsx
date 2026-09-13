@@ -7,9 +7,10 @@ export default function SearchBar({
 }) {
   return (
     <form className="search-form" onSubmit={onSubmit}>
-      <label className="search-field">
+      <label className="search-field" htmlFor="ddpro-master-search">
         <span>Arama / Komut</span>
         <input
+          id="ddpro-master-search"
           type="text"
           value={value}
           onChange={(event) => onChange(event.target.value)}

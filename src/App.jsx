@@ -667,6 +667,16 @@ function App() {
   const currentModule =
     MASTER_MODULES.find((module) => module.id === activeModule) || MASTER_MODULES[0];
 
+  useEffect(() => {
+    if (filteredModules.length === 0) {
+      return;
+    }
+
+    if (!filteredModules.some((module) => module.id === activeModule)) {
+      setActiveModule(filteredModules[0].id);
+    }
+  }, [activeModule, filteredModules]);
+
   const openModule = (moduleId) => {
     closeCreateForms();
     setActiveModule(moduleId);
