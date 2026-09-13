@@ -1889,6 +1889,14 @@ select {
   font-size: 12px;
 }
 
+.checkbox-disabled {
+  opacity: 0.74;
+}
+
+.checkbox-disabled input {
+  cursor: not-allowed;
+}
+
 .detail-table {
   display: flex;
   flex-direction: column;

@@ -1135,7 +1135,18 @@ function App() {
   const handleDeleteProject = (id) => {
     const current = projectDrafts.find((item) => item.id === id);
     if (!current) return;
-    setProjectDrafts((items) => items.filter((item) => item.id !== id));
+
+    const linkedOfferIds = offerDrafts.filter((item) => item.projectId === id).map((item) => item.id);
+
+    setProjectDrafts((items) =>
+      items
+        .filter((item) => item.id !== id)
+        .map((item) =>
+          linkedOfferIds.length > 0
+            ? normalizeProject({ ...item, offerIds: item.offerIds.filter((offerId) => !linkedOfferIds.includes(offerId)) })
+            : item
+        )
+    );
     setOfferDrafts((items) => items.map((item) => (item.projectId === id ? normalizeOffer({ ...item, projectId: '' }) : item)));
     if (selectedProjectId === id) setSelectedProjectId(null);
     addLog(`Proje taslağı silindi: ${current.name}`);
@@ -1294,6 +1305,7 @@ function App() {
       id: createLocalId('offer'),
       source: 'local',
       copiedFromId: record.id,
+      projectId: '',
       status: 'Taslak',
       items: record.items.length ? record.items : [createOfferItem()],
       createdAt: new Date().toISOString(),
@@ -1976,6 +1988,7 @@ function App() {
   const renderProjects = () => {
     const relatedSystems = selectedProject ? selectedProject.systemIds.map((id) => systemMap.get(id)).filter(Boolean) : [];
     const relatedOffers = selectedProject ? selectedProject.offerIds.map((id) => offerMap.get(id)).filter(Boolean) : [];
+    const readOnlyOfferIds = projectForm.offerIds.filter((id) => !offerDrafts.some((offer) => offer.id === id));
 
     return (
       <div className="module-page">
@@ -2025,6 +2038,9 @@ function App() {
                 <div className="checkbox-list">
                   {offers.filter((item) => item.source === 'local').map((item) => (
                     <label key={item.id}><input type="checkbox" checked={projectForm.offerIds.includes(item.id)} onChange={() => setProjectForm((current) => ({ ...current, offerIds: toggleMultiSelectValue(current.offerIds, item.id) }))} />{item.title}</label>
+                  ))}
+                  {readOnlyOfferIds.map((offerId) => (
+                    <label key={offerId} className="checkbox-disabled"><input type="checkbox" checked disabled readOnly />{offerMap.get(offerId)?.title || `API teklif bağlantısı (${offerId})`}</label>
                   ))}
                 </div>
               </div>

@@ -1,5 +1,10 @@
 import { calculateMaterialItemTotal, formatCurrency } from '../services/core-data.service.js';
 
+const collectDescendantIds = (items, itemId) => {
+  const children = items.filter((candidate) => candidate.parentId === itemId);
+  return children.flatMap((child) => [child.id, ...collectDescendantIds(items, child.id)]);
+};
+
 export default function HierarchyItemsEditor({ items, onAddItem, onRemoveItem, onItemChange }) {
   return (
     <div className="line-items-editor">
@@ -28,7 +33,7 @@ export default function HierarchyItemsEditor({ items, onAddItem, onRemoveItem, o
               >
                 <option value="">Ana düğüm</option>
                 {items
-                  .filter((candidate) => candidate.id !== item.id)
+                  .filter((candidate) => candidate.id !== item.id && !collectDescendantIds(items, item.id).includes(candidate.id))
                   .map((candidate) => (
                     <option key={candidate.id} value={candidate.id}>
                       {candidate.name || `Malzeme ${index + 1}`}
