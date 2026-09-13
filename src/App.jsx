@@ -297,6 +297,9 @@ const getApiFailureReason = (error) => {
   return "Bilinmeyen hata";
 };
 
+const getApiStatusCode = (error) =>
+  error?.status || error?.statusCode || error?.data?.statusCode || null;
+
 function App() {
   const [activeModule, setActiveModule] = useState(() =>
     resolveModuleFromHash(window.location.hash)
@@ -961,7 +964,7 @@ function App() {
         addLog(`Proje API üzerinden silindi: ${project.name}`);
       }
     } catch (error) {
-      if (error.status === 404) {
+      if (getApiStatusCode(error) === 404) {
         setProjects((currentProjects) =>
           currentProjects.filter((item) => item.id !== id)
         );
@@ -1054,7 +1057,7 @@ function App() {
         addLog(`Tedarik kaydı API üzerinden silindi: ${item.name}`);
       }
     } catch (error) {
-      if (error.status === 404) {
+      if (getApiStatusCode(error) === 404) {
         setProcurementItems((currentItems) =>
           currentItems.filter((procurement) => procurement.id !== id)
         );
@@ -1166,7 +1169,7 @@ function App() {
     } catch (error) {
       console.warn("Teklif API üzerinden silinemedi:", error.message);
 
-      if (error.status === 404) {
+      if (getApiStatusCode(error) === 404) {
         setOffers((currentOffers) =>
           currentOffers.filter((item) => item.id !== id)
         );

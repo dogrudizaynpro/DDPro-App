@@ -96,6 +96,7 @@ export const fetchAPI = async (endpoint, options = {}) => {
         data.message || `HTTP Error: ${response.status}`
       );
       error.status = response.status;
+      error.statusCode = response.status;
       error.data = data;
       throw error;
     }
