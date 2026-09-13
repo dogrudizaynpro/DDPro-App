@@ -1,6 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import AppShell from "./components/layout/AppShell.jsx";
+import Header from "./components/layout/Header.jsx";
+import Sidebar from "./components/layout/Sidebar.jsx";
+import FooterStatus from "./components/layout/FooterStatus.jsx";
+import CommandCenter from "./components/common/CommandCenter.jsx";
+import DashboardModule from "./components/modules/DashboardModule.jsx";
+import ProjectsModule from "./components/modules/ProjectsModule.jsx";
+import ResearchModule from "./components/modules/ResearchModule.jsx";
+import OffersModule from "./components/modules/OffersModule.jsx";
+import AIModule from "./components/modules/AIModule.jsx";
+import SystemsModule from "./components/modules/SystemsModule.jsx";
+import PlaceholderModule from "./components/modules/PlaceholderModule.jsx";
+import { MASTER_MODULES } from "./config/modules.js";
 import { getProjects } from "./services/projects.service.js";
-import "./styles.css";
 import {
   createOffer as createOfferRequest,
   deleteOffer as deleteOfferRequest,
@@ -10,6 +22,7 @@ import {
   mapOffersToViewModel,
 } from "./services/offers.service.js";
 import { getResearchItems } from "./services/research.service.js";
+import "./styles.css";
 
 const STORAGE_KEYS = {
   projects: "ddpro_projects_v1",
@@ -19,57 +32,6 @@ const STORAGE_KEYS = {
   logs: "ddpro_system_logs_v1",
   integrations: "ddpro_integrations_v1",
 };
-
-const modules = [
-  {
-    id: "dashboard",
-    icon: "◉",
-    title: "Genel Bakış",
-    short: "Sistem Merkezi",
-    description:
-      "Tüm DDPro operasyonlarını, kayıtları ve sistem hareketlerini tek merkezden takip et.",
-  },
-  {
-    id: "projects",
-    icon: "▣",
-    title: "Projeler",
-    short: "Proje Yönetimi",
-    description:
-      "Aktif projelerini oluştur, yönet, düzenle ve tüm süreçlerini merkezi olarak takip et.",
-  },
-  {
-    id: "research",
-    icon: "⌕",
-    title: "Tedarik & Araştırma",
-    short: "Araştırma Merkezi",
-    description:
-      "Ürün, malzeme, fiyat ve tedarikçi araştırmalarını merkezi araştırma havuzunda topla.",
-  },
-  {
-    id: "ai",
-    icon: "✦",
-    title: "DDPro AI",
-    short: "Yapay Zeka Sistemi",
-    description:
-      "Araştırma, analiz ve operasyon süreçlerinde yapay zeka destekli merkezi çalışma alanı.",
-  },
-  {
-    id: "offers",
-    icon: "€",
-    title: "Teklif Merkezi",
-    short: "Teklif Sistemi",
-    description:
-      "Tekliflerini oluştur, kayıt altına al, takip et ve proje süreçleriyle ilişkilendir.",
-  },
-  {
-    id: "systems",
-    icon: "⚙",
-    title: "Sistemler",
-    short: "Altyapı Merkezi",
-    description:
-      "DDPro altyapısı, entegrasyonlar, kayıtlar ve merkezi sistem bileşenlerini yönet.",
-  },
-];
 
 const systemModules = [
   {
@@ -110,16 +72,6 @@ const systemModules = [
   },
 ];
 
-const OFFER_STATUS_TONES = {
-  Hazırlanıyor: "pending",
-  Gönderildi: "info",
-  Onaylandı: "success",
-  Reddedildi: "danger",
-};
-
-const getOfferStatusTone = (status) =>
-  OFFER_STATUS_TONES[status] || "neutral";
-
 const mergeOffers = (apiOffers, storedOffers) => {
   const storedViewModels = mapOffersToViewModel(storedOffers);
   const apiIds = new Set(apiOffers.map((offer) => offer.id));
@@ -139,8 +91,7 @@ const getStoredData = (key, fallback = []) => {
   }
 };
 
-const createId = () =>
-  `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+const createId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 
 const isUuid = (value) =>
   typeof value === "string" &&
@@ -178,14 +129,16 @@ const getApiFailureReason = (error) => {
   return "Bilinmeyen hata";
 };
 
+const normalizeModuleDataSource = (items = []) =>
+  items.some((item) => item?.source === "api") ? "api" : "local";
+
 function App() {
   const [activeModule, setActiveModule] = useState("dashboard");
+  const [commandQuery, setCommandQuery] = useState("");
 
-  const [projects, setProjects] = useState(() =>
-    getStoredData(STORAGE_KEYS.projects)
-  );
-
+  const [projects, setProjects] = useState(() => getStoredData(STORAGE_KEYS.projects));
   const [projectsLoading, setProjectsLoading] = useState(true);
+  const [projectsError, setProjectsError] = useState(null);
 
   const [researchItems, setResearchItems] = useState(() =>
     getStoredData(STORAGE_KEYS.research)
@@ -196,7 +149,6 @@ function App() {
   const [offers, setOffers] = useState(() =>
     mapOffersToViewModel(getStoredData(STORAGE_KEYS.offers))
   );
-
   const [offersLoading, setOffersLoading] = useState(true);
   const [offersError, setOffersError] = useState(null);
   const [offersFetchState, setOffersFetchState] = useState("loading");
@@ -205,18 +157,13 @@ function App() {
   const [selectedOfferDetail, setSelectedOfferDetail] = useState(null);
   const [offerDetailLoading, setOfferDetailLoading] = useState(false);
   const [offerDetailError, setOfferDetailError] = useState(null);
+
   const projectsTouchedRef = useRef(false);
   const researchTouchedRef = useRef(false);
   const offersTouchedRef = useRef(false);
 
-  const [memoryItems, setMemoryItems] = useState(() =>
-    getStoredData(STORAGE_KEYS.memory)
-  );
-
-  const [systemLogs, setSystemLogs] = useState(() =>
-    getStoredData(STORAGE_KEYS.logs)
-  );
-
+  const [memoryItems, setMemoryItems] = useState(() => getStoredData(STORAGE_KEYS.memory));
+  const [systemLogs, setSystemLogs] = useState(() => getStoredData(STORAGE_KEYS.logs));
   const [integrations, setIntegrations] = useState(() =>
     getStoredData(STORAGE_KEYS.integrations, [
       {
@@ -254,7 +201,6 @@ function App() {
   const [memoryContent, setMemoryContent] = useState("");
 
   const [aiInput, setAiInput] = useState("");
-
   const [aiMessages, setAiMessages] = useState([
     {
       id: "welcome",
@@ -265,20 +211,46 @@ function App() {
     },
   ]);
 
+  const closeCreateForms = () => {
+    setShowProjectForm(false);
+    setShowResearchForm(false);
+    setShowOfferForm(false);
+    setShowMemoryForm(false);
+  };
+
+  const addLog = (message) => {
+    const newLog = {
+      id: createId(),
+      message,
+      date: formatDate(),
+    };
+
+    setSystemLogs((currentLogs) => [newLog, ...currentLogs].slice(0, 50));
+  };
+
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.projects, JSON.stringify(projects));
   }, [projects]);
 
   useEffect(() => {
-    localStorage.setItem(
-      STORAGE_KEYS.research,
-      JSON.stringify(researchItems)
-    );
+    localStorage.setItem(STORAGE_KEYS.research, JSON.stringify(researchItems));
   }, [researchItems]);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.offers, JSON.stringify(offers));
   }, [offers]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.memory, JSON.stringify(memoryItems));
+  }, [memoryItems]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.logs, JSON.stringify(systemLogs));
+  }, [systemLogs]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.integrations, JSON.stringify(integrations));
+  }, [integrations]);
 
   useEffect(() => {
     let cancelled = false;
@@ -296,9 +268,7 @@ function App() {
         if (cancelled) return;
 
         if (offersTouchedRef.current) {
-          addLog(
-            "Tekliflerde yerel değişiklik algılandı, API yanıtı üzerine yazmadı."
-          );
+          addLog("Tekliflerde yerel değişiklik algılandı, API yanıtı üzerine yazmadı.");
           setOffersFetchState(apiOffers.length > 0 ? "success" : "empty");
           return;
         }
@@ -426,9 +396,7 @@ function App() {
         if (cancelled) return;
 
         if (researchTouchedRef.current) {
-          addLog(
-            "Araştırmalarda yerel değişiklik algılandı, API yanıtı üzerine yazmadı."
-          );
+          addLog("Araştırmalarda yerel değişiklik algılandı, API yanıtı üzerine yazmadı.");
           return;
         }
 
@@ -463,32 +431,12 @@ function App() {
   }, []);
 
   useEffect(() => {
-    localStorage.setItem(
-      STORAGE_KEYS.memory,
-      JSON.stringify(memoryItems)
-    );
-  }, [memoryItems]);
-
-  useEffect(() => {
-    localStorage.setItem(
-      STORAGE_KEYS.logs,
-      JSON.stringify(systemLogs)
-    );
-  }, [systemLogs]);
-
-  useEffect(() => {
-    localStorage.setItem(
-      STORAGE_KEYS.integrations,
-      JSON.stringify(integrations)
-    );
-  }, [integrations]);
-
-  useEffect(() => {
     let cancelled = false;
 
     const fetchProjectsFromApi = async () => {
       const localProjects = getStoredData(STORAGE_KEYS.projects);
       setProjectsLoading(true);
+      setProjectsError(null);
 
       try {
         const apiProjects = await getProjects();
@@ -496,9 +444,7 @@ function App() {
         if (cancelled) return;
 
         if (projectsTouchedRef.current) {
-          addLog(
-            "Projelerde yerel değişiklik algılandı, API yanıtı üzerine yazmadı."
-          );
+          addLog("Projelerde yerel değişiklik algılandı, API yanıtı üzerine yazmadı.");
           return;
         }
 
@@ -513,6 +459,9 @@ function App() {
         const reason = getApiFailureReason(error);
         if (!cancelled) {
           setProjects(localProjects);
+          setProjectsError(
+            `Proje API erişimi başarısız (${reason}). Yerel proje verileri gösteriliyor.`
+          );
           addLog(`Projelerde API bağlantı hatası: ${reason}. Yerel veriler kullanıldı.`);
         }
       } finally {
@@ -529,40 +478,266 @@ function App() {
     };
   }, []);
 
-  const addLog = (message) => {
-    const newLog = {
-      id: createId(),
-      message,
-      date: formatDate(),
-    };
-
-    setSystemLogs((currentLogs) =>
-      [newLog, ...currentLogs].slice(0, 50)
-    );
-  };
-
   const dashboardStats = useMemo(
     () => [
       {
-        label: "AKTİF PROJELER",
-        value: projects.filter(
-          (project) => project.status === "Aktif"
-        ).length,
+        label: "Aktif Projeler",
+        value: projects.filter((project) => project.status === "Aktif").length,
+        description: "Canlı veya yerel kayıtlarda aktif durumdaki proje sayısı",
+        tone: "emerald",
       },
       {
-        label: "ARAŞTIRMALAR",
-        value: researchItems.length,
-      },
-      {
-        label: "TEKLİFLER",
+        label: "Teklifler",
         value: offers.length,
+        description: `${offers.filter((offer) => offer.source === "api").length} API, ${
+          offers.filter((offer) => offer.source !== "api").length
+        } yerel kayıt`,
+        tone: "silver",
       },
       {
-        label: "SİSTEM KAYITLARI",
-        value: systemLogs.length,
+        label: "Tedarik & Araştırma",
+        value: researchItems.length,
+        description: "Araştırma havuzundaki mevcut kayıt sayısı",
+        tone: "emerald",
+      },
+      {
+        label: "AI Analizleri",
+        value: aiMessages.filter((message) => message.role === "assistant").length,
+        description: "Yerel DDPro AI çalışma alanı etkileşimleri",
+        tone: "graphite",
+      },
+      {
+        label: "Sistem Durumu",
+        value: `${[
+          !projectsLoading && !projectsError,
+          !researchLoading && !researchError,
+          offersFetchState === "success" || offersFetchState === "empty",
+        ].filter(Boolean).length}/3`,
+        description: "Canlı veri modülleri erişim özeti",
+        tone: "silver",
       },
     ],
-    [projects, researchItems, offers, systemLogs]
+    [
+      aiMessages,
+      offers,
+      offersFetchState,
+      projects,
+      projectsError,
+      projectsLoading,
+      researchError,
+      researchItems,
+      researchLoading,
+    ]
+  );
+
+  const systemStatusItems = useMemo(
+    () => [
+      {
+        label: "Projeler API",
+        value: projectsLoading
+          ? "Yükleniyor"
+          : projectsError
+            ? "Yerel yedek"
+            : normalizeModuleDataSource(projects) === "api"
+              ? "Canlı bağlı"
+              : "Yerel veri",
+        tone: projectsLoading
+          ? "info"
+          : projectsError
+            ? "warning"
+            : normalizeModuleDataSource(projects) === "api"
+              ? "success"
+              : "neutral",
+      },
+      {
+        label: "Araştırma API",
+        value: researchLoading
+          ? "Yükleniyor"
+          : researchError
+            ? "Yerel yedek"
+            : normalizeModuleDataSource(researchItems) === "api"
+              ? "Canlı bağlı"
+              : "Yerel veri",
+        tone: researchLoading
+          ? "info"
+          : researchError
+            ? "warning"
+            : normalizeModuleDataSource(researchItems) === "api"
+              ? "success"
+              : "neutral",
+      },
+      {
+        label: "Teklifler API",
+        value:
+          offersFetchState === "loading"
+            ? "Yükleniyor"
+            : offersFetchState === "success"
+              ? "Canlı bağlı"
+              : offersFetchState === "empty"
+                ? "Bağlı / boş veri"
+                : "Yerel yedek",
+        tone:
+          offersFetchState === "loading"
+            ? "info"
+            : offersFetchState === "success"
+              ? "success"
+              : offersFetchState === "empty"
+                ? "neutral"
+                : "warning",
+      },
+      {
+        label: "DDPro AI",
+        value: "Yerel çalışma alanı",
+        tone: "neutral",
+      },
+      {
+        label: "Planlı Modüller",
+        value: `${MASTER_MODULES.filter((module) => module.dataMode === "placeholder").length} adet`,
+        tone: "muted",
+      },
+      {
+        label: "Local Storage",
+        value: "Aktif",
+        tone: "success",
+      },
+    ],
+    [
+      offersFetchState,
+      projects,
+      projectsError,
+      projectsLoading,
+      researchError,
+      researchItems,
+      researchLoading,
+    ]
+  );
+
+  const recentActivities = useMemo(
+    () =>
+      [
+        ...projects
+          .filter((project) => project.status === "Aktif")
+          .slice(0, 2)
+          .map((project) => ({
+            id: `project-${project.id}`,
+            title: project.name,
+            meta: project.type,
+            date: project.date,
+            status: project.status,
+            section: "Proje",
+          })),
+        ...offers
+          .filter((offer) => offer.status !== "Onaylandı")
+          .slice(0, 2)
+          .map((offer) => ({
+            id: `offer-${offer.id}`,
+            title: offer.title,
+            meta: offer.amountDisplay,
+            date: offer.date,
+            status: offer.status,
+            section: "Teklif",
+          })),
+        ...researchItems.slice(0, 2).map((item) => ({
+          id: `research-${item.id}`,
+          title: item.name,
+          meta: item.note,
+          date: item.date,
+          status: item.status || "Takipte",
+          section: "Araştırma",
+        })),
+      ].slice(0, 6),
+    [offers, projects, researchItems]
+  );
+
+  const filteredModules = useMemo(() => {
+    const query = commandQuery.trim().toLocaleLowerCase("tr-TR");
+
+    if (!query) {
+      return MASTER_MODULES;
+    }
+
+    return MASTER_MODULES.filter((module) =>
+      [module.title, module.short, module.description, ...(module.keywords || [])]
+        .join(" ")
+        .toLocaleLowerCase("tr-TR")
+        .includes(query)
+    );
+  }, [commandQuery]);
+
+  const currentModule =
+    MASTER_MODULES.find((module) => module.id === activeModule) || MASTER_MODULES[0];
+
+  const openModule = (moduleId) => {
+    closeCreateForms();
+    setActiveModule(moduleId);
+  };
+
+  const openModuleWithForm = (moduleId, form) => {
+    closeCreateForms();
+    setActiveModule(moduleId);
+
+    if (form === "project") setShowProjectForm(true);
+    if (form === "research") setShowResearchForm(true);
+    if (form === "offer") setShowOfferForm(true);
+    if (form === "memory") setShowMemoryForm(true);
+  };
+
+  const handleCommandSubmit = (event) => {
+    event.preventDefault();
+
+    const query = commandQuery.trim().toLocaleLowerCase("tr-TR");
+    if (!query) return;
+
+    const matchedModule = MASTER_MODULES.find((module) =>
+      [module.title, module.short, ...(module.keywords || [])]
+        .join(" ")
+        .toLocaleLowerCase("tr-TR")
+        .includes(query)
+    );
+
+    if (matchedModule) {
+      openModule(matchedModule.id);
+      addLog(`Komut merkezi üzerinden modül açıldı: ${matchedModule.title}`);
+      return;
+    }
+
+    addLog(`Komut eşleşmesi bulunamadı: ${commandQuery.trim()}`);
+  };
+
+  const quickActions = useMemo(
+    () => [
+      {
+        id: "new-project",
+        label: "Yeni Proje",
+        description: "Projeler modülünde yeni kayıt formunu aç",
+        action: () => openModuleWithForm("projects", "project"),
+      },
+      {
+        id: "new-research",
+        label: "Yeni Araştırma",
+        description: "Tedarik & Araştırma modülüne geç",
+        action: () => openModuleWithForm("research", "research"),
+      },
+      {
+        id: "new-offer",
+        label: "Yeni Teklif",
+        description: "Teklif merkezi kayıt formunu aç",
+        action: () => openModuleWithForm("offers", "offer"),
+      },
+      {
+        id: "open-ai",
+        label: "DDPro AI",
+        description: "AI komut alanına geç",
+        action: () => openModule("ai"),
+      },
+      {
+        id: "open-system",
+        label: "Sistem Merkezi",
+        description: "Hafıza ve entegrasyon alanlarını aç",
+        action: () => openModule("systems"),
+      },
+    ],
+    []
   );
 
   const createProject = (event) => {
@@ -577,13 +752,10 @@ function App() {
       type: projectType.trim() || "Genel Proje",
       status: projectStatus,
       date: formatDate(),
+      source: "local",
     };
 
-    setProjects((currentProjects) => [
-      newProject,
-      ...currentProjects,
-    ]);
-
+    setProjects((currentProjects) => [newProject, ...currentProjects]);
     addLog(`Yeni proje oluşturuldu: ${newProject.name}`);
 
     setProjectName("");
@@ -596,9 +768,7 @@ function App() {
     const project = projects.find((item) => item.id === id);
     projectsTouchedRef.current = true;
 
-    setProjects((currentProjects) =>
-      currentProjects.filter((item) => item.id !== id)
-    );
+    setProjects((currentProjects) => currentProjects.filter((item) => item.id !== id));
 
     if (project) {
       addLog(`Proje silindi: ${project.name}`);
@@ -616,13 +786,10 @@ function App() {
       name: researchName.trim(),
       note: researchNote.trim() || "Not eklenmedi.",
       date: formatDate(),
+      source: "local",
     };
 
-    setResearchItems((currentItems) => [
-      newResearch,
-      ...currentItems,
-    ]);
-
+    setResearchItems((currentItems) => [newResearch, ...currentItems]);
     addLog(`Yeni araştırma kaydı oluşturuldu: ${newResearch.name}`);
 
     setResearchName("");
@@ -631,14 +798,10 @@ function App() {
   };
 
   const deleteResearch = (id) => {
-    const item = researchItems.find(
-      (research) => research.id === id
-    );
+    const item = researchItems.find((research) => research.id === id);
     researchTouchedRef.current = true;
 
-    setResearchItems((currentItems) =>
-      currentItems.filter((research) => research.id !== id)
-    );
+    setResearchItems((currentItems) => currentItems.filter((research) => research.id !== id));
 
     if (item) {
       addLog(`Araştırma kaydı silindi: ${item.name}`);
@@ -667,22 +830,13 @@ function App() {
       const createdOffer = await createOfferRequest(newOffer);
       const nextOffer = createdOffer || newOffer;
 
-      setOffers((currentOffers) => [
-        nextOffer,
-        ...currentOffers,
-      ]);
+      setOffers((currentOffers) => [nextOffer, ...currentOffers]);
       setSelectedOfferId(nextOffer.id);
       addLog(`Yeni teklif API üzerinden oluşturuldu: ${newOffer.title}`);
     } catch (error) {
-      console.warn(
-        "Teklif API'ye kaydedilemedi, yerel kayıt oluşturuluyor:",
-        error.message
-      );
+      console.warn("Teklif API'ye kaydedilemedi, yerel kayıt oluşturuluyor:", error.message);
 
-      setOffers((currentOffers) => [
-        newOffer,
-        ...currentOffers,
-      ]);
+      setOffers((currentOffers) => [newOffer, ...currentOffers]);
       setSelectedOfferId(newOffer.id);
       setOffersError("Teklif API'ye kaydedilemedi. Yerel kayıt oluşturuldu.");
       addLog(`Yeni teklif yerel olarak oluşturuldu: ${newOffer.title}`);
@@ -700,9 +854,7 @@ function App() {
 
     if (!isUuid(id)) {
       setOffersError(null);
-      setOffers((currentOffers) =>
-        currentOffers.filter((item) => item.id !== id)
-      );
+      setOffers((currentOffers) => currentOffers.filter((item) => item.id !== id));
       if (selectedOfferId === id) {
         setSelectedOfferId(null);
       }
@@ -718,9 +870,7 @@ function App() {
     try {
       await deleteOfferRequest(id);
       setOffersError(null);
-      setOffers((currentOffers) =>
-        currentOffers.filter((item) => item.id !== id)
-      );
+      setOffers((currentOffers) => currentOffers.filter((item) => item.id !== id));
       if (selectedOfferId === id) {
         setSelectedOfferId(null);
       }
@@ -733,9 +883,7 @@ function App() {
       console.warn("Teklif API üzerinden silinemedi:", error.message);
 
       if (error.status === 404) {
-        setOffers((currentOffers) =>
-          currentOffers.filter((item) => item.id !== id)
-        );
+        setOffers((currentOffers) => currentOffers.filter((item) => item.id !== id));
         if (selectedOfferId === id) {
           setSelectedOfferId(null);
         }
@@ -768,11 +916,7 @@ function App() {
       date: formatDate(),
     };
 
-    setMemoryItems((currentItems) => [
-      newMemory,
-      ...currentItems,
-    ]);
-
+    setMemoryItems((currentItems) => [newMemory, ...currentItems]);
     addLog(`Merkezi hafızaya kayıt eklendi: ${newMemory.title}`);
 
     setMemoryTitle("");
@@ -783,9 +927,7 @@ function App() {
   const deleteMemory = (id) => {
     const memory = memoryItems.find((item) => item.id === id);
 
-    setMemoryItems((currentItems) =>
-      currentItems.filter((item) => item.id !== id)
-    );
+    setMemoryItems((currentItems) => currentItems.filter((item) => item.id !== id));
 
     if (memory) {
       addLog(`Hafıza kaydı silindi: ${memory.title}`);
@@ -797,8 +939,7 @@ function App() {
 
     if (!integration) return;
 
-    const nextStatus =
-      integration.status === "Aktif" ? "Pasif" : "Aktif";
+    const nextStatus = integration.status === "Aktif" ? "Pasif" : "Aktif";
 
     setIntegrations((currentItems) =>
       currentItems.map((item) =>
@@ -811,9 +952,7 @@ function App() {
       )
     );
 
-    addLog(
-      `${integration.name} entegrasyon durumu değiştirildi: ${nextStatus}`
-    );
+    addLog(`${integration.name} entegrasyon durumu değiştirildi: ${nextStatus}`);
   };
 
   const sendAiMessage = (event) => {
@@ -847,689 +986,160 @@ function App() {
     ]);
 
     addLog(`DDPro AI mesajı gönderildi: ${message}`);
-
     setAiInput("");
   };
-
-  const renderDashboard = () => (
-    <div className="dashboard-module">
-      <div className="stats-grid">
-        {dashboardStats.map((stat) => (
-          <div className="stat-card" key={stat.label}>
-            <span>{stat.label}</span>
-            <strong>{stat.value}</strong>
-          </div>
-        ))}
-      </div>
-
-      <div className="dashboard-grid">
-        <div className="panel">
-          <div className="panel-header">
-            <h2>Son Sistem Hareketleri</h2>
-          </div>
-
-          <div className="panel-content">
-            {systemLogs.length === 0 ? (
-              <p className="empty-state">
-                Henüz sistem kaydı bulunmuyor.
-              </p>
-            ) : (
-              <div className="log-list">
-                {systemLogs.slice(0, 8).map((log) => (
-                  <div className="log-item" key={log.id}>
-                    <strong>{log.message}</strong>
-                    <small>{log.date}</small>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="panel">
-          <div className="panel-header">
-            <h2>Hızlı Durum</h2>
-          </div>
-
-          <div className="panel-content">
-            <div className="quick-status">
-              <span>Proje Sistemi</span>
-              <strong>Hazır</strong>
-            </div>
-            <div className="quick-status">
-              <span>Araştırma Sistemi</span>
-              <strong>Hazır</strong>
-            </div>
-            <div className="quick-status">
-              <span>Teklif Sistemi</span>
-              <strong>Hazır</strong>
-            </div>
-            <div className="quick-status">
-              <span>Merkezi Hafıza</span>
-              <strong>Hazır</strong>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-
-  const renderProjects = () => (
-    <div className="module-page">
-      <div className="module-toolbar">
-        <button
-          type="button"
-          onClick={() => setShowProjectForm((value) => !value)}
-        >
-          {showProjectForm ? "Formu Kapat" : "+ Yeni Proje"}
-        </button>
-      </div>
-
-      {showProjectForm && (
-        <form className="data-form" onSubmit={createProject}>
-          <input
-            type="text"
-            placeholder="Proje adı"
-            value={projectName}
-            onChange={(event) => setProjectName(event.target.value)}
-          />
-
-          <input
-            type="text"
-            placeholder="Proje türü"
-            value={projectType}
-            onChange={(event) => setProjectType(event.target.value)}
-          />
-
-          <select
-            value={projectStatus}
-            onChange={(event) => setProjectStatus(event.target.value)}
-          >
-            <option>Aktif</option>
-            <option>Beklemede</option>
-            <option>Tamamlandı</option>
-          </select>
-
-          <button type="submit">Projeyi Kaydet</button>
-        </form>
-      )}
-
-      <div className="data-list">
-        {projectsLoading ? (
-          <p className="empty-state">Projeler yükleniyor...</p>
-        ) : projects.length === 0 ? (
-          <p className="empty-state">Henüz proje kaydı bulunmuyor.</p>
-        ) : (
-          projects.map((project) => (
-            <div className="data-card" key={project.id}>
-              <div>
-                <h3>{project.name}</h3>
-                <p>{project.type}</p>
-                <small>
-                  {project.status} · {project.date}
-                </small>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => deleteProject(project.id)}
-              >
-                Sil
-              </button>
-            </div>
-          ))
-        )}
-      </div>
-    </div>
-  );
-
-  const renderResearch = () => (
-    <div className="module-page">
-      <div className="module-toolbar">
-        <button
-          type="button"
-          onClick={() => setShowResearchForm((value) => !value)}
-        >
-          {showResearchForm ? "Formu Kapat" : "+ Yeni Araştırma"}
-        </button>
-      </div>
-
-      {showResearchForm && (
-        <form className="data-form" onSubmit={createResearch}>
-          <input
-            type="text"
-            placeholder="Araştırma başlığı"
-            value={researchName}
-            onChange={(event) => setResearchName(event.target.value)}
-          />
-
-          <textarea
-            placeholder="Araştırma notu"
-            value={researchNote}
-            onChange={(event) => setResearchNote(event.target.value)}
-          />
-
-          <button type="submit">Araştırmayı Kaydet</button>
-        </form>
-      )}
-
-      {researchError && (
-        <p className="empty-state" style={{ color: "#f59e0b" }}>
-          ⚠ {researchError}
-        </p>
-      )}
-
-      <div className="data-list">
-        {researchLoading ? (
-          <p className="empty-state">Araştırmalar yükleniyor…</p>
-        ) : researchItems.length === 0 ? (
-          <p className="empty-state">
-            Henüz araştırma kaydı bulunmuyor.
-          </p>
-        ) : (
-          researchItems.map((item) => (
-            <div className="data-card" key={item.id}>
-              <div>
-                <h3>{item.name}</h3>
-                <p>{item.note}</p>
-                <small>{item.date}</small>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => deleteResearch(item.id)}
-              >
-                Sil
-              </button>
-            </div>
-          ))
-        )}
-      </div>
-    </div>
-  );
-
-  const renderAI = () => (
-    <div className="module-page ai-module">
-      <div className="ai-chat">
-        {aiMessages.map((message) => (
-          <div
-            key={message.id}
-            className={`ai-message ${message.role}`}
-          >
-            <strong>
-              {message.role === "assistant"
-                ? "DDPro AI"
-                : "Sen"}
-            </strong>
-            <p>{message.text}</p>
-            <small>{message.date}</small>
-          </div>
-        ))}
-      </div>
-
-      <form className="ai-form" onSubmit={sendAiMessage}>
-        <textarea
-          placeholder="DDPro AI için mesajını yaz..."
-          value={aiInput}
-          onChange={(event) => setAiInput(event.target.value)}
-        />
-
-        <button type="submit">Gönder</button>
-      </form>
-    </div>
-  );
-
-  const renderOffers = () => (
-    <div className="module-page">
-      <div className="module-toolbar">
-        <div className="offers-toolbar-actions">
-          <span className={`offers-status-pill ${offersFetchState}`}>
-            {offersFetchState === "loading" && "API yükleniyor"}
-            {offersFetchState === "success" && "API bağlı"}
-            {offersFetchState === "empty" && "API boş veri döndü"}
-            {offersFetchState === "error" && "API bağlantı hatası"}
-          </span>
-
-          <button
-            type="button"
-            className="secondary-button"
-            disabled={offersLoading}
-            onClick={() => setOffersReloadKey((value) => value + 1)}
-          >
-            {offersLoading ? "Yenileniyor..." : "Yenile"}
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setShowOfferForm((value) => !value)}
-          >
-            {showOfferForm ? "Formu Kapat" : "+ Yeni Teklif"}
-          </button>
-        </div>
-      </div>
-
-      {offersError && (
-        <p className="status-banner warning">
-          ⚠ {offersError}
-        </p>
-      )}
-
-      {!offersError && offersFetchState === "empty" && (
-        <p className="status-banner info">
-          ℹ API üzerinde henüz teklif bulunmuyor
-          {offers.some((offer) => offer.source === "local")
-            ? ", kayıtlı yerel taslaklar listeleniyor."
-            : "."}
-        </p>
-      )}
-
-      {showOfferForm && (
-        <form className="data-form" onSubmit={createOffer}>
-          <input
-            type="text"
-            placeholder="Teklif adı"
-            value={offerName}
-            onChange={(event) => setOfferName(event.target.value)}
-          />
-
-          <input
-            type="text"
-            placeholder="Teklif tutarı"
-            value={offerAmount}
-            onChange={(event) => setOfferAmount(event.target.value)}
-          />
-
-          <select
-            value={offerStatus}
-            onChange={(event) => setOfferStatus(event.target.value)}
-          >
-            <option>Hazırlanıyor</option>
-            <option>Gönderildi</option>
-            <option>Onaylandı</option>
-            <option>Reddedildi</option>
-          </select>
-
-          <button type="submit">Teklifi Kaydet</button>
-
-          <p className="form-hint">
-            Yeni kayıtlar bu sürümde yerel taslak olarak eklenir.
-          </p>
-        </form>
-      )}
-
-      <div className="offers-summary-grid">
-        <div className="offer-summary-card">
-          <span>Toplam Teklif</span>
-          <strong>{offers.length}</strong>
-        </div>
-
-        <div className="offer-summary-card">
-          <span>API Kayıtları</span>
-          <strong>
-            {offers.filter((offer) => offer.source === "api").length}
-          </strong>
-        </div>
-
-        <div className="offer-summary-card">
-          <span>Onaylanan</span>
-          <strong>
-            {offers.filter((offer) => offer.status === "Onaylandı").length}
-          </strong>
-        </div>
-
-        <div className="offer-summary-card">
-          <span>Yerel Taslak</span>
-          <strong>
-            {offers.filter((offer) => offer.source === "local").length}
-          </strong>
-        </div>
-      </div>
-
-      <div className="offers-layout">
-        <div className="panel">
-          <div className="panel-header">
-            <h2>Teklif Listesi</h2>
-            <span className="panel-meta">{offers.length} kayıt</span>
-          </div>
-
-          <div className="panel-content">
-            {offersLoading ? (
-              <p className="empty-state">Teklifler yükleniyor…</p>
-            ) : offers.length === 0 ? (
-              <p className="empty-state">Henüz teklif kaydı bulunmuyor.</p>
-            ) : (
-              <div className="offers-list">
-                {offers.map((offer) => (
-                  <article
-                    className={`offer-card${
-                      offer.id === selectedOfferId ? " selected" : ""
-                    }`}
-                    key={offer.id}
-                  >
-                    <div className="offer-card-top">
-                      <div>
-                        <h3>{offer.title}</h3>
-                        <p className="offer-amount">{offer.amountDisplay}</p>
-                      </div>
-
-                      <span
-                        className={`offer-status-badge ${getOfferStatusTone(
-                          offer.status
-                        )}`}
-                      >
-                        {offer.status}
-                      </span>
-                    </div>
-
-                    <div className="offer-meta-row">
-                      <span>{offer.date}</span>
-                      <span>
-                        {offer.source === "api"
-                          ? "Canlı API"
-                          : "Yerel taslak"}
-                      </span>
-                    </div>
-
-                    <div className="offer-card-actions">
-                      <button
-                        type="button"
-                        className="offer-secondary-button"
-                        onClick={() => setSelectedOfferId(offer.id)}
-                      >
-                        Detay
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => deleteOffer(offer.id)}
-                      >
-                        {offer.source === "local" ? "Sil" : "Listeden Kaldır"}
-                      </button>
-                    </div>
-                  </article>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="panel offer-detail-panel">
-          <div className="panel-header">
-            <h2>Teklif Detayı</h2>
-            {selectedOfferDetail && (
-              <span className="panel-meta">
-                {selectedOfferDetail.source === "api"
-                  ? "API detayı"
-                  : "Taslak detay"}
-              </span>
-            )}
-          </div>
-
-          <div className="panel-content">
-            {offersLoading ? (
-              <p className="empty-state">Detay alanı hazırlanıyor…</p>
-            ) : !selectedOfferDetail ? (
-              <p className="empty-state">
-                Detayları görmek için bir teklif seç.
-              </p>
-            ) : offerDetailLoading ? (
-              <p className="empty-state">Teklif detayı yükleniyor…</p>
-            ) : (
-              <div className="offer-detail-content">
-                <div className="offer-detail-header">
-                  <div>
-                    <h3>{selectedOfferDetail.title}</h3>
-                    <p>{selectedOfferDetail.amountDisplay}</p>
-                  </div>
-
-                  <span
-                    className={`offer-status-badge ${getOfferStatusTone(
-                      selectedOfferDetail.status
-                    )}`}
-                  >
-                    {selectedOfferDetail.status}
-                  </span>
-                </div>
-
-                {offerDetailError && (
-                  <p className="status-banner warning">{offerDetailError}</p>
-                )}
-
-                <div className="offer-detail-grid">
-                  <div className="offer-detail-item">
-                    <span>Kaynak</span>
-                    <strong>
-                      {selectedOfferDetail.source === "api"
-                        ? "Teklifler API"
-                        : "Yerel taslak"}
-                    </strong>
-                  </div>
-
-                  <div className="offer-detail-item">
-                    <span>Teklif Tarihi</span>
-                    <strong>{selectedOfferDetail.date}</strong>
-                  </div>
-
-                  <div className="offer-detail-item">
-                    <span>Para Birimi</span>
-                    <strong>
-                      {selectedOfferDetail.currency || "Belirtilmedi"}
-                    </strong>
-                  </div>
-
-                  <div className="offer-detail-item">
-                    <span>Proje Bağlantısı</span>
-                    <strong>
-                      {selectedOfferDetail.projectId || "Atanmadı"}
-                    </strong>
-                  </div>
-                </div>
-
-                <div className="offer-detail-note">
-                  <strong>Detay görünümü hazır</strong>
-                  <p>
-                    Teklif seçildiğinde temel alanlar ve API detay sorgusu bu
-                    panelde yönetilir.
-                  </p>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-
-  const renderSystems = () => (
-    <div className="module-page">
-      <div className="systems-grid">
-        {systemModules.map((system) => (
-          <div className="system-card" key={system.id}>
-            <h3>{system.title}</h3>
-            <p>{system.description}</p>
-          </div>
-        ))}
-      </div>
-
-      <div className="panel memory-panel">
-        <div className="panel-header">
-          <h2>Merkezi Hafıza</h2>
-
-          <button
-            type="button"
-            onClick={() => setShowMemoryForm((value) => !value)}
-          >
-            {showMemoryForm ? "Kapat" : "+ Yeni Kayıt"}
-          </button>
-        </div>
-
-        {showMemoryForm && (
-          <form className="data-form" onSubmit={createMemory}>
-            <input
-              type="text"
-              placeholder="Hafıza başlığı"
-              value={memoryTitle}
-              onChange={(event) => setMemoryTitle(event.target.value)}
-            />
-
-            <textarea
-              placeholder="Hafıza içeriği"
-              value={memoryContent}
-              onChange={(event) => setMemoryContent(event.target.value)}
-            />
-
-            <button type="submit">Hafızaya Kaydet</button>
-          </form>
-        )}
-
-        <div className="data-list">
-          {memoryItems.length === 0 ? (
-            <p className="empty-state">
-              Merkezi hafızada henüz kayıt bulunmuyor.
-            </p>
-          ) : (
-            memoryItems.map((item) => (
-              <div className="data-card" key={item.id}>
-                <div>
-                  <h3>{item.title}</h3>
-                  <p>{item.content}</p>
-                  <small>{item.date}</small>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => deleteMemory(item.id)}
-                >
-                  Sil
-                </button>
-              </div>
-            ))
-          )}
-        </div>
-      </div>
-
-      <div className="panel">
-        <div className="panel-header">
-          <h2>Entegrasyonlar</h2>
-        </div>
-
-        <div className="data-list">
-          {integrations.map((item) => (
-            <div className="data-card" key={item.id}>
-              <div>
-                <h3>{item.name}</h3>
-                <p>{item.description}</p>
-                <small>Durum: {item.status}</small>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => toggleIntegration(item.id)}
-              >
-                {item.status === "Aktif" ? "Pasifleştir" : "Aktifleştir"}
-              </button>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
 
   const renderModule = () => {
     switch (activeModule) {
       case "projects":
-        return renderProjects();
-
+        return (
+          <ProjectsModule
+            projects={projects}
+            loading={projectsLoading}
+            error={projectsError}
+            showForm={showProjectForm}
+            onToggleForm={() => setShowProjectForm((value) => !value)}
+            onSubmit={createProject}
+            onDelete={deleteProject}
+            projectName={projectName}
+            onProjectNameChange={setProjectName}
+            projectType={projectType}
+            onProjectTypeChange={setProjectType}
+            projectStatus={projectStatus}
+            onProjectStatusChange={setProjectStatus}
+          />
+        );
       case "research":
-        return renderResearch();
-
-      case "ai":
-        return renderAI();
-
+        return (
+          <ResearchModule
+            items={researchItems}
+            loading={researchLoading}
+            error={researchError}
+            showForm={showResearchForm}
+            onToggleForm={() => setShowResearchForm((value) => !value)}
+            onSubmit={createResearch}
+            onDelete={deleteResearch}
+            researchName={researchName}
+            onResearchNameChange={setResearchName}
+            researchNote={researchNote}
+            onResearchNoteChange={setResearchNote}
+          />
+        );
       case "offers":
-        return renderOffers();
-
+        return (
+          <OffersModule
+            offers={offers}
+            loading={offersLoading}
+            error={offersError}
+            fetchState={offersFetchState}
+            showForm={showOfferForm}
+            onToggleForm={() => setShowOfferForm((value) => !value)}
+            onReload={() => setOffersReloadKey((value) => value + 1)}
+            onSubmit={createOffer}
+            onDelete={deleteOffer}
+            offerName={offerName}
+            onOfferNameChange={setOfferName}
+            offerAmount={offerAmount}
+            onOfferAmountChange={setOfferAmount}
+            offerStatus={offerStatus}
+            onOfferStatusChange={setOfferStatus}
+            selectedOfferId={selectedOfferId}
+            onSelectOffer={setSelectedOfferId}
+            selectedOfferDetail={selectedOfferDetail}
+            offerDetailLoading={offerDetailLoading}
+            offerDetailError={offerDetailError}
+          />
+        );
+      case "ai":
+        return (
+          <AIModule
+            messages={aiMessages}
+            aiInput={aiInput}
+            onAiInputChange={setAiInput}
+            onSubmit={sendAiMessage}
+          />
+        );
       case "systems":
-        return renderSystems();
-
+        return (
+          <SystemsModule
+            systems={systemModules}
+            memoryItems={memoryItems}
+            integrations={integrations}
+            showMemoryForm={showMemoryForm}
+            onToggleMemoryForm={() => setShowMemoryForm((value) => !value)}
+            onCreateMemory={createMemory}
+            onDeleteMemory={deleteMemory}
+            onToggleIntegration={toggleIntegration}
+            memoryTitle={memoryTitle}
+            onMemoryTitleChange={setMemoryTitle}
+            memoryContent={memoryContent}
+            onMemoryContentChange={setMemoryContent}
+          />
+        );
       case "dashboard":
+        return (
+          <DashboardModule
+            stats={dashboardStats}
+            systemStatusItems={systemStatusItems}
+            recentLogs={systemLogs.slice(0, 8)}
+            recentActivities={recentActivities}
+            modules={MASTER_MODULES.filter((module) => module.id !== "dashboard")}
+            quickActions={quickActions}
+            onSelectModule={openModule}
+          />
+        );
       default:
-        return renderDashboard();
+        return <PlaceholderModule module={currentModule} onOpenDashboard={() => openModule("dashboard")} />;
     }
   };
 
-  const currentModule =
-    modules.find((module) => module.id === activeModule) ||
-    modules[0];
-
   return (
-    <div className="ddpro-app">
-      <header className="app-header">
-        <div className="brand-area">
-          <div className="brand-logo">DD</div>
-
-          <div className="brand-content">
-            <strong>DOĞRU DİZAYN PRO</strong>
-            <span>DDPro Dijital Yönetim Sistemi</span>
+    <AppShell
+      sidebar={
+        <Sidebar
+          modules={filteredModules}
+          activeModule={activeModule}
+          onSelectModule={openModule}
+          totalModuleCount={MASTER_MODULES.length}
+        />
+      }
+      header={
+        <Header
+          currentModule={currentModule}
+          commandQuery={commandQuery}
+          onCommandChange={setCommandQuery}
+          onCommandSubmit={handleCommandSubmit}
+          filteredCount={filteredModules.length}
+          totalCount={MASTER_MODULES.length}
+          systemStatusItems={systemStatusItems.slice(0, 3)}
+        />
+      }
+      footer={<FooterStatus items={systemStatusItems} />}
+    >
+      <section className="content-shell">
+        <div className="content-header">
+          <div>
+            <p className="eyebrow-label">MASTER DDPRO ARAYÜZÜ</p>
+            <h1>{currentModule.title}</h1>
+            <p>{currentModule.description}</p>
+          </div>
+          <div className="content-header-meta">
+            <span className={`availability-badge ${currentModule.statusTone}`}>
+              {currentModule.availabilityLabel}
+            </span>
+            <span className="content-header-note">{currentModule.short}</span>
           </div>
         </div>
 
-        <div className="header-status">
-          <span className="status-dot"></span>
-          Sistem Aktif
-        </div>
-      </header>
+        <CommandCenter
+          activeModule={currentModule}
+          systemStatusItems={systemStatusItems.slice(0, 4)}
+          quickActions={quickActions}
+        />
 
-      <div className="app-layout">
-        <aside className="sidebar">
-          <div className="sidebar-title">
-            ANA MODÜLLER
-          </div>
-
-          <nav className="module-nav">
-            {modules.map((module) => (
-              <button
-                key={module.id}
-                type="button"
-                className={`module-button ${
-                  activeModule === module.id ? "active" : ""
-                }`}
-                onClick={() => setActiveModule(module.id)}
-              >
-                <span className="module-icon">
-                  {module.icon}
-                </span>
-
-                <span className="module-text">
-                  <strong>{module.title}</strong>
-                  <small>{module.short}</small>
-                </span>
-              </button>
-            ))}
-          </nav>
-
-          <div className="sidebar-footer">
-            <div className="sidebar-system">
-              <span className="status-dot"></span>
-              DDPro Core v1.0
-            </div>
-          </div>
-        </aside>
-
-        <main className="main-content">
-          <section className="content-header">
-            <div>
-              <h1>{currentModule.title}</h1>
-              <p>{currentModule.description}</p>
-            </div>
-          </section>
-
-          <section className="content-body">
-            {renderModule()}
-          </section>
-        </main>
-      </div>
-    </div>
+        <section className="content-body">{renderModule()}</section>
+      </section>
+    </AppShell>
   );
 }
 
