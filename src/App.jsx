@@ -611,6 +611,17 @@ const buildInitialLoadState = () =>
     return accumulator;
   }, {});
 
+const buildInitialSelectionState = (initialRecords) =>
+  ENTITY_MODULES.reduce((accumulator, moduleId) => {
+    accumulator[moduleId] = initialRecords[moduleId]?.[0]?.id || null;
+    return accumulator;
+  }, {});
+
+const sortRecordsByUpdatedAt = (items = []) =>
+  [...items].sort(
+    (left, right) => new Date(right.updatedAt || right.createdAt) - new Date(left.updatedAt || left.createdAt)
+  );
+
 const MODULE_CONFIGS = {
   products: {
     singular: "Ürün",
@@ -898,9 +909,7 @@ const mergeRemoteRecords = (currentRecords, incomingRecords, moduleId) => {
     map.set(record.id, record);
   });
 
-  return Array.from(map.values()).sort(
-    (left, right) => new Date(right.updatedAt) - new Date(left.updatedAt)
-  );
+  return sortRecordsByUpdatedAt(Array.from(map.values()));
 };
 
 const buildModuleRecord = (moduleId, draft, existingRecord) => {
@@ -1115,16 +1124,15 @@ const getRelatedRecords = (link, records) => {
 };
 
 function App() {
+  const initialRecords = useMemo(() => buildInitialRecords(), []);
+
   const [activeModule, setActiveModule] = useState(() =>
     findModuleByHash(typeof window !== "undefined" ? window.location.hash : "#dashboard").id
   );
-  const [records, setRecords] = useState(buildInitialRecords);
+  const [records, setRecords] = useState(initialRecords);
   const [loadState, setLoadState] = useState(buildInitialLoadState);
   const [selectedIds, setSelectedIds] = useState(() =>
-    ENTITY_MODULES.reduce((accumulator, moduleId) => {
-      accumulator[moduleId] = buildInitialRecords()[moduleId]?.[0]?.id || null;
-      return accumulator;
-    }, {})
+    buildInitialSelectionState(initialRecords)
   );
   const [filters, setFilters] = useState(() =>
     ENTITY_MODULES.reduce((accumulator, moduleId) => {
@@ -1498,13 +1506,15 @@ function App() {
     const record = buildModuleRecord(editorState.moduleId, editorState.draft, existingRecord);
 
     setRecords((current) => {
+      const nextModuleRecords = existingRecord
+        ? current[editorState.moduleId].map((item) =>
+            item.id === existingRecord.id ? record : item
+          )
+        : [record, ...current[editorState.moduleId]];
+
       const nextRecords = {
         ...current,
-        [editorState.moduleId]: existingRecord
-          ? current[editorState.moduleId].map((item) =>
-              item.id === existingRecord.id ? record : item
-            )
-          : [record, ...current[editorState.moduleId]],
+        [editorState.moduleId]: sortRecordsByUpdatedAt(nextModuleRecords),
       };
 
       return applyProductSystemSync(nextRecords, editorState.moduleId, record);

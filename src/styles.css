@@ -40,12 +40,6 @@ button {
   cursor: pointer;
 }
 
-button,
-input,
-textarea,
-select {
-  -webkit-tap-highlight-color: transparent;
-}
 
 button:focus-visible,
 input:focus-visible,
