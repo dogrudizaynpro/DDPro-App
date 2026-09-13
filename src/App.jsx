@@ -910,6 +910,7 @@ function App() {
 
     if (!projectName.trim()) return;
     projectsTouchedRef.current = true;
+    let shouldResetForm = false;
 
     const newProject = {
       id: createId(),
@@ -928,12 +929,14 @@ function App() {
       setProjects((currentProjects) => [nextProject, ...currentProjects]);
       setProjectsFetchState("success");
       addLog(`Yeni proje API üzerinden oluşturuldu: ${nextProject.name}`);
+      shouldResetForm = true;
     } catch (error) {
       if (CAN_USE_LOCAL_FALLBACK) {
         setProjects((currentProjects) => [newProject, ...currentProjects]);
         setProjectsFetchState("warning");
         setProjectsError("Proje API'ye kaydedilemedi. Yerel kayıt oluşturuldu.");
         addLog(`Yeni proje yerel olarak oluşturuldu: ${newProject.name}`);
+        shouldResetForm = true;
       } else {
         setProjectsError(
           `Proje API'ye kaydedilemedi (${getApiFailureReason(error)}). Yerel fallback production ortamında kapalı.`
@@ -944,10 +947,12 @@ function App() {
       }
     }
 
-    setProjectName("");
-    setProjectType("");
-    setProjectStatus("Aktif");
-    setShowProjectForm(false);
+    if (shouldResetForm) {
+      setProjectName("");
+      setProjectType("");
+      setProjectStatus("Aktif");
+      setShowProjectForm(false);
+    }
   };
 
   const deleteProject = async (id) => {
@@ -1001,6 +1006,7 @@ function App() {
 
     if (!procurementName.trim()) return;
     procurementTouchedRef.current = true;
+    let shouldResetForm = false;
 
     const newProcurement = {
       id: createId(),
@@ -1018,6 +1024,7 @@ function App() {
       setProcurementItems((currentItems) => [nextProcurement, ...currentItems]);
       setProcurementFetchState("success");
       addLog(`Yeni tedarik kaydı API üzerinden oluşturuldu: ${nextProcurement.name}`);
+      shouldResetForm = true;
     } catch (error) {
       if (CAN_USE_LOCAL_FALLBACK) {
         setProcurementItems((currentItems) => [newProcurement, ...currentItems]);
@@ -1026,6 +1033,7 @@ function App() {
           "Tedarik kaydı API'ye kaydedilemedi. Yerel kayıt oluşturuldu."
         );
         addLog(`Yeni tedarik kaydı yerel olarak oluşturuldu: ${newProcurement.name}`);
+        shouldResetForm = true;
       } else {
         setProcurementError(
           `Tedarik kaydı API'ye kaydedilemedi (${getApiFailureReason(error)}). Yerel fallback production ortamında kapalı.`
@@ -1036,9 +1044,11 @@ function App() {
       }
     }
 
-    setProcurementName("");
-    setProcurementNote("");
-    setShowProcurementForm(false);
+    if (shouldResetForm) {
+      setProcurementName("");
+      setProcurementNote("");
+      setShowProcurementForm(false);
+    }
   };
 
   const deleteProcurement = async (id) => {
@@ -1095,6 +1105,7 @@ function App() {
 
     if (!offerName.trim()) return;
     offersTouchedRef.current = true;
+    let shouldResetForm = false;
 
     const newOffer = mapOfferToViewModel({
       id: createId(),
@@ -1118,6 +1129,7 @@ function App() {
       ]);
       setSelectedOfferId(nextOffer.id);
       addLog(`Yeni teklif API üzerinden oluşturuldu: ${newOffer.title}`);
+      shouldResetForm = true;
     } catch (error) {
       console.warn("Teklif API'ye kaydedilemedi:", error.message);
 
@@ -1127,6 +1139,7 @@ function App() {
         setOffersFetchState("warning");
         setOffersError("Teklif API'ye kaydedilemedi. Yerel kayıt oluşturuldu.");
         addLog(`Yeni teklif yerel olarak oluşturuldu: ${newOffer.title}`);
+        shouldResetForm = true;
       } else {
         setOffersFetchState("error");
         setOffersError(
@@ -1138,10 +1151,12 @@ function App() {
       }
     }
 
-    setOfferName("");
-    setOfferAmount("");
-    setOfferStatus("Hazırlanıyor");
-    setShowOfferForm(false);
+    if (shouldResetForm) {
+      setOfferName("");
+      setOfferAmount("");
+      setOfferStatus("Hazırlanıyor");
+      setShowOfferForm(false);
+    }
   };
 
   const deleteOffer = async (id) => {
