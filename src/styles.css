@@ -323,7 +323,7 @@ textarea {
 .detail-item span,
 .record-card-top span,
 .workflow-link-card span,
-.field span {
+.field label {
   color: #8ca0ba;
   font-size: 12px;
 }

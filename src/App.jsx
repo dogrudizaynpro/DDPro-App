@@ -1548,6 +1548,10 @@ function App() {
       const selectedProducts = new Set(record.productIds || []);
       nextRecords.products = nextRecords.products.map((product) => {
         if (selectedProducts.has(product.id)) {
+          if (product.systemId && product.systemId !== record.id) {
+            return product;
+          }
+
           return normalizeProduct({
             ...product,
             systemId: record.id,
@@ -1652,27 +1656,24 @@ function App() {
     localChangeVersionRef.current[moduleId] =
       (localChangeVersionRef.current[moduleId] || 0) + 1;
 
-    setRecords((current) => {
-      const nextModuleRecords = current[moduleId].filter((item) => item.id !== recordId);
-      const nextRecords = sanitizeReferencesAfterDelete(
-        {
-          ...current,
-          [moduleId]: nextModuleRecords,
-        },
-        moduleId,
-        recordId
-      );
+    const nextModuleRecords = (records[moduleId] || []).filter((item) => item.id !== recordId);
+    const nextRecords = sanitizeReferencesAfterDelete(
+      {
+        ...records,
+        [moduleId]: nextModuleRecords,
+      },
+      moduleId,
+      recordId
+    );
 
-      setSelectedIds((currentSelectedIds) => ({
-        ...currentSelectedIds,
-        [moduleId]:
-          currentSelectedIds[moduleId] === recordId
-            ? nextRecords[moduleId][0]?.id || null
-            : currentSelectedIds[moduleId],
-      }));
-
-      return nextRecords;
-    });
+    setRecords(nextRecords);
+    setSelectedIds((currentSelectedIds) => ({
+      ...currentSelectedIds,
+      [moduleId]:
+        currentSelectedIds[moduleId] === recordId
+          ? nextRecords[moduleId][0]?.id || null
+          : currentSelectedIds[moduleId],
+    }));
 
     appendLog(
       `${MODULE_CONFIGS[moduleId].singular} silindi: ${getRecordLabel(moduleId, record)}`,
@@ -1737,19 +1738,27 @@ function App() {
   const renderFormField = (moduleId, field) => {
     const value = editorState.draft?.[field.name];
     const relationOptions = field.relation
-      ? (records[field.relation] || []).map((item) => ({
-          value: item.id,
-          label:
-            item.name ||
-            item.title ||
-            item.ddpCode ||
-            item.systemCode ||
-            item.analysisCode ||
-            item.offerCode ||
-            item.projectCode ||
-            item.customerCode ||
-            item.id,
-        }))
+      ? (records[field.relation] || [])
+          .filter((item) => {
+            if (moduleId === "systems" && field.name === "productIds") {
+              return !item.systemId || item.systemId === editorState.recordId;
+            }
+
+            return true;
+          })
+          .map((item) => ({
+            value: item.id,
+            label:
+              item.name ||
+              item.title ||
+              item.ddpCode ||
+              item.systemCode ||
+              item.analysisCode ||
+              item.offerCode ||
+              item.projectCode ||
+              item.customerCode ||
+              item.id,
+          }))
       : [];
 
     if (field.type === "textarea") {
@@ -2046,13 +2055,13 @@ function App() {
                 <form className="module-form" onSubmit={saveRecord}>
                   <div className="form-grid">
                     {config.fields.map((field) => (
-                      <label key={field.name} className={field.type === "textarea" ? "field full" : "field"}>
-                        <span>
+                      <div key={field.name} className={field.type === "textarea" ? "field full" : "field"}>
+                        <label htmlFor={`${moduleId}-${field.name}`}>
                           {field.label}
                           {field.required ? " *" : ""}
-                        </span>
+                        </label>
                         {renderFormField(moduleId, field)}
-                      </label>
+                      </div>
                     ))}
                   </div>
 
