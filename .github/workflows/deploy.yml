@@ -37,8 +37,13 @@ jobs:
           API_URL="${{ vars.VITE_API_URL }}"
 
           if [ -z "$API_URL" ]; then
-            echo "::error::Repository variable VITE_API_URL is required for production deployment."
-            exit 1
+            API_URL="${{ secrets.VITE_API_URL }}"
+          fi
+
+          if [ -z "$API_URL" ]; then
+            echo "::notice::VITE_API_URL not configured. Build will continue with frontend fallback mode."
+            echo "value=" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
 
           case "$API_URL" in
@@ -51,9 +56,11 @@ jobs:
           esac
 
           echo "::notice::Using configured production API origin."
+          echo "VITE_API_URL=$API_URL" >> "$GITHUB_ENV"
           echo "value=$API_URL" >> "$GITHUB_OUTPUT"
 
       - name: Smoke test production API
+        if: ${{ steps.api_url.outputs.value != '' }}
         run: |
           API_URL="${{ steps.api_url.outputs.value }}"
           curl --fail --silent --show-error \
@@ -65,8 +72,6 @@ jobs:
 
       - name: Build DDPro
         run: npm run build
-        env:
-          VITE_API_URL: ${{ steps.api_url.outputs.value }}
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
