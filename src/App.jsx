@@ -198,7 +198,7 @@ function App() {
       );
 
       if (!matchedModule) {
-        window.history.replaceState(null, "", modules[0].path);
+        window.location.hash = modules[0].path;
         setActiveModule(modules[0].id);
         return;
       }
