@@ -8,7 +8,7 @@
     "dev": "vite",
     "build": "vite build",
     "test": "NODE_ENV=test node --test \"test/**/*.test.js\"",
-    "lint": "eslint \"src/**/*.{js,jsx}\" \"backend/src/**/*.js\" \"*.js\"",
+    "lint": "eslint \"src/**/*.{js,jsx}\" \"backend/src/**/*.js\" \"backend/test/**/*.js\" \"test/**/*.js\" \"*.js\"",
     "preview": "vite preview",
     "predeploy": "npm run build",
     "deploy": "gh-pages -d dist"

@@ -7,7 +7,13 @@ export default [
     ignores: ["dist/**", "node_modules/**", "backend/node_modules/**"],
   },
   {
-    files: ["src/**/*.{js,jsx}", "backend/src/**/*.js", "*.js"],
+    files: [
+      "src/**/*.{js,jsx}",
+      "backend/src/**/*.js",
+      "backend/test/**/*.js",
+      "test/**/*.js",
+      "*.js",
+    ],
     ...js.configs.recommended,
     plugins: {
       react: reactPlugin,
