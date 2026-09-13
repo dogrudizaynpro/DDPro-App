@@ -132,6 +132,8 @@ const getApiFailureReason = (error) => {
 const normalizeModuleDataSource = (items = []) =>
   items.some((item) => item?.source === "api") ? "api" : "local";
 
+const VALID_MODULE_IDS = new Set(MASTER_MODULES.map((module) => module.id));
+
 function App() {
   const [activeModule, setActiveModule] = useState("dashboard");
   const [commandQuery, setCommandQuery] = useState("");
@@ -679,7 +681,7 @@ function App() {
 
   const openModule = useCallback((moduleId) => {
     closeCreateForms();
-    setActiveModule(moduleId);
+    setActiveModule(VALID_MODULE_IDS.has(moduleId) ? moduleId : "dashboard");
   }, [closeCreateForms]);
 
   const openModuleWithForm = useCallback((moduleId, form) => {
