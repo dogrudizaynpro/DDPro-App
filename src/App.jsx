@@ -427,7 +427,11 @@ function App() {
     const nextHash = `#/${activeModule}`;
 
     if (window.location.hash !== nextHash) {
-      window.location.hash = nextHash;
+      window.history.replaceState(
+        null,
+        "",
+        `${window.location.pathname}${window.location.search}${nextHash}`
+      );
     }
   }, [activeModule]);
 
@@ -762,6 +766,14 @@ function App() {
   );
 
   const openModule = (moduleId) => {
+    if (typeof window !== "undefined") {
+      const nextHash = `#/${moduleId}`;
+
+      if (window.location.hash !== nextHash) {
+        window.location.hash = nextHash;
+      }
+    }
+
     setActiveModule(moduleId);
   };
 
@@ -1007,6 +1019,9 @@ function App() {
     event.preventDefault();
 
     if (!productForm.name.trim()) return;
+    const existingProduct = editingProductId
+      ? products.find((item) => item.id === editingProductId)
+      : null;
 
     const nextProduct = {
       id: editingProductId || createId(),
@@ -1015,7 +1030,7 @@ function App() {
       supplier: productForm.supplier.trim() || "Tedarikçi belirtilmedi",
       status: productForm.status,
       note: productForm.note.trim() || "Not eklenmedi.",
-      date: formatDate(),
+      date: existingProduct?.date || formatDate(),
       source: "local",
     };
 
@@ -1067,6 +1082,9 @@ function App() {
     event.preventDefault();
 
     if (!priceForm.title.trim()) return;
+    const existingItem = editingPriceId
+      ? priceAnalyses.find((item) => item.id === editingPriceId)
+      : null;
 
     const unitPrice = parseDecimalInput(priceForm.unitPrice);
     const quantity = parseDecimalInput(priceForm.quantity);
@@ -1084,7 +1102,7 @@ function App() {
       quantityInput: priceForm.quantity.trim(),
       totalAmount,
       note: priceForm.note.trim() || "Not eklenmedi.",
-      date: formatDate(),
+      date: existingItem?.date || formatDate(),
       source: "local",
     };
 
@@ -1137,6 +1155,9 @@ function App() {
     event.preventDefault();
 
     if (!materialForm.title.trim()) return;
+    const existingItem = editingMaterialId
+      ? materialAnalyses.find((item) => item.id === editingMaterialId)
+      : null;
 
     const nextItem = {
       id: editingMaterialId || createId(),
@@ -1147,7 +1168,7 @@ function App() {
       unit: materialForm.unit.trim() || "Birim belirtilmedi",
       usageArea: materialForm.usageArea.trim() || "Kullanım alanı belirtilmedi",
       note: materialForm.note.trim() || "Not eklenmedi.",
-      date: formatDate(),
+      date: existingItem?.date || formatDate(),
       source: "local",
     };
 
@@ -1198,6 +1219,9 @@ function App() {
     event.preventDefault();
 
     if (!crmForm.customerName.trim()) return;
+    const existingItem = editingCrmId
+      ? crmRecords.find((item) => item.id === editingCrmId)
+      : null;
 
     const nextItem = {
       id: editingCrmId || createId(),
@@ -1206,7 +1230,7 @@ function App() {
       contact: crmForm.contact.trim() || "İletişim bilgisi belirtilmedi",
       stage: crmForm.stage,
       note: crmForm.note.trim() || "Not eklenmedi.",
-      date: formatDate(),
+      date: existingItem?.date || formatDate(),
       source: "local",
     };
 
