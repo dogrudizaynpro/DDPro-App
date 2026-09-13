@@ -1565,6 +1565,24 @@ function App() {
 
         return product;
       });
+
+      const systemProductMap = nextRecords.products.reduce((accumulator, product) => {
+        if (!product.systemId) {
+          return accumulator;
+        }
+
+        const currentProductIds = accumulator.get(product.systemId) || [];
+        accumulator.set(product.systemId, [...currentProductIds, product.id]);
+        return accumulator;
+      }, new Map());
+
+      nextRecords.systems = nextRecords.systems.map((system) =>
+        normalizeSystem({
+          ...system,
+          productIds: systemProductMap.get(system.id) || [],
+          updatedAt: system.id === record.id ? new Date().toISOString() : system.updatedAt,
+        })
+      );
     }
 
     return nextRecords;
@@ -1635,19 +1653,26 @@ function App() {
       (localChangeVersionRef.current[moduleId] || 0) + 1;
 
     setRecords((current) => {
-      const nextRecords = {
-        ...current,
-        [moduleId]: current[moduleId].filter((item) => item.id !== recordId),
-      };
+      const nextModuleRecords = current[moduleId].filter((item) => item.id !== recordId);
+      const nextRecords = sanitizeReferencesAfterDelete(
+        {
+          ...current,
+          [moduleId]: nextModuleRecords,
+        },
+        moduleId,
+        recordId
+      );
 
-      return sanitizeReferencesAfterDelete(nextRecords, moduleId, recordId);
+      setSelectedIds((currentSelectedIds) => ({
+        ...currentSelectedIds,
+        [moduleId]:
+          currentSelectedIds[moduleId] === recordId
+            ? nextRecords[moduleId][0]?.id || null
+            : currentSelectedIds[moduleId],
+      }));
+
+      return nextRecords;
     });
-
-    const remainingRecords = (records[moduleId] || []).filter((item) => item.id !== recordId);
-    setSelectedIds((current) => ({
-      ...current,
-      [moduleId]: current[moduleId] === recordId ? remainingRecords[0]?.id || null : current[moduleId],
-    }));
 
     appendLog(
       `${MODULE_CONFIGS[moduleId].singular} silindi: ${getRecordLabel(moduleId, record)}`,
