@@ -118,16 +118,22 @@ export const calculateMaterialAnalysisTotals = (items = []) => {
   return { total };
 };
 
-const groupChildren = (items = [], parentId = null) =>
+const groupChildren = (items = [], parentId = null, lineage = new Set()) =>
   items
     .filter((item) => (item.parentId || null) === parentId)
-    .map((item) => ({
-      ...item,
-      totalCost: calculateMaterialItemTotal(item),
-      children: groupChildren(items, item.id),
-    }));
+    .map((item) => {
+      const nextLineage = new Set(lineage);
+      nextLineage.add(item.id);
+      const children = lineage.has(item.id) ? [] : groupChildren(items, item.id, nextLineage);
 
-export const buildMaterialTree = (items = []) => groupChildren(items, null);
+      return {
+        ...item,
+        totalCost: calculateMaterialItemTotal(item),
+        children,
+      };
+    });
+
+export const buildMaterialTree = (items = []) => groupChildren(items, null, new Set());
 
 export const getSourceLabel = (source) => (source === 'api' ? 'Canlı API' : 'Yerel taslak');
 

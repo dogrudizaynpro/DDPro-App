@@ -285,7 +285,13 @@ const normalizeOffer = (record = {}) => {
     unitPrice: String(item.unitPrice ?? '0'),
   }));
   const vatRate = String(record.vatRate ?? '20');
-  const { subtotal, tax, total } = calculateOfferTotals(items, vatRate);
+  const explicitTotal = toNumber(record.total ?? record.amount ?? record.amountValue);
+  const explicitSubtotal = toNumber(record.subtotal ?? explicitTotal);
+  const explicitTax = toNumber(record.tax);
+  const calculated = calculateOfferTotals(items, vatRate);
+  const subtotal = items.length > 0 ? calculated.subtotal : explicitSubtotal;
+  const tax = items.length > 0 ? calculated.tax : explicitTax;
+  const total = items.length > 0 ? calculated.total : explicitTotal || explicitSubtotal + explicitTax;
 
   return {
     id: record.id || createLocalId('offer'),
@@ -400,7 +406,10 @@ function App() {
   const [offersError, setOffersError] = useState('');
   const [offersFetchState, setOffersFetchState] = useState('loading');
 
-  const [researchItems, setResearchItems] = useState(() => readCollection(STORAGE_KEYS.research, []).map(normalizeResearch));
+  const [apiResearchItems, setApiResearchItems] = useState([]);
+  const [researchDrafts, setResearchDrafts] = useState(() =>
+    sortByRecent(readCollection(STORAGE_KEYS.research, []).map(normalizeResearch).filter((item) => item.source !== 'api'))
+  );
   const [researchLoading, setResearchLoading] = useState(true);
   const [researchError, setResearchError] = useState('');
 
@@ -487,6 +496,7 @@ function App() {
 
   const projects = useMemo(() => mergeRecordsById(apiProjects, projectDrafts), [apiProjects, projectDrafts]);
   const offers = useMemo(() => mergeRecordsById(apiOffers, offerDrafts), [apiOffers, offerDrafts]);
+  const researchItems = useMemo(() => mergeRecordsById(apiResearchItems, researchDrafts), [apiResearchItems, researchDrafts]);
 
   const productMap = useMemo(() => new Map(products.map((item) => [item.id, item])), [products]);
   const systemMap = useMemo(() => new Map(systems.map((item) => [item.id, item])), [systems]);
@@ -530,8 +540,8 @@ function App() {
   }, [offerDrafts]);
 
   useEffect(() => {
-    writeCollection(STORAGE_KEYS.research, researchItems);
-  }, [researchItems]);
+    writeCollection(STORAGE_KEYS.research, researchDrafts);
+  }, [researchDrafts]);
 
   useEffect(() => {
     writeCollection(STORAGE_KEYS.memory, memoryItems);
@@ -649,11 +659,10 @@ function App() {
       try {
         const records = await getResearchItems();
         if (cancelled) return;
-        if (records.length > 0) {
-          setResearchItems(sortByRecent(records.map(normalizeResearch)));
-        }
+        setApiResearchItems(sortByRecent(records.map((record) => normalizeResearch({ ...record, source: 'api' }))));
       } catch (error) {
         if (!cancelled) {
+          setApiResearchItems([]);
           setResearchError(error.message || 'Araştırma kayıtları alınamadı.');
         }
       } finally {
@@ -670,43 +679,78 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (!selectedProductId && products[0]) {
+    if (products.length === 0) {
+      setSelectedProductId(null);
+      return;
+    }
+
+    if (!selectedProductId || !products.some((item) => item.id === selectedProductId)) {
       setSelectedProductId(products[0].id);
     }
   }, [products, selectedProductId]);
 
   useEffect(() => {
-    if (!selectedSystemId && systems[0]) {
+    if (systems.length === 0) {
+      setSelectedSystemId(null);
+      return;
+    }
+
+    if (!selectedSystemId || !systems.some((item) => item.id === selectedSystemId)) {
       setSelectedSystemId(systems[0].id);
     }
   }, [systems, selectedSystemId]);
 
   useEffect(() => {
-    if (!selectedCustomerId && customers[0]) {
+    if (customers.length === 0) {
+      setSelectedCustomerId(null);
+      return;
+    }
+
+    if (!selectedCustomerId || !customers.some((item) => item.id === selectedCustomerId)) {
       setSelectedCustomerId(customers[0].id);
     }
   }, [customers, selectedCustomerId]);
 
   useEffect(() => {
-    if (!selectedProjectId && projects[0]) {
+    if (projects.length === 0) {
+      setSelectedProjectId(null);
+      return;
+    }
+
+    if (!selectedProjectId || !projects.some((item) => item.id === selectedProjectId)) {
       setSelectedProjectId(projects[0].id);
     }
   }, [projects, selectedProjectId]);
 
   useEffect(() => {
-    if (!selectedOfferId && offers[0]) {
+    if (offers.length === 0) {
+      setSelectedOfferId(null);
+      return;
+    }
+
+    if (!selectedOfferId || !offers.some((item) => item.id === selectedOfferId)) {
       setSelectedOfferId(offers[0].id);
     }
   }, [offers, selectedOfferId]);
 
   useEffect(() => {
-    if (!selectedPriceAnalysisId && priceAnalyses[0]) {
+    if (priceAnalyses.length === 0) {
+      setSelectedPriceAnalysisId(null);
+      return;
+    }
+
+    if (!selectedPriceAnalysisId || !priceAnalyses.some((item) => item.id === selectedPriceAnalysisId)) {
       setSelectedPriceAnalysisId(priceAnalyses[0].id);
     }
   }, [priceAnalyses, selectedPriceAnalysisId]);
 
   useEffect(() => {
-    if (!selectedMaterialAnalysisId && materialAnalyses[0]) {
+    if (materialAnalyses.length === 0) {
+      setSelectedMaterialAnalysisId(null);
+      return;
+    }
+
+    if (!selectedMaterialAnalysisId || !materialAnalyses.some((item) => item.id === selectedMaterialAnalysisId)) {
       setSelectedMaterialAnalysisId(materialAnalyses[0].id);
     }
   }, [materialAnalyses, selectedMaterialAnalysisId]);
@@ -1034,12 +1078,12 @@ function App() {
     const nextRecord = normalizeResearch({
       ...researchForm,
       id: researchForm.id || createLocalId('research'),
-      createdAt: researchForm.id ? researchItems.find((item) => item.id === researchForm.id)?.createdAt : now,
+      createdAt: researchForm.id ? researchDrafts.find((item) => item.id === researchForm.id)?.createdAt : now,
       updatedAt: now,
       source: 'local',
     });
 
-    setResearchItems((current) =>
+    setResearchDrafts((current) =>
       sortByRecent(researchForm.id ? current.map((item) => (item.id === nextRecord.id ? nextRecord : item)) : [nextRecord, ...current])
     );
     setShowResearchForm(false);
@@ -1074,9 +1118,16 @@ function App() {
   const handleDeleteCustomer = (id) => {
     const current = customerMap.get(id);
     if (!current) return;
+
+    const hasRelations = projects.some((item) => item.customerId === id) || offers.some((item) => item.customerId === id);
+
+    if (hasRelations) {
+      setCustomerFormError('Bu müşteri proje veya teklif kayıtlarında kullanıldığı için silinemez. Önce ilişkileri kaldırın.');
+      setSelectedCustomerId(id);
+      return;
+    }
+
     setCustomers((items) => items.filter((item) => item.id !== id));
-    setProjectDrafts((items) => items.map((item) => (item.customerId === id ? normalizeProject({ ...item, customerId: '' }) : item)));
-    setOfferDrafts((items) => items.map((item) => (item.customerId === id ? normalizeOffer({ ...item, customerId: '' }) : item)));
     if (selectedCustomerId === id) setSelectedCustomerId(null);
     addLog(`Müşteri silindi: ${current.company}`);
   };
@@ -1116,9 +1167,9 @@ function App() {
   };
 
   const handleDeleteResearch = (id) => {
-    const current = researchItems.find((item) => item.id === id);
-    if (!current || current.source === 'api') return;
-    setResearchItems((items) => items.filter((item) => item.id !== id));
+    const current = researchDrafts.find((item) => item.id === id);
+    if (!current) return;
+    setResearchDrafts((items) => items.filter((item) => item.id !== id));
     addLog(`Araştırma taslağı silindi: ${current.name}`);
   };
 
