@@ -740,6 +740,7 @@ function App() {
       }
     } catch (error) {
       if (error.status === 404) {
+        setProjectsError(null);
         setProjects((currentProjects) =>
           currentProjects.filter((item) => item.id !== id)
         );
@@ -829,6 +830,7 @@ function App() {
       }
     } catch (error) {
       if (error.status === 404) {
+        setResearchError(null);
         setResearchItems((currentItems) =>
           currentItems.filter((research) => research.id !== id)
         );
@@ -1145,7 +1147,7 @@ function App() {
       )}
 
       {projectsError && (
-        <p className="status-banner warning">
+        <p className="status-banner warning" role="alert" aria-live="assertive">
           ⚠ {projectsError}
         </p>
       )}
@@ -1210,7 +1212,12 @@ function App() {
       )}
 
       {researchError && (
-        <p className="empty-state" style={{ color: "#f59e0b" }}>
+        <p
+          className="empty-state"
+          style={{ color: "#f59e0b" }}
+          role="alert"
+          aria-live="assertive"
+        >
           ⚠ {researchError}
         </p>
       )}
