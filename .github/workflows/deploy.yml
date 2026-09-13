@@ -31,17 +31,20 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Validate API URL
+      - name: Resolve and validate API URL
+        env:
+          VITE_API_URL_SECRET: ${{ secrets.VITE_API_URL }}
+          VITE_API_URL_VAR: ${{ vars.VITE_API_URL }}
         run: |
-          if [ -z "${{ vars.VITE_API_URL }}" ]; then
-            echo "Repository variable VITE_API_URL is required for GitHub Pages API access."
+          API_URL="${VITE_API_URL_SECRET:-$VITE_API_URL_VAR}"
+          if [ -z "$API_URL" ]; then
+            echo "VITE_API_URL is required. Configure repository/environment secret VITE_API_URL or repository variable VITE_API_URL."
             exit 1
           fi
+          echo "VITE_API_URL=$API_URL" >> "$GITHUB_ENV"
 
       - name: Build DDPro
         run: npm run build
-        env:
-          VITE_API_URL: ${{ vars.VITE_API_URL }}
 
       - name: Setup Pages
         uses: actions/configure-pages@v5

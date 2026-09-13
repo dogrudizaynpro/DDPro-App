@@ -1,3 +1,9 @@
 node_modules/
 dist/
 package-lock.json
+.env
+.env.*
+!.env.example
+backend/.env
+backend/.env.*
+!backend/.env.example
