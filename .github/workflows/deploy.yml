@@ -31,17 +31,27 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Validate API URL
+      - name: Resolve API URL
+        id: api_url
         run: |
-          if [ -z "${{ vars.VITE_API_URL }}" ]; then
-            echo "Repository variable VITE_API_URL is required for GitHub Pages API access."
-            exit 1
+          API_URL="${{ vars.VITE_API_URL }}"
+
+          if [ -z "$API_URL" ]; then
+            API_URL="${{ secrets.VITE_API_URL }}"
           fi
+
+          if [ -z "$API_URL" ]; then
+            echo "::warning::VITE_API_URL is not set. Continuing without an injected API URL; configure it for production runtime."
+          else
+            echo "::add-mask::$API_URL"
+          fi
+
+          echo "value=$API_URL" >> "$GITHUB_OUTPUT"
 
       - name: Build DDPro
         run: npm run build
         env:
-          VITE_API_URL: ${{ vars.VITE_API_URL }}
+          VITE_API_URL: ${{ steps.api_url.outputs.value }}
 
       - name: Setup Pages
         uses: actions/configure-pages@v5

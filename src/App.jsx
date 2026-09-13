@@ -9,11 +9,11 @@ import {
   mapOfferToViewModel,
   mapOffersToViewModel,
 } from "./services/offers.service.js";
-import { getResearchItems } from "./services/research.service.js";
+import { getResearchItems as getProcurementItems } from "./services/research.service.js";
 
 const STORAGE_KEYS = {
   projects: "ddpro_projects_v1",
-  research: "ddpro_research_v1",
+  procurement: "ddpro_research_v1",
   offers: "ddpro_offers_v1",
   memory: "ddpro_memory_v1",
   logs: "ddpro_system_logs_v1",
@@ -166,11 +166,23 @@ const routeModuleMap = Object.fromEntries(
 );
 const moduleIds = new Set(modules.map((module) => module.id));
 
+const normalizeModulePath = (pathValue) => {
+  const sanitizedPath = (pathValue || "").trim();
+  const normalizedBasePath = sanitizedPath.replace(/\/+$/, "");
+
+  if (!normalizedBasePath) {
+    return "/dashboard";
+  }
+
+  return normalizedBasePath.startsWith("/")
+    ? normalizedBasePath
+    : `/${normalizedBasePath}`;
+};
+
 const resolveModuleFromHash = (hashValue) => {
   const rawPath = (hashValue || "").replace(/^#/, "").trim();
-  const [pathOnly] = rawPath.split("?");
-  const basePath = pathOnly.replace(/\/+$/, "");
-  const normalizedPath = (basePath.startsWith("/") ? basePath : `/${basePath}`) || "/dashboard";
+  const pathOnly = rawPath.match(/^[^?#]*/)?.[0] || "";
+  const normalizedPath = normalizeModulePath(pathOnly);
   return routeModuleMap[normalizedPath] || "dashboard";
 };
 
@@ -194,13 +206,39 @@ const mergeOffers = (apiOffers, storedOffers) => {
   return [...apiOffers, ...localOnlyOffers];
 };
 
-const getStoredData = (key, fallback = []) => {
+const EMPTY_ITEMS = Object.freeze([]);
+
+const getStoredData = (key, fallback = EMPTY_ITEMS) => {
   try {
     const value = localStorage.getItem(key);
     return value ? JSON.parse(value) : fallback;
   } catch {
     return fallback;
   }
+};
+
+const useStoredDataState = (key, fallback = EMPTY_ITEMS) => {
+  const [value, setValue] = useState(() => getStoredData(key, fallback));
+
+  useEffect(() => {
+    localStorage.setItem(key, JSON.stringify(value));
+  }, [key, value]);
+
+  useEffect(() => {
+    const syncStoredValue = (event) => {
+      if (event.key === null || event.key === key) {
+        setValue(getStoredData(key, fallback));
+      }
+    };
+
+    window.addEventListener("storage", syncStoredValue);
+
+    return () => {
+      window.removeEventListener("storage", syncStoredValue);
+    };
+  }, [key, fallback]);
+
+  return [value, setValue];
 };
 
 const createId = () =>
@@ -253,11 +291,11 @@ function App() {
 
   const [projectsLoading, setProjectsLoading] = useState(true);
 
-  const [researchItems, setResearchItems] = useState(() =>
-    getStoredData(STORAGE_KEYS.research)
+  const [procurementItems, setProcurementItems] = useState(() =>
+    getStoredData(STORAGE_KEYS.procurement)
   );
-  const [researchLoading, setResearchLoading] = useState(true);
-  const [researchError, setResearchError] = useState(null);
+  const [procurementLoading, setProcurementLoading] = useState(true);
+  const [procurementError, setProcurementError] = useState(null);
 
   const [offers, setOffers] = useState(() =>
     mapOffersToViewModel(getStoredData(STORAGE_KEYS.offers))
@@ -272,7 +310,7 @@ function App() {
   const [offerDetailLoading, setOfferDetailLoading] = useState(false);
   const [offerDetailError, setOfferDetailError] = useState(null);
   const projectsTouchedRef = useRef(false);
-  const researchTouchedRef = useRef(false);
+  const procurementTouchedRef = useRef(false);
   const offersTouchedRef = useRef(false);
 
   const [memoryItems, setMemoryItems] = useState(() =>
@@ -299,21 +337,17 @@ function App() {
       },
     ])
   );
-  const [products] = useState(() => getStoredData(STORAGE_KEYS.products));
-  const [systemInventory] = useState(() => getStoredData(STORAGE_KEYS.systems));
-  const [priceAnalysisItems] = useState(() =>
-    getStoredData(STORAGE_KEYS.priceAnalysis)
-  );
-  const [materialAnalysisItems] = useState(() =>
-    getStoredData(STORAGE_KEYS.materialAnalysis)
-  );
-  const [customerItems] = useState(() => getStoredData(STORAGE_KEYS.customers));
-  const [documentItems] = useState(() => getStoredData(STORAGE_KEYS.documents));
-  const [financeItems] = useState(() => getStoredData(STORAGE_KEYS.finance));
-  const [reportItems] = useState(() => getStoredData(STORAGE_KEYS.reports));
+  const [products] = useStoredDataState(STORAGE_KEYS.products);
+  const [systemInventory] = useStoredDataState(STORAGE_KEYS.systems);
+  const [priceAnalysisItems] = useStoredDataState(STORAGE_KEYS.priceAnalysis);
+  const [materialAnalysisItems] = useStoredDataState(STORAGE_KEYS.materialAnalysis);
+  const [customerItems] = useStoredDataState(STORAGE_KEYS.customers);
+  const [documentItems] = useStoredDataState(STORAGE_KEYS.documents);
+  const [financeItems] = useStoredDataState(STORAGE_KEYS.finance);
+  const [reportItems] = useStoredDataState(STORAGE_KEYS.reports);
 
   const [showProjectForm, setShowProjectForm] = useState(false);
-  const [showResearchForm, setShowResearchForm] = useState(false);
+  const [showProcurementForm, setShowProcurementForm] = useState(false);
   const [showOfferForm, setShowOfferForm] = useState(false);
   const [showMemoryForm, setShowMemoryForm] = useState(false);
 
@@ -321,8 +355,8 @@ function App() {
   const [projectType, setProjectType] = useState("");
   const [projectStatus, setProjectStatus] = useState("Aktif");
 
-  const [researchName, setResearchName] = useState("");
-  const [researchNote, setResearchNote] = useState("");
+  const [procurementName, setProcurementName] = useState("");
+  const [procurementNote, setProcurementNote] = useState("");
 
   const [offerName, setOfferName] = useState("");
   const [offerAmount, setOfferAmount] = useState("");
@@ -363,14 +397,13 @@ function App() {
     }
 
     const rawHash = window.location.hash.replace(/^#/, "");
-    const [hashPath] = rawHash.split("?");
-    const normalizedHashPath =
-      (hashPath.startsWith("/") ? hashPath : `/${hashPath}`).replace(/\/+$/, "") ||
-      "/dashboard";
+    const hashPath = rawHash.match(/^[^?#]*/)?.[0] || "";
+    const hashPathSuffix = rawHash.slice(hashPath.length);
+    const normalizedHashPath = normalizeModulePath(hashPath);
     const expectedPath = moduleRouteMap[activeModule] || "/dashboard";
 
     if (normalizedHashPath !== expectedPath) {
-      window.location.hash = expectedPath;
+      window.location.hash = `${expectedPath}${hashPathSuffix}`;
     }
   }, [activeModule]);
 
@@ -380,10 +413,10 @@ function App() {
 
   useEffect(() => {
     localStorage.setItem(
-      STORAGE_KEYS.research,
-      JSON.stringify(researchItems)
+      STORAGE_KEYS.procurement,
+      JSON.stringify(procurementItems)
     );
-  }, [researchItems]);
+  }, [procurementItems]);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.offers, JSON.stringify(offers));
@@ -524,47 +557,44 @@ function App() {
   useEffect(() => {
     let cancelled = false;
 
-    const fetchResearchFromApi = async () => {
-      const localResearchItems = getStoredData(STORAGE_KEYS.research);
-      setResearchLoading(true);
-      setResearchError(null);
+    const fetchProcurementFromApi = async () => {
+      const localProcurementItems = getStoredData(STORAGE_KEYS.procurement);
+      setProcurementLoading(true);
+      setProcurementError(null);
 
       try {
-        const apiResearchItems = await getResearchItems();
+        const apiProcurementItems = await getProcurementItems();
 
         if (cancelled) return;
 
-        if (researchTouchedRef.current) {
+        if (procurementTouchedRef.current) {
           addLog(
-            "Araştırmalarda yerel değişiklik algılandı, API yanıtı üzerine yazmadı."
+            "Tedarik kayıtlarında yerel değişiklik algılandı, API yanıtı üzerine yazmadı."
           );
-          return;
-        }
-
-        if (apiResearchItems && apiResearchItems.length > 0) {
-          setResearchItems(apiResearchItems);
-          addLog("Araştırmalar API üzerinden yüklendi.");
+        } else if (apiProcurementItems && apiProcurementItems.length > 0) {
+          setProcurementItems(apiProcurementItems);
+          addLog("Tedarik kayıtları API üzerinden yüklendi.");
         } else {
-          setResearchItems(localResearchItems);
-          addLog("Araştırmalar API boş döndü, yerel veriler kullanıldı.");
+          setProcurementItems(localProcurementItems);
+          addLog("Tedarik API boş döndü, yerel veriler kullanıldı.");
         }
       } catch (error) {
         const reason = getApiFailureReason(error);
         if (!cancelled) {
-          setResearchItems(localResearchItems);
-          setResearchError(
-            `Araştırma API erişimi başarısız (${reason}). Yerel araştırma verileri gösteriliyor.`
+          setProcurementItems(localProcurementItems);
+          setProcurementError(
+            `Tedarik API erişimi başarısız (${reason}). Yerel tedarik verileri gösteriliyor.`
           );
-          addLog(`Araştırmalar API bağlantı hatası: ${reason}. Yerel veriler kullanıldı.`);
+          addLog(`Tedarik API bağlantı hatası: ${reason}. Yerel veriler kullanıldı.`);
         }
       } finally {
         if (!cancelled) {
-          setResearchLoading(false);
+          setProcurementLoading(false);
         }
       }
     };
 
-    fetchResearchFromApi();
+    fetchProcurementFromApi();
 
     return () => {
       cancelled = true;
@@ -752,43 +782,43 @@ function App() {
     }
   };
 
-  const createResearch = (event) => {
+  const createProcurement = (event) => {
     event.preventDefault();
 
-    if (!researchName.trim()) return;
-    researchTouchedRef.current = true;
+    if (!procurementName.trim()) return;
+    procurementTouchedRef.current = true;
 
-    const newResearch = {
+    const newProcurement = {
       id: createId(),
-      name: researchName.trim(),
-      note: researchNote.trim() || "Not eklenmedi.",
+      name: procurementName.trim(),
+      note: procurementNote.trim() || "Not eklenmedi.",
       date: formatDate(),
     };
 
-    setResearchItems((currentItems) => [
-      newResearch,
+    setProcurementItems((currentItems) => [
+      newProcurement,
       ...currentItems,
     ]);
 
-    addLog(`Yeni araştırma kaydı oluşturuldu: ${newResearch.name}`);
+    addLog(`Yeni tedarik kaydı oluşturuldu: ${newProcurement.name}`);
 
-    setResearchName("");
-    setResearchNote("");
-    setShowResearchForm(false);
+    setProcurementName("");
+    setProcurementNote("");
+    setShowProcurementForm(false);
   };
 
-  const deleteResearch = (id) => {
-    const item = researchItems.find(
-      (research) => research.id === id
+  const deleteProcurement = (id) => {
+    const item = procurementItems.find(
+      (procurement) => procurement.id === id
     );
-    researchTouchedRef.current = true;
+    procurementTouchedRef.current = true;
 
-    setResearchItems((currentItems) =>
-      currentItems.filter((research) => research.id !== id)
+    setProcurementItems((currentItems) =>
+      currentItems.filter((procurement) => procurement.id !== id)
     );
 
     if (item) {
-      addLog(`Araştırma kaydı silindi: ${item.name}`);
+      addLog(`Tedarik kaydı silindi: ${item.name}`);
     }
   };
 
@@ -1120,7 +1150,7 @@ function App() {
             </div>
             <div className="quick-status">
               <span>Tedarik Modülü</span>
-              <strong>{researchLoading ? "Yükleniyor" : "Hazır"}</strong>
+              <strong>{procurementLoading ? "Yükleniyor" : "Hazır"}</strong>
             </div>
           </div>
         </div>
@@ -1381,44 +1411,44 @@ function App() {
       <div className="module-toolbar">
         <button
           type="button"
-          onClick={() => setShowResearchForm((value) => !value)}
+          onClick={() => setShowProcurementForm((value) => !value)}
         >
-          {showResearchForm ? "Formu Kapat" : "+ Yeni Tedarik Kaydı"}
+          {showProcurementForm ? "Formu Kapat" : "+ Yeni Tedarik Kaydı"}
         </button>
       </div>
 
-      {showResearchForm && (
-        <form className="data-form" onSubmit={createResearch}>
+      {showProcurementForm && (
+        <form className="data-form" onSubmit={createProcurement}>
           <input
             type="text"
             placeholder="Tedarik başlığı"
-            value={researchName}
-            onChange={(event) => setResearchName(event.target.value)}
+            value={procurementName}
+            onChange={(event) => setProcurementName(event.target.value)}
           />
 
           <textarea
             placeholder="Tedarik notu"
-            value={researchNote}
-            onChange={(event) => setResearchNote(event.target.value)}
+            value={procurementNote}
+            onChange={(event) => setProcurementNote(event.target.value)}
           />
 
           <button type="submit">Kaydet</button>
         </form>
       )}
 
-      {researchError && (
+      {procurementError && (
         <p className="empty-state" style={{ color: "#f59e0b" }}>
-          ⚠ {researchError}
+          ⚠ {procurementError}
         </p>
       )}
 
       <div className="data-list">
-        {researchLoading ? (
+        {procurementLoading ? (
           <p className="empty-state">Tedarik kayıtları yükleniyor…</p>
-        ) : researchItems.length === 0 ? (
+        ) : procurementItems.length === 0 ? (
           <p className="empty-state">Henüz veri bulunmuyor.</p>
         ) : (
-          researchItems.map((item) => (
+          procurementItems.map((item) => (
             <div className="data-card" key={item.id}>
               <div>
                 <h3>{item.name}</h3>
@@ -1428,7 +1458,7 @@ function App() {
 
               <button
                 type="button"
-                onClick={() => deleteResearch(item.id)}
+                onClick={() => deleteProcurement(item.id)}
               >
                 Sil
               </button>
@@ -1743,10 +1773,13 @@ function App() {
             <p className="empty-state">Henüz veri bulunmuyor.</p>
           ) : (
             <div className="systems-grid">
-              {systemInventory.map((item, index) => (
+              {systemInventory.map((item) => (
                 <div
                   className="system-card"
-                  key={item.id || `${item.name || "system"}-${index}`}
+                  key={
+                    item.id ||
+                    `${item.name || "system"}::${item.description || "description-missing"}`
+                  }
                 >
                   <h3>{item.name || "Sistem Kaydı"}</h3>
                   <p>{item.description || "Sistem detay açıklaması bulunmuyor."}</p>
