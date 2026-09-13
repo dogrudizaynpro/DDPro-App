@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "test": "npm run test --prefix backend",
+    "test": "NODE_ENV=test node --test \"test/**/*.test.js\"",
     "lint": "eslint \"src/**/*.{js,jsx}\" \"backend/src/**/*.js\" \"*.js\"",
     "preview": "vite preview",
     "predeploy": "npm run build",

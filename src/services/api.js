@@ -13,7 +13,7 @@ const isLocalHost = (hostname = "") =>
 
 const resolveApiBaseUrl = () => {
   const envUrl = trimTrailingSlash(
-    String(import.meta.env.VITE_API_URL || "").trim()
+    String(import.meta.env?.VITE_API_URL || "").trim()
   );
 
   if (envUrl) {

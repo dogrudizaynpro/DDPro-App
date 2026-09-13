@@ -35,6 +35,9 @@ jobs:
       - name: Run build
         run: npm run build
 
+      - name: Run root audit
+        run: npm audit
+
   backend:
     runs-on: ubuntu-latest
 
