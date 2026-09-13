@@ -12,7 +12,6 @@ import {
 import { getResearchItems } from "./services/research.service.js";
 import {
   getModuleById,
-  getModuleIdFromHash,
   modules,
   placeholderModules,
   systemModules,
@@ -188,17 +187,26 @@ function App() {
     }
 
     const syncModuleFromHash = () => {
-      const resolvedHash = window.location.hash || modules[0].path;
-      const nextModuleId = getModuleIdFromHash(resolvedHash);
-      setActiveModule(nextModuleId);
+      if (!window.location.hash) {
+        window.location.hash = modules[0].path;
+        setActiveModule(modules[0].id);
+        return;
+      }
+
+      const matchedModule = modules.find(
+        (module) => module.path === window.location.hash
+      );
+
+      if (!matchedModule) {
+        window.history.replaceState(null, "", modules[0].path);
+        setActiveModule(modules[0].id);
+        return;
+      }
+
+      setActiveModule(matchedModule.id);
     };
 
     window.addEventListener("hashchange", syncModuleFromHash);
-
-    if (!window.location.hash) {
-      window.location.hash = modules[0].path;
-    }
-
     syncModuleFromHash();
 
     return () => {
@@ -1786,10 +1794,6 @@ function App() {
                   activeModule === module.id ? "active" : ""
                 }`}
                 aria-current={activeModule === module.id ? "page" : undefined}
-                onClick={(event) => {
-                  event.preventDefault();
-                  navigateToModule(module.id);
-                }}
               >
                 <span className="module-icon">
                   {module.icon}
