@@ -103,6 +103,19 @@ export const fetchAPI = async (endpoint, options = {}) => {
 
     return data;
   } catch (error) {
+    if (
+      error instanceof TypeError &&
+      /failed to fetch|fetch/i.test(String(error.message || ""))
+    ) {
+      const networkError = new Error(
+        "API endpoint'ine ulaşılamadı. VITE_API_URL, backend yayını veya CORS ayarlarını kontrol edin."
+      );
+      networkError.code = "API_NETWORK_ERROR";
+      networkError.cause = error;
+      console.error("API Error:", networkError.message);
+      throw networkError;
+    }
+
     // Re-throw with additional context
     console.error("API Error:", error.message);
     throw error;

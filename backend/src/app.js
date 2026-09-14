@@ -9,6 +9,17 @@ import offersRouter from "./routes/offers.routes.js";
 import { getSupabaseClient, isSupabaseAvailable } from "./config/supabase.js";
 
 const app = express();
+const DEFAULT_ALLOWED_ORIGINS = [
+  "http://localhost:3000",
+  "http://localhost:5000",
+  "http://localhost:5173",
+  "https://dogrudizaynpro.github.io",
+];
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(",")
+      .map((origin) => origin.trim())
+      .filter(Boolean)
+  : DEFAULT_ALLOWED_ORIGINS;
 
 // ============================================================
 // MIDDLEWARE
@@ -20,9 +31,7 @@ app.use(helmet());
 // CORS
 app.use(
   cors({
-    origin: process.env.ALLOWED_ORIGINS
-      ? process.env.ALLOWED_ORIGINS.split(",")
-      : ["http://localhost:3000", "http://localhost:5173"],
+    origin: allowedOrigins,
     credentials: true,
   })
 );

@@ -28,7 +28,16 @@ const ProcurementModule = lazy(() => import("./modules/ProcurementModule.jsx"));
 const OffersModule = lazy(() => import("./modules/OffersModule.jsx"));
 const SystemsModule = lazy(() => import("./modules/SystemsModule.jsx"));
 const AIModule = lazy(() => import("./modules/AIModule.jsx"));
+const MemoryModule = lazy(() => import("./modules/MemoryModule.jsx"));
+const IntegrationsModule = lazy(() => import("./modules/IntegrationsModule.jsx"));
 const SkeletonModule = lazy(() => import("./modules/SkeletonModule.jsx"));
+
+const MOBILE_DRAWER_QUERY = "(max-width: 640px)";
+
+const getIsMobileDrawerViewport = () =>
+  typeof window !== "undefined" &&
+  typeof window.matchMedia === "function" &&
+  window.matchMedia(MOBILE_DRAWER_QUERY).matches;
 
 const STORAGE_KEYS = {
   projects: "ddpro_projects_v1",
@@ -148,6 +157,33 @@ const modules = [
       "DDPro AI çalışma alanı ve asistan konuşma akışı.",
   },
   {
+    id: "ai-analysis",
+    path: "/ai-analiz",
+    icon: "◎",
+    title: "AI Analiz",
+    short: "Analitik Merkez",
+    description:
+      "Projeler, teklifler ve operasyon verileri için AI destekli özet analiz görünümü.",
+  },
+  {
+    id: "calendar",
+    path: "/takvim",
+    icon: "☷",
+    title: "Takvim",
+    short: "Plan Takibi",
+    description:
+      "Operasyon takvimi, yaklaşan teslimler ve planlı iş akışlarının görünümü.",
+  },
+  {
+    id: "messages",
+    path: "/mesajlar",
+    icon: "✉",
+    title: "Mesajlar",
+    short: "İletişim Merkezi",
+    description:
+      "Uygulama içi bildirimler, ekip mesaj akışı ve son operasyon kayıtları.",
+  },
+  {
     id: "finance",
     path: "/finans-maliyet",
     icon: "⟐",
@@ -164,6 +200,24 @@ const modules = [
     short: "Rapor Merkezi",
     description:
       "Operasyonel ve yönetsel rapor ekranları için temel yapı.",
+  },
+  {
+    id: "data-memory",
+    path: "/veri-hafiza",
+    icon: "⛁",
+    title: "Veri & Hafıza",
+    short: "Merkezi Hafıza",
+    description:
+      "Merkezi hafıza kayıtları ve veri odaklı çalışma notlarının yönetim alanı.",
+  },
+  {
+    id: "integrations",
+    path: "/entegrasyonlar",
+    icon: "⇄",
+    title: "Entegrasyonlar",
+    short: "Bağlantı Merkezi",
+    description:
+      "Aktif sistem bağlantıları ve entegrasyon durum takibinin yönetim alanı.",
   },
   {
     id: "settings",
@@ -301,6 +355,10 @@ const getApiFailureReason = (error) => {
     return error.message;
   }
 
+  if (error.code === "API_NETWORK_ERROR") {
+    return error.message;
+  }
+
   if (error.status === 503) {
     return "Backend veritabanı yapılandırması eksik veya servis hazır değil (HTTP 503)";
   }
@@ -323,6 +381,11 @@ function App() {
   const [activeModule, setActiveModule] = useState(() =>
     resolveModuleFromHash(window.location.hash)
   );
+  const [isMobileDrawerViewport, setIsMobileDrawerViewport] = useState(
+    getIsMobileDrawerViewport
+  );
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [globalSearch, setGlobalSearch] = useState("");
 
   const [apiHealthState, setApiHealthState] = useState({
     status: "loading",
@@ -422,6 +485,68 @@ function App() {
       date: formatDate(),
     },
   ]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+      return undefined;
+    }
+
+    const mediaQuery = window.matchMedia(MOBILE_DRAWER_QUERY);
+    const syncViewport = (event) => {
+      const matches = event?.matches ?? mediaQuery.matches;
+      setIsMobileDrawerViewport(matches);
+
+      if (!matches) {
+        setIsSidebarOpen(false);
+      }
+    };
+
+    syncViewport();
+
+    if (typeof mediaQuery.addEventListener === "function") {
+      mediaQuery.addEventListener("change", syncViewport);
+
+      return () => {
+        mediaQuery.removeEventListener("change", syncViewport);
+      };
+    }
+
+    mediaQuery.addListener(syncViewport);
+
+    return () => {
+      mediaQuery.removeListener(syncViewport);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isMobileDrawerViewport) {
+      return undefined;
+    }
+
+    const handleEscape = (event) => {
+      if (event.key === "Escape") {
+        setIsSidebarOpen(false);
+      }
+    };
+
+    window.addEventListener("keydown", handleEscape);
+
+    return () => {
+      window.removeEventListener("keydown", handleEscape);
+    };
+  }, [isMobileDrawerViewport]);
+
+  useEffect(() => {
+    if (!isMobileDrawerViewport) {
+      return undefined;
+    }
+
+    document.body.style.overflow = isSidebarOpen ? "hidden" : "";
+
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [isMobileDrawerViewport, isSidebarOpen]);
 
   useEffect(() => {
     const syncModuleFromHash = () => {
@@ -871,6 +996,7 @@ function App() {
   );
 
   const handleModuleNavigation = (moduleId) => {
+    setIsSidebarOpen(false);
     const nextRoute = moduleRouteMap[moduleId] || "/dashboard";
     if (window.location.hash !== `#${nextRoute}`) {
       window.location.hash = nextRoute;
@@ -922,9 +1048,55 @@ function App() {
       : apiHealthState.status === "loading"
         ? "API Kontrol Ediliyor"
         : "Production API Kontrol Gerekli";
+  const aiStatusTone = aiMessages.length > 0 ? "success" : "loading";
+  const aiStatusLabel =
+    aiMessages.length > 1
+      ? `AI Hazır · ${aiMessages.length} kayıt`
+      : "AI Hazır";
+  const recentNotifications = useMemo(
+    () => systemLogs.slice(0, 3),
+    [systemLogs]
+  );
+  const globalSearchMatches = useMemo(() => {
+    const query = globalSearch.trim().toLocaleLowerCase("tr-TR");
+
+    if (!query) {
+      return [];
+    }
+
+    return modules
+      .filter((module) =>
+        [module.title, module.short, module.description, module.path]
+          .join(" ")
+          .toLocaleLowerCase("tr-TR")
+          .includes(query)
+      )
+      .slice(0, 5);
+  }, [globalSearch]);
   const handleOffersReload = () => {
     offerDetailsCacheRef.current.clear();
     setOffersReloadKey((value) => value + 1);
+  };
+  const handleGlobalSearchSubmit = (event) => {
+    event.preventDefault();
+
+    const normalizedQuery = globalSearch.trim().toLocaleLowerCase("tr-TR");
+
+    if (!normalizedQuery) {
+      return;
+    }
+
+    const nextModule = modules.find((module) =>
+      [module.title, module.short, module.description, module.path]
+        .join(" ")
+        .toLocaleLowerCase("tr-TR")
+        .includes(normalizedQuery)
+    );
+
+    if (nextModule) {
+      handleModuleNavigation(nextModule.id);
+      setGlobalSearch("");
+    }
   };
 
   const createProject = async (event) => {
@@ -1502,6 +1674,8 @@ function App() {
       finance: financeItems.length,
       reports: reportItems.length,
       integrations: integrations.length,
+      memory: memoryItems.length,
+      messages: systemLogs.length,
     }),
     [
       products.length,
@@ -1512,6 +1686,8 @@ function App() {
       financeItems.length,
       reportItems.length,
       integrations.length,
+      memoryItems.length,
+      systemLogs.length,
     ]
   );
 
@@ -1683,6 +1859,107 @@ function App() {
           message: LOCAL_ONLY_MODULE_MESSAGE,
         },
       },
+      "ai-analysis": {
+        title: "AI Analiz",
+        description:
+          "Operasyon verileri canlıysa backend yanıtları, değilse mevcut arayüz verileri üzerinden özet görünüm sunulur.",
+        sections: [
+          {
+            id: "ai-analysis-projects",
+            title: "Aktif Proje İçgörüsü",
+            description: "Aktif proje yükü ve operasyon yoğunluğu özeti.",
+            count: activeProjects.length,
+          },
+          {
+            id: "ai-analysis-offers",
+            title: "Bekleyen Teklifler",
+            description: "Takip edilmesi gereken teklif akışları.",
+            count: pendingOffers.length,
+          },
+          {
+            id: "ai-analysis-health",
+            title: "Canlı Veri Durumu",
+            description:
+              apiHealthState.status === "success"
+                ? "Production API ve veritabanı hazır."
+                : "Production API kontrolü veya veritabanı hazırlığı gerekiyor.",
+            count: apiHealthState.status === "success" ? 1 : 0,
+          },
+        ],
+        statusNote:
+          apiHealthState.status === "success"
+            ? {
+                tone: "success",
+                message: "AI analiz alanı mevcut canlı sistem durumuyla erişilebilir.",
+              }
+            : {
+                tone: "warning",
+                message:
+                  apiHealthState.message ||
+                  "Canlı backend hazır olmadığında analiz alanı yalnızca mevcut istemci verileriyle çalışır.",
+              },
+      },
+      calendar: {
+        title: "Takvim",
+        description:
+          "Takvim modülü mevcut proje ve teklif akışlarına göre plan görünümü sunar.",
+        sections: [
+          {
+            id: "calendar-projects",
+            title: "Proje Takvimi",
+            description: "Aktif projeler için planlı iş takibi alanı.",
+            count: activeProjects.length,
+          },
+          {
+            id: "calendar-offers",
+            title: "Teklif Takibi",
+            description: "Teklif tarihleri ve takip edilmesi gereken işler.",
+            count: offers.length,
+          },
+          {
+            id: "calendar-reminders",
+            title: "Yaklaşan Hatırlatmalar",
+            description: "Takvim entegrasyonu hazır olduğunda burada görünür.",
+            count: 0,
+          },
+        ],
+        statusNote: {
+          tone: "info",
+          message:
+            "Takvim route'u aktif. Ayrı backend modülü olmadığı için mevcut uygulama verileriyle uyumlu plan görünümü sunuluyor.",
+        },
+      },
+      messages: {
+        title: "Mesajlar",
+        description:
+          "Sistem kayıtları ve AI akışı üzerinden iletişim durumunun tek ekranda izlenmesi için hazırlanmıştır.",
+        sections: [
+          {
+            id: "messages-system",
+            title: "Sistem Bildirimleri",
+            description: "Son operasyon kayıtları ve uygulama olayları.",
+            count: moduleCounts.messages,
+          },
+          {
+            id: "messages-ai",
+            title: "AI Mesaj Akışı",
+            description: "AI asistan ile kayıt altına alınan konuşmalar.",
+            count: aiMessages.length,
+          },
+          {
+            id: "messages-team",
+            title: "Ekip Mesajları",
+            description:
+              "Bağımsız mesaj backend'i eklendiğinde bu alana taşınacaktır.",
+            count: 0,
+          },
+        ],
+        statusNote: {
+          tone: "info",
+          message:
+            "Mesajlar route'u aktif. Ayrı mesaj backend'i olmadığı için mevcut log ve AI kayıtlarıyla boş ekran engellendi.",
+        },
+      },
       settings: {
         title: "Ayarlar",
         description: "Uygulama tercihleri ve yapılandırma alanı.",
@@ -1706,7 +1983,15 @@ function App() {
         },
       },
     }),
-    [moduleCounts]
+    [
+      activeProjects.length,
+      aiMessages.length,
+      apiHealthState.message,
+      apiHealthState.status,
+      moduleCounts,
+      offers.length,
+      pendingOffers.length,
+    ]
   );
 
   const renderModule = () => {
@@ -1815,6 +2100,41 @@ function App() {
       );
     }
 
+    if (activeModule === "data-memory") {
+      return (
+        <MemoryModule
+          showMemoryForm={showMemoryForm}
+          setShowMemoryForm={setShowMemoryForm}
+          createMemory={createMemory}
+          memoryTitle={memoryTitle}
+          setMemoryTitle={setMemoryTitle}
+          memoryContent={memoryContent}
+          setMemoryContent={setMemoryContent}
+          memoryItems={memoryItems}
+          deleteMemory={deleteMemory}
+          statusNote={{
+            tone: "info",
+            message:
+              "Merkezi hafıza kayıtları mevcut tarayıcı içi veri yapısıyla korunur.",
+          }}
+        />
+      );
+    }
+
+    if (activeModule === "integrations") {
+      return (
+        <IntegrationsModule
+          integrations={integrations}
+          toggleIntegration={toggleIntegration}
+          statusNote={{
+            tone: "info",
+            message:
+              "Entegrasyon listesi mevcut uygulama durumunu gösterir; yeni backend entegrasyonu taklit edilmez.",
+          }}
+        />
+      );
+    }
+
     const skeletonProps =
       skeletonModuleProps[activeModule] || skeletonModuleProps.settings;
     return <SkeletonModule {...skeletonProps} />;
@@ -1827,23 +2147,117 @@ function App() {
   return (
     <div className="ddpro-app">
       <header className="app-header">
-        <div className="brand-area">
-          <div className="brand-logo">DD</div>
+        <div className="header-primary">
+          <button
+            type="button"
+            className="sidebar-toggle"
+            aria-label={isSidebarOpen ? "Menüyü kapat" : "Menüyü aç"}
+            aria-controls="ddpro-sidebar"
+            aria-expanded={isSidebarOpen}
+            onClick={() => setIsSidebarOpen((value) => !value)}
+          >
+            <span></span>
+            <span></span>
+            <span></span>
+          </button>
 
-          <div className="brand-content">
-            <strong>DOĞRU DİZAYN PRO</strong>
-            <span>DDPro Dijital Yönetim Sistemi</span>
+          <div className="brand-area">
+            <div className="brand-logo">DD</div>
+
+            <div className="brand-content">
+              <strong>DOĞRU DİZAYN PRO</strong>
+              <span>DDPro Dijital Yönetim Sistemi</span>
+            </div>
           </div>
         </div>
 
-        <div className={`header-status ${headerStatusTone}`}>
-          <span className={`status-dot ${headerStatusTone}`}></span>
-          {headerStatusLabel}
+        <form className="header-search" onSubmit={handleGlobalSearchSubmit}>
+          <span className="header-search-icon" aria-hidden="true">
+            ⌕
+          </span>
+          <input
+            type="search"
+            value={globalSearch}
+            onChange={(event) => setGlobalSearch(event.target.value)}
+            placeholder="Global arama: modül, route veya açıklama"
+            aria-label="Global arama"
+          />
+          {globalSearchMatches.length > 0 ? (
+            <div className="header-search-results">
+              {globalSearchMatches.map((module) => (
+                <button
+                  key={module.id}
+                  type="button"
+                  className="header-search-result"
+                  onClick={() => {
+                    handleModuleNavigation(module.id);
+                    setGlobalSearch("");
+                  }}
+                >
+                  <span>{module.icon}</span>
+                  <strong>{module.title}</strong>
+                  <small>{module.path}</small>
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </form>
+
+        <div className="header-actions">
+          <div className="header-status-group">
+            <div className={`header-status ${headerStatusTone}`}>
+              <span className={`status-dot ${headerStatusTone}`}></span>
+              <span>Sistem</span>
+              <strong>{headerStatusLabel}</strong>
+            </div>
+
+            <div className={`header-status ${aiStatusTone}`}>
+              <span className={`status-dot ${aiStatusTone}`}></span>
+              <span>AI</span>
+              <strong>{aiStatusLabel}</strong>
+            </div>
+          </div>
+
+          <div className="header-card notifications-card">
+            <span className="header-card-label">Bildirimler</span>
+            <strong>{recentNotifications.length || 0}</strong>
+            <small>
+              {recentNotifications[0]?.message || "Yeni bildirim yok"}
+            </small>
+          </div>
+
+          <div className="header-card profile-card">
+            <span className="profile-avatar" aria-hidden="true">
+              DP
+            </span>
+            <div>
+              <span className="header-card-label">Kullanıcı</span>
+              <strong>DDPro Operasyon</strong>
+              <small>Premium çalışma alanı aktif</small>
+            </div>
+          </div>
         </div>
       </header>
 
+      <button
+        type="button"
+        className={`sidebar-backdrop ${
+          isMobileDrawerViewport && isSidebarOpen ? "open" : ""
+        }`}
+        aria-label="Menüyü kapat"
+        aria-hidden={!isMobileDrawerViewport || !isSidebarOpen}
+        tabIndex={isMobileDrawerViewport && isSidebarOpen ? 0 : -1}
+        onClick={() => setIsSidebarOpen(false)}
+      />
+
       <div className="app-layout">
-        <aside className="sidebar">
+        <aside
+          id="ddpro-sidebar"
+          className={`sidebar ${
+            isMobileDrawerViewport && isSidebarOpen ? "open" : ""
+          }`}
+          aria-hidden={isMobileDrawerViewport ? !isSidebarOpen : undefined}
+        >
           <div className="sidebar-title">
             ANA MODÜLLER
           </div>
