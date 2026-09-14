@@ -50,12 +50,13 @@ const STORAGE_KEYS = {
 const modules = [
   {
     id: "dashboard",
-    path: "/dashboard",
+    path: "/genel-bakis",
     icon: "⌂",
-    title: "Dashboard",
-    short: "Ana Ekran",
+    title: "Genel Bakış",
+    short: "Ana Panel",
     description:
       "DDPro operasyonlarının merkezi görünümü.",
+    navGroup: "core",
   },
   {
     id: "projects",
@@ -65,42 +66,17 @@ const modules = [
     short: "Proje Yönetimi",
     description:
       "Aktif projelerini oluştur, yönet, düzenle ve tüm süreçlerini merkezi olarak takip et.",
+    navGroup: "core",
   },
   {
-    id: "products",
-    path: "/urunler",
-    icon: "◈",
-    title: "Ürünler",
-    short: "Ürün Yönetimi",
+    id: "crm",
+    path: "/crm",
+    icon: "☰",
+    title: "CRM",
+    short: "Müşteri Yönetimi",
     description:
-      "Ürün veri yapısı ve ürün kartlarının yönetim alanı.",
-  },
-  {
-    id: "systems",
-    path: "/sistemler",
-    icon: "⚙",
-    title: "Sistemler",
-    short: "Sistem Yönetimi",
-    description:
-      "Sistem bileşenleri, entegrasyonlar ve sistem kayıtları.",
-  },
-  {
-    id: "price-analysis",
-    path: "/fiyat-analizi",
-    icon: "₺",
-    title: "Fiyat Analizi",
-    short: "Fiyat Merkezi",
-    description:
-      "Fiyat analiz kayıtları ve karşılaştırma ekranları.",
-  },
-  {
-    id: "material-analysis",
-    path: "/malzeme-analizi",
-    icon: "⛁",
-    title: "Malzeme Analizi",
-    short: "Maliyet Merkezi",
-    description:
-      "Malzeme maliyet analizlerini bağımsız olarak yönet.",
+      "Müşteri ilişkileri ve CRM kayıtları için merkezi çalışma alanı.",
+    navGroup: "core",
   },
   {
     id: "offers",
@@ -110,33 +86,37 @@ const modules = [
     short: "Teklif Sistemi",
     description:
       "Tekliflerini oluştur, kayıt altına al, takip et ve proje süreçleriyle ilişkilendir.",
-  },
-  {
-    id: "crm",
-    path: "/musteriler-crm",
-    icon: "☰",
-    title: "Müşteriler / CRM",
-    short: "CRM Yönetimi",
-    description:
-      "Müşteri ilişkileri ve CRM kayıtları için merkezi çalışma alanı.",
+    navGroup: "core",
   },
   {
     id: "procurement",
-    path: "/tedarik",
+    path: "/tedarik-arastirma",
     icon: "⌕",
-    title: "Tedarik",
+    title: "Tedarik & Araştırma",
     short: "Tedarik Yönetimi",
     description:
       "Tedarik araştırmaları ve kayıtları için operasyon ekranı.",
+    navGroup: "core",
   },
   {
-    id: "documents",
-    path: "/belgeler",
-    icon: "☷",
-    title: "Belgeler",
-    short: "Belge Yönetimi",
+    id: "products",
+    path: "/urunler-malzemeler",
+    icon: "◈",
+    title: "Ürünler / Malzemeler",
+    short: "Ürün Yönetimi",
     description:
-      "Belge arşivi ve doküman takibi için temel iskelet ekranı.",
+      "Ürün veri yapısı ve ürün kartlarının yönetim alanı.",
+    navGroup: "core",
+  },
+  {
+    id: "price-analysis",
+    path: "/fiyatlandirma",
+    icon: "₺",
+    title: "Fiyatlandırma",
+    short: "Fiyat Merkezi",
+    description:
+      "Fiyat analiz kayıtları ve karşılaştırma ekranları.",
+    navGroup: "core",
   },
   {
     id: "ai-assistant",
@@ -146,33 +126,117 @@ const modules = [
     short: "Yapay Zeka",
     description:
       "DDPro AI çalışma alanı ve asistan konuşma akışı.",
+    navGroup: "core",
+  },
+  {
+    id: "ai-analysis",
+    path: "/ai-analiz",
+    icon: "✧",
+    title: "AI Analiz",
+    short: "AI İçgörü",
+    description:
+      "Yapay zeka destekli analiz senaryoları için modül iskeleti.",
+    navGroup: "core",
+  },
+  {
+    id: "calendar",
+    path: "/takvim",
+    icon: "☲",
+    title: "Takvim",
+    short: "Planlama",
+    description:
+      "Operasyonel planlama, görev ve etkinlik takvimi.",
+    navGroup: "core",
+  },
+  {
+    id: "messages",
+    path: "/mesajlar",
+    icon: "✉",
+    title: "Mesajlar",
+    short: "İletişim Merkezi",
+    description:
+      "Ekip içi ve modül bazlı mesaj akışları için iletişim ekranı.",
+    navGroup: "core",
+  },
+  {
+    id: "reports",
+    path: "/raporlar",
+    icon: "☷",
+    title: "Raporlar",
+    short: "Rapor Merkezi",
+    description:
+      "Operasyonel ve yönetsel rapor ekranları için temel yapı.",
+    navGroup: "core",
+  },
+  {
+    id: "data-memory",
+    path: "/veri-hafiza",
+    icon: "⛁",
+    title: "Veri & Hafıza",
+    short: "Hafıza Merkezi",
+    description:
+      "Merkezi veri ve hafıza yapılarını yöneten ana iskelet modülü.",
+    navGroup: "core",
+  },
+  {
+    id: "integrations",
+    path: "/entegrasyonlar",
+    icon: "⟐",
+    title: "Entegrasyonlar",
+    short: "Bağlantılar",
+    description:
+      "Dış servis bağlantıları ve entegrasyon yönetimi alanı.",
+    navGroup: "core",
+  },
+  {
+    id: "settings",
+    path: "/sistem-ayarlari",
+    icon: "⚚",
+    title: "Sistem Ayarları",
+    short: "Yapılandırma",
+    description:
+      "Uygulama tercihleri ve sistem ayarları yönetimi.",
+    navGroup: "core",
+  },
+  {
+    id: "systems",
+    path: "/sistemler",
+    icon: "⚙",
+    title: "Sistemler (Legacy)",
+    short: "Eski Sistem Ekranı",
+    description:
+      "Sistem bileşenleri, entegrasyonlar ve sistem kayıtları.",
+    navGroup: "legacy",
+  },
+  {
+    id: "material-analysis",
+    path: "/malzeme-analizi",
+    icon: "⛁",
+    title: "Malzeme Analizi (Legacy)",
+    short: "Eski Maliyet Ekranı",
+    description:
+      "Malzeme maliyet analizlerini bağımsız olarak yönet.",
+    navGroup: "legacy",
+  },
+  {
+    id: "documents",
+    path: "/belgeler",
+    icon: "☷",
+    title: "Belgeler (Legacy)",
+    short: "Eski Belge Ekranı",
+    description:
+      "Belge arşivi ve doküman takibi için temel iskelet ekranı.",
+    navGroup: "legacy",
   },
   {
     id: "finance",
     path: "/finans-maliyet",
     icon: "⟐",
-    title: "Finans / Maliyet",
-    short: "Finans Yönetimi",
+    title: "Finans / Maliyet (Legacy)",
+    short: "Eski Finans Ekranı",
     description:
       "Finansal özetler, maliyet kırılımları ve bütçe takibi.",
-  },
-  {
-    id: "reports",
-    path: "/raporlar",
-    icon: "☲",
-    title: "Raporlar",
-    short: "Rapor Merkezi",
-    description:
-      "Operasyonel ve yönetsel rapor ekranları için temel yapı.",
-  },
-  {
-    id: "settings",
-    path: "/ayarlar",
-    icon: "⚚",
-    title: "Ayarlar",
-    short: "Yapılandırma",
-    description:
-      "Uygulama tercihleri ve sistem ayarları yönetimi.",
+    navGroup: "legacy",
   },
 ];
 
@@ -184,13 +248,24 @@ const routeModuleMap = Object.fromEntries(
   modules.map((module) => [module.path, module.id])
 );
 const moduleIds = new Set(modules.map((module) => module.id));
+const primaryModules = modules.filter((module) => module.navGroup !== "legacy");
+const legacyModules = modules.filter((module) => module.navGroup === "legacy");
+
+const moduleRouteAliases = {
+  "/dashboard": "dashboard",
+  "/musteriler-crm": "crm",
+  "/tedarik": "procurement",
+  "/urunler": "products",
+  "/fiyat-analizi": "price-analysis",
+  "/ayarlar": "settings",
+};
 
 const normalizeModulePath = (pathValue) => {
   const sanitizedPath = (pathValue || "").trim();
   const normalizedBasePath = sanitizedPath.replace(/\/+$/, "");
 
   if (!normalizedBasePath) {
-    return "/dashboard";
+    return "/genel-bakis";
   }
 
   return normalizedBasePath.startsWith("/")
@@ -202,7 +277,7 @@ const resolveModuleFromHash = (hashValue) => {
   const rawPath = (hashValue || "").replace(/^#/, "").trim();
   const pathOnly = rawPath.match(/^[^?#]*/)?.[0] || "";
   const normalizedPath = normalizeModulePath(pathOnly);
-  return routeModuleMap[normalizedPath] || "dashboard";
+  return routeModuleMap[normalizedPath] || moduleRouteAliases[normalizedPath] || "dashboard";
 };
 
 const OFFER_STATUS_TONES = {
@@ -449,7 +524,7 @@ function App() {
     const hashPath = rawHash.match(/^[^?#]*/)?.[0] || "";
     const hashPathSuffix = rawHash.slice(hashPath.length);
     const normalizedHashPath = normalizeModulePath(hashPath);
-    const expectedPath = moduleRouteMap[activeModule] || "/dashboard";
+    const expectedPath = moduleRouteMap[activeModule] || "/genel-bakis";
 
     if (normalizedHashPath !== expectedPath) {
       window.location.hash = `${expectedPath}${hashPathSuffix}`;
@@ -871,7 +946,7 @@ function App() {
   );
 
   const handleModuleNavigation = (moduleId) => {
-    const nextRoute = moduleRouteMap[moduleId] || "/dashboard";
+    const nextRoute = moduleRouteMap[moduleId] || "/genel-bakis";
     if (window.location.hash !== `#${nextRoute}`) {
       window.location.hash = nextRoute;
       return;
@@ -1393,7 +1468,10 @@ function App() {
 
           <div className="panel-content quick-links-grid">
             {modules
-              .filter((module) => module.id !== "dashboard")
+              .filter(
+                (module) =>
+                  module.id !== "dashboard" && module.navGroup !== "legacy"
+              )
               .slice(0, 6)
               .map((module) => (
                 <button
@@ -1502,6 +1580,8 @@ function App() {
       finance: financeItems.length,
       reports: reportItems.length,
       integrations: integrations.length,
+      dataMemory: memoryItems.length,
+      messages: aiMessages.length,
     }),
     [
       products.length,
@@ -1512,6 +1592,8 @@ function App() {
       financeItems.length,
       reportItems.length,
       integrations.length,
+      memoryItems.length,
+      aiMessages.length,
     ]
   );
 
@@ -1547,20 +1629,89 @@ function App() {
         },
       },
       "price-analysis": {
-        title: "Fiyat Analizi",
+        title: "Fiyatlandırma",
         description:
-          "Fiyat analizi ekranı malzeme analizinden bağımsız tutulur.",
+          "Fiyatlandırma ekranı mevcut fiyat analizi altyapısı üzerinden çalışır.",
         sections: [
           {
             id: "price-analysis-list",
-            title: "Fiyat Analiz Kayıtları",
-            description: "Ürün veya sistem bazlı fiyat analizi kayıtları.",
+            title: "Fiyatlandırma Kayıtları",
+            description: "Ürün veya sistem bazlı fiyatlandırma kayıtları.",
             count: moduleCounts.priceAnalysis,
           },
           {
             id: "price-analysis-comparison",
             title: "Fiyat Karşılaştırma",
             description: "Tedarikçi bazlı fiyat karşılaştırma sonuçları.",
+            count: 0,
+          },
+        ],
+        statusNote: {
+          tone: "info",
+          message: LOCAL_ONLY_MODULE_MESSAGE,
+        },
+      },
+      "ai-analysis": {
+        title: "AI Analiz",
+        description:
+          "AI destekli analiz akışları için route ve arayüz iskeleti hazırdır.",
+        sections: [
+          {
+            id: "ai-analysis-insights",
+            title: "Analiz İçgörüleri",
+            description: "Yapay zeka destekli özet ve içgörü alanı.",
+            count: 0,
+          },
+          {
+            id: "ai-analysis-scenarios",
+            title: "Senaryo Analizi",
+            description: "Farklı senaryoların etki değerlendirme alanı.",
+            count: 0,
+          },
+        ],
+        statusNote: {
+          tone: "info",
+          message: LOCAL_ONLY_MODULE_MESSAGE,
+        },
+      },
+      calendar: {
+        title: "Takvim",
+        description:
+          "Görev, toplantı ve operasyon planlaması için takvim modülü iskeleti.",
+        sections: [
+          {
+            id: "calendar-events",
+            title: "Planlı Etkinlikler",
+            description: "Takvim etkinlikleri ve görev planları.",
+            count: 0,
+          },
+          {
+            id: "calendar-reminders",
+            title: "Hatırlatmalar",
+            description: "Zaman bazlı bildirim ve hatırlatma alanı.",
+            count: 0,
+          },
+        ],
+        statusNote: {
+          tone: "info",
+          message: LOCAL_ONLY_MODULE_MESSAGE,
+        },
+      },
+      messages: {
+        title: "Mesajlar",
+        description:
+          "Mesaj merkezi route’u hazır; canlı mesajlaşma entegrasyonu sonraki aşamadadır.",
+        sections: [
+          {
+            id: "messages-inbox",
+            title: "Gelen Kutusu",
+            description: "Modül bazlı ve ekip içi mesaj akışı.",
+            count: moduleCounts.messages,
+          },
+          {
+            id: "messages-channels",
+            title: "Kanallar",
+            description: "Sohbet ve bildirim kanalları.",
             count: 0,
           },
         ],
@@ -1683,8 +1834,54 @@ function App() {
           message: LOCAL_ONLY_MODULE_MESSAGE,
         },
       },
+      "data-memory": {
+        title: "Veri & Hafıza",
+        description:
+          "Merkezi hafıza kayıtları ve veri yönetimi için route iskeleti hazırdır.",
+        sections: [
+          {
+            id: "data-memory-records",
+            title: "Hafıza Kayıtları",
+            description: "Mevcut hafıza kayıtlarının merkezi görünümü.",
+            count: moduleCounts.dataMemory,
+          },
+          {
+            id: "data-memory-governance",
+            title: "Veri Yönetişimi",
+            description: "Veri sınıflandırma ve erişim politikaları alanı.",
+            count: 0,
+          },
+        ],
+        statusNote: {
+          tone: "info",
+          message: LOCAL_ONLY_MODULE_MESSAGE,
+        },
+      },
+      integrations: {
+        title: "Entegrasyonlar",
+        description:
+          "Bağlantı yönetimi için ana entegrasyon route’u oluşturuldu.",
+        sections: [
+          {
+            id: "integrations-list",
+            title: "Bağlı Servisler",
+            description: "Aktif/pasif entegrasyon durumları.",
+            count: moduleCounts.integrations,
+          },
+          {
+            id: "integrations-settings",
+            title: "Entegrasyon Ayarları",
+            description: "Servis bazlı bağlantı ve yapılandırma alanı.",
+            count: 0,
+          },
+        ],
+        statusNote: {
+          tone: "info",
+          message: LOCAL_ONLY_MODULE_MESSAGE,
+        },
+      },
       settings: {
-        title: "Ayarlar",
+        title: "Sistem Ayarları",
         description: "Uygulama tercihleri ve yapılandırma alanı.",
         sections: [
           {
@@ -1849,7 +2046,7 @@ function App() {
           </div>
 
           <nav className="module-nav">
-            {modules.map((module) => (
+            {primaryModules.map((module) => (
               <button
                 key={module.id}
                 type="button"
@@ -1869,6 +2066,33 @@ function App() {
               </button>
             ))}
           </nav>
+
+          {legacyModules.length > 0 ? (
+            <>
+              <div className="sidebar-title">EK MODÜLLER</div>
+              <nav className="module-nav">
+                {legacyModules.map((module) => (
+                  <button
+                    key={module.id}
+                    type="button"
+                    className={`module-button ${
+                      activeModule === module.id ? "active" : ""
+                    }`}
+                    onClick={() => handleModuleNavigation(module.id)}
+                  >
+                    <span className="module-icon">
+                      {module.icon}
+                    </span>
+
+                    <span className="module-text">
+                      <strong>{module.title}</strong>
+                      <small>{module.short}</small>
+                    </span>
+                  </button>
+                ))}
+              </nav>
+            </>
+          ) : null}
 
           <div className="sidebar-footer">
             <div className="sidebar-system">
