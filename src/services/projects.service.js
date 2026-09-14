@@ -91,7 +91,7 @@ export const getProjects = async () => {
     const data = await fetchAPI("/api/projects");
     return mapProjectsToViewModel(data.data || []);
   } catch (error) {
-    console.error("Failed to fetch projects:", error.message);
+    console.warn("Failed to fetch projects:", error.message);
     throw error;
   }
 };
@@ -116,7 +116,7 @@ export const getProjectById = async (id) => {
       console.warn(`Project not found: ${id}`);
       return null;
     }
-    console.error("Failed to fetch project:", error.message);
+    console.warn("Failed to fetch project:", error.message);
     throw error;
   }
 };
@@ -159,7 +159,7 @@ export const createProject = async (project) => {
 
     return data.data ? mapProjectToViewModel(data.data) : null;
   } catch (error) {
-    console.error("Failed to create project:", error.message);
+    console.warn("Failed to create project:", error.message);
     throw error;
   }
 };
@@ -176,7 +176,7 @@ export const deleteProject = async (id) => {
 
     return data.data ? mapProjectToViewModel(data.data) : null;
   } catch (error) {
-    console.error("Failed to delete project:", error.message);
+    console.warn("Failed to delete project:", error.message);
     throw error;
   }
 };

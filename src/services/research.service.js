@@ -69,7 +69,7 @@ export const getResearchItems = async () => {
     const data = await fetchAPI("/api/research");
     return mapResearchItemsToViewModel(data.data || []);
   } catch (error) {
-    console.error("Failed to fetch research items:", error.message);
+    console.warn("Failed to fetch research items:", error.message);
     throw error;
   }
 };
@@ -94,7 +94,7 @@ export const getResearchItemById = async (id) => {
       console.warn(`Research item not found: ${id}`);
       return null;
     }
-    console.error("Failed to fetch research item:", error.message);
+    console.warn("Failed to fetch research item:", error.message);
     throw error;
   }
 };
@@ -139,7 +139,7 @@ export const createResearchItem = async (item) => {
 
     return data.data ? mapResearchItemToViewModel(data.data) : null;
   } catch (error) {
-    console.error("Failed to create research item:", error.message);
+    console.warn("Failed to create research item:", error.message);
     throw error;
   }
 };
@@ -156,7 +156,7 @@ export const deleteResearchItem = async (id) => {
 
     return data.data ? mapResearchItemToViewModel(data.data) : null;
   } catch (error) {
-    console.error("Failed to delete research item:", error.message);
+    console.warn("Failed to delete research item:", error.message);
     throw error;
   }
 };

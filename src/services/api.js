@@ -112,12 +112,12 @@ export const fetchAPI = async (endpoint, options = {}) => {
       );
       networkError.code = "API_NETWORK_ERROR";
       networkError.cause = error;
-      console.error("API Error:", networkError.message);
+      console.warn("API Warning:", networkError.message);
       throw networkError;
     }
 
     // Re-throw with additional context
-    console.error("API Error:", error.message);
+    console.warn("API Warning:", error.message);
     throw error;
   }
 };

@@ -254,7 +254,7 @@ export const getOffers = async () => {
     const data = await fetchAPI("/api/offers");
     return mapOffersToViewModel(data.data || []);
   } catch (error) {
-    console.error("Failed to fetch offers:", error.message);
+    console.warn("Failed to fetch offers:", error.message);
     throw error;
   }
 };
@@ -279,7 +279,7 @@ export const getOfferById = async (id) => {
       return null;
     }
 
-    console.error("Failed to fetch offer:", error.message);
+    console.warn("Failed to fetch offer:", error.message);
     throw error;
   }
 };
@@ -299,7 +299,7 @@ export const createOffer = async (offer) => {
 
     return data.data ? mapOfferToViewModel(data.data) : null;
   } catch (error) {
-    console.error("Failed to create offer:", error.message);
+    console.warn("Failed to create offer:", error.message);
     throw error;
   }
 };
@@ -320,7 +320,7 @@ export const deleteOffer = async (id) => {
 
     return data.data ? mapOfferToViewModel(data.data) : null;
   } catch (error) {
-    console.error("Failed to delete offer:", error.message);
+    console.warn("Failed to delete offer:", error.message);
     throw error;
   }
 };
