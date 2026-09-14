@@ -412,6 +412,7 @@ function App() {
   const [memoryContent, setMemoryContent] = useState("");
 
   const [aiInput, setAiInput] = useState("");
+  const [moduleSearch, setModuleSearch] = useState("");
 
   const [aiMessages, setAiMessages] = useState([
     {
@@ -848,27 +849,180 @@ function App() {
     [offers]
   );
 
+  const activeIntegrationCount = useMemo(
+    () => integrations.filter((integration) => integration.status === "Aktif").length,
+    [integrations]
+  );
+
   const dashboardStats = useMemo(
     () => [
       {
         label: "AKTİF PROJELER",
         value: activeProjects.length,
+        detail:
+          activeProjects.length > 0
+            ? `${projects.length} toplam proje yönetiliyor`
+            : "Yeni proje kaydı bekleniyor",
+      },
+      {
+        label: "TEDARİK & ARAŞTIRMA",
+        value: procurementItems.length,
+        detail:
+          procurementItems.length > 0
+            ? "Operasyon listesi güncel"
+            : "Araştırma kuyruğu hazır",
       },
       {
         label: "BEKLEYEN TEKLİFLER",
         value: pendingOffers.length,
+        detail:
+          pendingOffers.length > 0
+            ? "Takip ve onay süreci açık"
+            : "Bekleyen teklif bulunmuyor",
       },
       {
-        label: "ÜRÜNLER",
+        label: "AKTİF AI SİSTEMLERİ",
+        value: activeIntegrationCount,
+        detail: `${integrations.length} sistem bağlantısı tanımlı`,
+      },
+      {
+        label: "ÜRÜN & SİSTEM",
         value: products.length,
-      },
-      {
-        label: "SİSTEMLER",
-        value: systemInventory.length,
+        detail: `${systemInventory.length} sistem kaydı ile bağlı`,
       },
     ],
-    [activeProjects.length, pendingOffers.length, products.length, systemInventory.length]
+    [
+      activeIntegrationCount,
+      activeProjects.length,
+      integrations.length,
+      pendingOffers.length,
+      procurementItems.length,
+      products.length,
+      projects.length,
+      systemInventory.length,
+    ]
   );
+
+  const filteredModules = useMemo(() => {
+    const query = moduleSearch.trim().toLocaleLowerCase("tr-TR");
+    if (!query) {
+      return modules;
+    }
+
+    return modules.filter((module) =>
+      [module.title, module.short, module.description]
+        .join(" ")
+        .toLocaleLowerCase("tr-TR")
+        .includes(query)
+    );
+  }, [moduleSearch]);
+
+  const dashboardProjectCards = useMemo(() => {
+    const seededCards = (activeProjects.length > 0 ? activeProjects : projects)
+      .slice(0, 3)
+      .map((project, index) => ({
+        id: project.id,
+        name: project.name,
+        type: project.type || "Genel Proje",
+        status: project.status || "Aktif",
+        progress: Math.max(36, 82 - index * 18),
+        isPlaceholder: false,
+      }));
+
+    while (seededCards.length < 3) {
+      const cardIndex = seededCards.length;
+      seededCards.push({
+        id: `dashboard-placeholder-${cardIndex}`,
+        name: cardIndex === 2 ? "YENİ PROJE" : "DDPRO PIPELINE",
+        type:
+          cardIndex === 2
+            ? "Oluşturma asamasında"
+            : "Yeni iş akışı hazır durumda",
+        status: cardIndex === 2 ? "Başlatılıyor" : "Hazır",
+        progress: cardIndex === 2 ? 18 : 58,
+        isPlaceholder: true,
+      });
+    }
+
+    return seededCards;
+  }, [activeProjects, projects]);
+
+  const dashboardActivityFeed = useMemo(() => {
+    const items = [];
+
+    if (aiMessages.length > 0) {
+      const lastMessage = aiMessages[aiMessages.length - 1];
+      items.push({
+        id: `assistant-${lastMessage.id}`,
+        label: "AI Komuta Merkezi",
+        text: lastMessage.text,
+        meta: lastMessage.date,
+      });
+    }
+
+    if (systemLogs.length > 0) {
+      items.push({
+        id: `log-${systemLogs[0].id}`,
+        label: "Son Sistem Kaydı",
+        text: systemLogs[0].message,
+        meta: systemLogs[0].date,
+      });
+    }
+
+    items.push({
+      id: "projects-summary",
+      label: "Operasyon Özeti",
+      text: `${activeProjects.length} aktif proje, ${pendingOffers.length} bekleyen teklif ve ${procurementItems.length} tedarik kaydı eş zamanlı takip ediliyor.`,
+      meta: "Gerçek zamanlı görünüm",
+    });
+
+    return items.slice(0, 3);
+  }, [activeProjects.length, aiMessages, pendingOffers.length, procurementItems.length, systemLogs]);
+
+  const systemHealthItems = useMemo(
+    () => [
+      {
+        label: "DDPro Core",
+        state: "success",
+        value: "Hazır",
+      },
+      {
+        label: "Projeler API",
+        state: getConnectionTone(projectsFetchState),
+        value: getConnectionLabel(projectsFetchState),
+      },
+      {
+        label: "Teklifler API",
+        state: getConnectionTone(offersFetchState),
+        value: getConnectionLabel(offersFetchState),
+      },
+      {
+        label: "Tedarik API",
+        state: getConnectionTone(procurementFetchState),
+        value: getConnectionLabel(procurementFetchState),
+      },
+      {
+        label: "Aktif AI Sistemleri",
+        state: activeIntegrationCount > 0 ? "success" : "info",
+        value: `${activeIntegrationCount}/${integrations.length || 1} çevrimiçi`,
+      },
+    ],
+    [
+      activeIntegrationCount,
+      integrations.length,
+      offersFetchState,
+      procurementFetchState,
+      projectsFetchState,
+    ]
+  );
+
+  const handleModuleSearchSubmit = (event) => {
+    event.preventDefault();
+
+    if (filteredModules.length > 0) {
+      handleModuleNavigation(filteredModules[0].id);
+    }
+  };
 
   const handleModuleNavigation = (moduleId) => {
     const nextRoute = moduleRouteMap[moduleId] || "/dashboard";
@@ -1347,147 +1501,163 @@ function App() {
         <p className="status-banner warning">{apiHealthState.message}</p>
       ) : null}
 
-      <div className="stats-grid">
+      <section className="dashboard-hero">
+        <div className="dashboard-hero-copy">
+          <span className="dashboard-overline">DOĞRU DİZAYN PRO</span>
+          <h2>
+            DOĞRU SİSTEM.
+            <br />
+            DOĞRU ÇÖZÜM.
+          </h2>
+          <p className="dashboard-hero-description">
+            Projelerini, tedarik araştırmalarını, teklif akışını ve sistem
+            yönetimini tek merkezden takip et.
+          </p>
+
+          <div className="dashboard-hero-tags">
+            <span>Merkezi Operasyon</span>
+            <span>AI Destekli İzleme</span>
+            <span>Canlı Veri Akışı</span>
+          </div>
+        </div>
+
+        <div className="dashboard-showcase" aria-hidden="true">
+          <div className="dashboard-showcase-grid"></div>
+          <div className="dashboard-monogram">
+            <div className="dashboard-monogram-core">
+              <span>D</span>
+              <span>P</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div className="stats-grid dashboard-stats-grid">
         {dashboardStats.map((stat) => (
-          <div className="stat-card" key={stat.label}>
+          <div className="stat-card dashboard-stat-card" key={stat.label}>
             <span>{stat.label}</span>
             <strong>{stat.value}</strong>
+            <small>{stat.detail}</small>
+            <i aria-hidden="true"></i>
           </div>
         ))}
       </div>
 
-      <div className="dashboard-grid">
-        <div className="panel">
-          <div className="panel-header">
-            <h2>Proje Özeti</h2>
+      <div className="dashboard-bottom-grid">
+        <section className="dashboard-card project-showcase">
+          <div className="dashboard-card-header">
+            <div>
+              <h3>Aktif Projeler</h3>
+              <p>Öne çıkan proje akışı ve başlatılacak yeni iş kartları.</p>
+            </div>
           </div>
 
-          <div className="panel-content">
-            <div className="quick-status">
-              <span>Toplam Proje</span>
-              <strong>{projects.length}</strong>
-            </div>
-            <div className="quick-status">
-              <span>Aktif Projeler</span>
-              <strong>
-                {activeProjects.length}
-              </strong>
-            </div>
-            <div className="quick-status">
-              <span>Bekleyen Teklifler</span>
-              <strong>
-                {pendingOffers.length}
-              </strong>
-            </div>
-            <div className="quick-status">
-              <span>Ürün / Sistem Özeti</span>
-              <strong>{products.length + systemInventory.length}</strong>
-            </div>
+          <div className="project-showcase-grid">
+            {dashboardProjectCards.map((project) => (
+              <article
+                className={`project-showcase-card ${
+                  project.isPlaceholder ? "placeholder" : ""
+                }`}
+                key={project.id}
+              >
+                <span className="project-type">{project.name}</span>
+                <strong>{project.type}</strong>
+                <div className="project-progress">
+                  <span>%{project.progress}</span>
+                  <small>{project.status}</small>
+                </div>
+                <div className="project-progress-bar">
+                  <i style={{ width: `${project.progress}%` }}></i>
+                </div>
+              </article>
+            ))}
           </div>
-        </div>
+        </section>
 
-        <div className="panel">
-          <div className="panel-header">
-            <h2>Hızlı Erişim Kartları</h2>
+        <section className="dashboard-card command-center">
+          <div className="dashboard-card-header">
+            <div>
+              <h3>DDPRO AI Komuta Merkezi</h3>
+              <p>Sistem asistanı hazır. İlgili modülü seçerek akışı başlat.</p>
+            </div>
           </div>
 
-          <div className="panel-content quick-links-grid">
-            {modules
-              .filter((module) => module.id !== "dashboard")
-              .slice(0, 6)
-              .map((module) => (
-                <button
-                  type="button"
-                  className="quick-link-card"
-                  key={module.id}
-                  aria-label={`${module.title} modülüne git`}
-                  onClick={() => handleModuleNavigation(module.id)}
-                >
-                  <span aria-hidden="true">{module.icon}</span>
-                  <strong>{module.title}</strong>
-                </button>
-              ))}
+          <div className="command-center-feed">
+            {dashboardActivityFeed.map((item) => (
+              <div className="command-center-item" key={item.id}>
+                <span>{item.label}</span>
+                <strong>{item.text}</strong>
+                <small>{item.meta}</small>
+              </div>
+            ))}
           </div>
-        </div>
+
+          <div className="command-actions-grid">
+            <button type="button" onClick={() => handleModuleNavigation("projects")}>
+              + Yeni Proje Oluştur
+            </button>
+            <button
+              type="button"
+              onClick={() => handleModuleNavigation("procurement")}
+            >
+              + Malzeme Araştır
+            </button>
+            <button type="button" onClick={() => handleModuleNavigation("offers")}>
+              + Teklif Karşılaştır
+            </button>
+            <button
+              type="button"
+              onClick={() => handleModuleNavigation("ai-assistant")}
+            >
+              + AI Analizi Başlat
+            </button>
+          </div>
+
+          <div className="command-center-toolbar">
+            <span>⌘</span>
+            <span>⌕</span>
+            <span>▾</span>
+            <span>⎋</span>
+          </div>
+        </section>
       </div>
 
-      <div className="dashboard-grid">
-        <div className="panel">
-          <div className="panel-header">
-            <h2>Aktif Projeler</h2>
-          </div>
-
-          <div className="panel-content">
-            {projectsLoading ? (
-              <p className="empty-state">Projeler yükleniyor...</p>
-            ) : activeProjects.length === 0 ? (
-              <p className="empty-state">Henüz veri bulunmuyor.</p>
-            ) : (
-              <div className="log-list">
-                {activeProjects
-                  .slice(0, 6)
-                  .map((project) => (
-                    <div className="log-item" key={project.id}>
-                      <strong>{project.name}</strong>
-                      <small>
-                        {project.type} · {project.date}
-                      </small>
-                    </div>
-                  ))}
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="panel">
+      <div className="dashboard-grid dashboard-secondary-grid">
+        <section className="panel">
           <div className="panel-header">
             <h2>Sistem Durumu</h2>
           </div>
 
-          <div className="panel-content">
-            <div className="quick-status">
-              <span>DDPro Core</span>
-              <strong>Hazır</strong>
-            </div>
-            <div className="quick-status">
-              <span>Projeler API</span>
-              <strong>{getConnectionLabel(projectsFetchState)}</strong>
-            </div>
-            <div className="quick-status">
-              <span>Teklifler API</span>
-              <strong>{getConnectionLabel(offersFetchState)}</strong>
-            </div>
-            <div className="quick-status">
-              <span>Tedarik API</span>
-              <strong>{getConnectionLabel(procurementFetchState)}</strong>
-            </div>
-            <div className="quick-status">
-              <span>Diğer Modüller</span>
-              <strong>API entegrasyonu bekliyor</strong>
-            </div>
+          <div className="panel-content system-health-list">
+            {systemHealthItems.map((item) => (
+              <div className="system-health-row" key={item.label}>
+                <span>{item.label}</span>
+                <strong className={item.state}>{item.value}</strong>
+              </div>
+            ))}
           </div>
-        </div>
-      </div>
+        </section>
 
-      <div className="panel">
-        <div className="panel-header">
-          <h2>Son İşlemler</h2>
-        </div>
+        <section className="panel">
+          <div className="panel-header">
+            <h2>Son İşlemler</h2>
+          </div>
 
-        <div className="panel-content">
-          {systemLogs.length === 0 ? (
-            <p className="empty-state">Henüz veri bulunmuyor.</p>
-          ) : (
-            <div className="log-list">
-              {systemLogs.slice(0, 8).map((log) => (
-                <div className="log-item" key={log.id}>
-                  <strong>{log.message}</strong>
-                  <small>{log.date}</small>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+          <div className="panel-content">
+            {systemLogs.length === 0 ? (
+              <p className="empty-state">Henüz veri bulunmuyor.</p>
+            ) : (
+              <div className="log-list">
+                {systemLogs.slice(0, 6).map((log) => (
+                  <div className="log-item" key={log.id}>
+                    <strong>{log.message}</strong>
+                    <small>{log.date}</small>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </section>
       </div>
     </div>
   );
@@ -1823,33 +1993,58 @@ function App() {
   const currentModule =
     modules.find((module) => module.id === activeModule) ||
     modules[0];
+  const isDashboard = activeModule === "dashboard";
 
   return (
-    <div className="ddpro-app">
+    <div className={`ddpro-app ${isDashboard ? "dashboard-shell" : ""}`}>
       <header className="app-header">
         <div className="brand-area">
-          <div className="brand-logo">DD</div>
+          <div className="brand-logo">
+            <span>D</span>
+            <span>P</span>
+          </div>
 
           <div className="brand-content">
             <strong>DOĞRU DİZAYN PRO</strong>
-            <span>DDPro Dijital Yönetim Sistemi</span>
+            <span>DDPro Dijital Komuta Merkezi</span>
           </div>
         </div>
 
-        <div className={`header-status ${headerStatusTone}`}>
-          <span className={`status-dot ${headerStatusTone}`}></span>
-          {headerStatusLabel}
+        <div className="header-utility-bar">
+          <form className="header-search" onSubmit={handleModuleSearchSubmit}>
+            <span aria-hidden="true">⌕</span>
+            <input
+              type="search"
+              value={moduleSearch}
+              onChange={(event) => setModuleSearch(event.target.value)}
+              placeholder="Search"
+              aria-label="Modül ara"
+            />
+          </form>
+
+          <div className="header-pill-group">
+            <div className="header-pill">
+              <span>Aktif AI Sistemleri</span>
+              <strong>{activeIntegrationCount}</strong>
+            </div>
+            <div className="header-pill">
+              <span>Etkinlik Linki</span>
+              <strong>{systemLogs.length}</strong>
+            </div>
+            <div className={`header-status ${headerStatusTone}`}>
+              <span className={`status-dot ${headerStatusTone}`}></span>
+              {headerStatusLabel}
+            </div>
+          </div>
         </div>
       </header>
 
       <div className="app-layout">
         <aside className="sidebar">
-          <div className="sidebar-title">
-            ANA MODÜLLER
-          </div>
+          <div className="sidebar-title">ANA MODÜLLER</div>
 
           <nav className="module-nav">
-            {modules.map((module) => (
+            {filteredModules.map((module) => (
               <button
                 key={module.id}
                 type="button"
@@ -1868,6 +2063,10 @@ function App() {
                 </span>
               </button>
             ))}
+
+            {filteredModules.length === 0 ? (
+              <p className="sidebar-empty-state">Aranan modül bulunamadı.</p>
+            ) : null}
           </nav>
 
           <div className="sidebar-footer">
@@ -1879,12 +2078,14 @@ function App() {
         </aside>
 
         <main className="main-content">
-          <section className="content-header">
-            <div>
-              <h1>{currentModule.title}</h1>
-              <p>{currentModule.description}</p>
-            </div>
-          </section>
+          {isDashboard ? null : (
+            <section className="content-header">
+              <div>
+                <h1>{currentModule.title}</h1>
+                <p>{currentModule.description}</p>
+              </div>
+            </section>
+          )}
 
           <section className="content-body">
             <Suspense
