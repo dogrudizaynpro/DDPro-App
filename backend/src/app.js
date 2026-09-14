@@ -10,6 +10,9 @@ import { getSupabaseClient, isSupabaseAvailable } from "./config/supabase.js";
 
 const app = express();
 const DEFAULT_ALLOWED_ORIGINS = [
+  "http://127.0.0.1:3000",
+  "http://127.0.0.1:5000",
+  "http://127.0.0.1:5173",
   "http://localhost:3000",
   "http://localhost:5000",
   "http://localhost:5173",
@@ -20,6 +23,8 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
       .map((origin) => origin.trim())
       .filter(Boolean)
   : DEFAULT_ALLOWED_ORIGINS;
+const isLocalRuntimeOrigin = (origin = "") =>
+  /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin);
 
 // ============================================================
 // MIDDLEWARE
@@ -31,7 +36,14 @@ app.use(helmet());
 // CORS
 app.use(
   cors({
-    origin: allowedOrigins,
+    origin(origin, callback) {
+      if (!origin || allowedOrigins.includes(origin) || isLocalRuntimeOrigin(origin)) {
+        callback(null, true);
+        return;
+      }
+
+      callback(new Error("Origin not allowed by CORS"));
+    },
     credentials: true,
   })
 );
