@@ -887,7 +887,7 @@ function App() {
       },
       {
         label: "ÜRÜN & SİSTEM",
-        value: products.length,
+        value: products.length + systemInventory.length,
         detail: `${systemInventory.length} sistem kaydı ile bağlı`,
       },
     ],
