@@ -22,6 +22,8 @@ import {
   deleteResearchItem as deleteProcurementRequest,
   getResearchItems as getProcurementItems,
 } from "./services/research.service.js";
+import AppShell from "./components/AppShell.jsx";
+import DashboardHome from "./components/DashboardHome.jsx";
 
 const ProjectsModule = lazy(() => import("./modules/ProjectsModule.jsx"));
 const ProcurementModule = lazy(() => import("./modules/ProcurementModule.jsx"));
@@ -185,6 +187,64 @@ const routeModuleMap = Object.fromEntries(
 );
 const moduleIds = new Set(modules.map((module) => module.id));
 
+const sidebarMenuItems = [
+  { id: "overview", title: "Genel Bakış", icon: "⌂", moduleId: "dashboard" },
+  { id: "projects", title: "Projeler", icon: "▣", moduleId: "projects" },
+  { id: "crm", title: "CRM", icon: "☰", moduleId: "crm" },
+  { id: "offers", title: "Teklifler", icon: "€", moduleId: "offers" },
+  {
+    id: "procurement",
+    title: "Tedarik & Araştırma",
+    icon: "⌕",
+    moduleId: "procurement",
+  },
+  {
+    id: "products",
+    title: "Ürünler / Malzemeler",
+    icon: "◈",
+    moduleId: "products",
+  },
+  {
+    id: "pricing",
+    title: "Fiyatlandırma",
+    icon: "₺",
+    moduleId: "price-analysis",
+  },
+  {
+    id: "ai-assistant",
+    title: "AI Asistan",
+    icon: "✦",
+    moduleId: "ai-assistant",
+  },
+  {
+    id: "ai-analysis",
+    title: "AI Analiz",
+    icon: "⛁",
+    moduleId: "material-analysis",
+  },
+  { id: "calendar", title: "Takvim", icon: "◷", moduleId: "documents" },
+  { id: "messages", title: "Mesajlar", icon: "✉", moduleId: "ai-assistant" },
+  { id: "reports", title: "Raporlar", icon: "☲", moduleId: "reports" },
+  {
+    id: "memory",
+    title: "Veri & Hafıza",
+    icon: "⌬",
+    moduleId: "systems",
+  },
+  {
+    id: "integrations",
+    title: "Entegrasyonlar",
+    icon: "⛭",
+    moduleId: "systems",
+  },
+  {
+    id: "settings",
+    title: "Sistem Ayarları",
+    icon: "⚚",
+    moduleId: "settings",
+  },
+];
+
 const normalizeModulePath = (pathValue) => {
   const sanitizedPath = (pathValue || "").trim();
   const normalizedBasePath = sanitizedPath.replace(/\/+$/, "");
@@ -323,6 +383,8 @@ function App() {
   const [activeModule, setActiveModule] = useState(() =>
     resolveModuleFromHash(window.location.hash)
   );
+  const [globalSearch, setGlobalSearch] = useState("");
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const [apiHealthState, setApiHealthState] = useState({
     status: "loading",
@@ -843,34 +905,8 @@ function App() {
     [projects]
   );
 
-  const pendingOffers = useMemo(
-    () => offers.filter((offer) => offer.status === "Hazırlanıyor"),
-    [offers]
-  );
-
-  const dashboardStats = useMemo(
-    () => [
-      {
-        label: "AKTİF PROJELER",
-        value: activeProjects.length,
-      },
-      {
-        label: "BEKLEYEN TEKLİFLER",
-        value: pendingOffers.length,
-      },
-      {
-        label: "ÜRÜNLER",
-        value: products.length,
-      },
-      {
-        label: "SİSTEMLER",
-        value: systemInventory.length,
-      },
-    ],
-    [activeProjects.length, pendingOffers.length, products.length, systemInventory.length]
-  );
-
   const handleModuleNavigation = (moduleId) => {
+    setIsSidebarOpen(false);
     const nextRoute = moduleRouteMap[moduleId] || "/dashboard";
     if (window.location.hash !== `#${nextRoute}`) {
       window.location.hash = nextRoute;
@@ -922,6 +958,104 @@ function App() {
       : apiHealthState.status === "loading"
         ? "API Kontrol Ediliyor"
         : "Production API Kontrol Gerekli";
+  const notificationCount = [projectsError, offersError, procurementError].filter(
+    Boolean
+  ).length;
+  const filteredSidebarItems = useMemo(() => {
+    const query = globalSearch.trim().toLocaleLowerCase("tr-TR");
+    if (!query) {
+      return sidebarMenuItems;
+    }
+
+    return sidebarMenuItems.filter((item) =>
+      item.title.toLocaleLowerCase("tr-TR").includes(query)
+    );
+  }, [globalSearch]);
+
+  const dashboardKpiCards = useMemo(
+    () => [
+      {
+        label: "Aktif Projeler",
+        value: activeProjects.length,
+        moduleId: "projects",
+      },
+      {
+        label: "Teklifler",
+        value: offers.length,
+        moduleId: "offers",
+      },
+      {
+        label: "Tedarik / Araştırmalar",
+        value: procurementItems.length,
+        moduleId: "procurement",
+      },
+      {
+        label: "AI Analizleri",
+        value: materialAnalysisItems.length,
+        moduleId: "material-analysis",
+      },
+    ],
+    [
+      activeProjects.length,
+      offers.length,
+      procurementItems.length,
+      materialAnalysisItems.length,
+    ]
+  );
+
+  const projectProgressSummary = useMemo(() => {
+    const statusGroups = projects.reduce((accumulator, project) => {
+      const status = project.status || "Belirsiz";
+      accumulator[status] = (accumulator[status] || 0) + 1;
+      return accumulator;
+    }, {});
+
+    return Object.entries(statusGroups)
+      .map(([status, count]) => ({ status, count }))
+      .slice(0, 5);
+  }, [projects]);
+
+  const upcomingCalendarItems = useMemo(() => {
+    const upcoming = [
+      ...projects.slice(0, 3).map((project) => ({
+        id: `project-${project.id}`,
+        title: project.name,
+        subtitle: project.type || "Proje",
+        date: project.date || "-",
+      })),
+      ...offers.slice(0, 3).map((offer) => ({
+        id: `offer-${offer.id}`,
+        title: offer.title || offer.name || "Teklif",
+        subtitle: offer.status || "Teklif",
+        date: offer.date || "-",
+      })),
+    ];
+
+    return upcoming.slice(0, 6);
+  }, [projects, offers]);
+
+  const aiCommandActions = useMemo(
+    () => [
+      { id: "ai-assistant", label: "AI Asistan Erişimi", moduleId: "ai-assistant" },
+      { id: "new-project", label: "Yeni Proje Oluştur", moduleId: "projects" },
+      {
+        id: "material-research",
+        label: "Malzeme Araştır",
+        moduleId: "procurement",
+      },
+      {
+        id: "offer-compare",
+        label: "Teklif Karşılaştır",
+        moduleId: "offers",
+      },
+      {
+        id: "supply-analysis",
+        label: "Tedarik Analizi",
+        moduleId: "material-analysis",
+      },
+    ],
+    []
+  );
   const handleOffersReload = () => {
     offerDetailsCacheRef.current.clear();
     setOffersReloadKey((value) => value + 1);
@@ -1342,154 +1476,24 @@ function App() {
   };
 
   const renderDashboard = () => (
-    <div className="dashboard-module">
-      {apiHealthState.message ? (
-        <p className="status-banner warning">{apiHealthState.message}</p>
-      ) : null}
-
-      <div className="stats-grid">
-        {dashboardStats.map((stat) => (
-          <div className="stat-card" key={stat.label}>
-            <span>{stat.label}</span>
-            <strong>{stat.value}</strong>
-          </div>
-        ))}
-      </div>
-
-      <div className="dashboard-grid">
-        <div className="panel">
-          <div className="panel-header">
-            <h2>Proje Özeti</h2>
-          </div>
-
-          <div className="panel-content">
-            <div className="quick-status">
-              <span>Toplam Proje</span>
-              <strong>{projects.length}</strong>
-            </div>
-            <div className="quick-status">
-              <span>Aktif Projeler</span>
-              <strong>
-                {activeProjects.length}
-              </strong>
-            </div>
-            <div className="quick-status">
-              <span>Bekleyen Teklifler</span>
-              <strong>
-                {pendingOffers.length}
-              </strong>
-            </div>
-            <div className="quick-status">
-              <span>Ürün / Sistem Özeti</span>
-              <strong>{products.length + systemInventory.length}</strong>
-            </div>
-          </div>
-        </div>
-
-        <div className="panel">
-          <div className="panel-header">
-            <h2>Hızlı Erişim Kartları</h2>
-          </div>
-
-          <div className="panel-content quick-links-grid">
-            {modules
-              .filter((module) => module.id !== "dashboard")
-              .slice(0, 6)
-              .map((module) => (
-                <button
-                  type="button"
-                  className="quick-link-card"
-                  key={module.id}
-                  aria-label={`${module.title} modülüne git`}
-                  onClick={() => handleModuleNavigation(module.id)}
-                >
-                  <span aria-hidden="true">{module.icon}</span>
-                  <strong>{module.title}</strong>
-                </button>
-              ))}
-          </div>
-        </div>
-      </div>
-
-      <div className="dashboard-grid">
-        <div className="panel">
-          <div className="panel-header">
-            <h2>Aktif Projeler</h2>
-          </div>
-
-          <div className="panel-content">
-            {projectsLoading ? (
-              <p className="empty-state">Projeler yükleniyor...</p>
-            ) : activeProjects.length === 0 ? (
-              <p className="empty-state">Henüz veri bulunmuyor.</p>
-            ) : (
-              <div className="log-list">
-                {activeProjects
-                  .slice(0, 6)
-                  .map((project) => (
-                    <div className="log-item" key={project.id}>
-                      <strong>{project.name}</strong>
-                      <small>
-                        {project.type} · {project.date}
-                      </small>
-                    </div>
-                  ))}
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="panel">
-          <div className="panel-header">
-            <h2>Sistem Durumu</h2>
-          </div>
-
-          <div className="panel-content">
-            <div className="quick-status">
-              <span>DDPro Core</span>
-              <strong>Hazır</strong>
-            </div>
-            <div className="quick-status">
-              <span>Projeler API</span>
-              <strong>{getConnectionLabel(projectsFetchState)}</strong>
-            </div>
-            <div className="quick-status">
-              <span>Teklifler API</span>
-              <strong>{getConnectionLabel(offersFetchState)}</strong>
-            </div>
-            <div className="quick-status">
-              <span>Tedarik API</span>
-              <strong>{getConnectionLabel(procurementFetchState)}</strong>
-            </div>
-            <div className="quick-status">
-              <span>Diğer Modüller</span>
-              <strong>API entegrasyonu bekliyor</strong>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="panel">
-        <div className="panel-header">
-          <h2>Son İşlemler</h2>
-        </div>
-
-        <div className="panel-content">
-          {systemLogs.length === 0 ? (
-            <p className="empty-state">Henüz veri bulunmuyor.</p>
-          ) : (
-            <div className="log-list">
-              {systemLogs.slice(0, 8).map((log) => (
-                <div className="log-item" key={log.id}>
-                  <strong>{log.message}</strong>
-                  <small>{log.date}</small>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
+    <DashboardHome
+      apiHealthMessage={apiHealthState.message}
+      kpiCards={dashboardKpiCards}
+      onNavigate={handleModuleNavigation}
+      activeProjects={activeProjects}
+      projectsLoading={projectsLoading}
+      projectProgressSummary={projectProgressSummary}
+      upcomingCalendarItems={upcomingCalendarItems}
+      recentOffers={offers.slice(0, 6)}
+      offersLoading={offersLoading}
+      procurementItems={procurementItems}
+      procurementLoading={procurementLoading}
+      aiCommandActions={aiCommandActions}
+      getConnectionLabel={getConnectionLabel}
+      projectsFetchState={projectsFetchState}
+      offersFetchState={offersFetchState}
+      procurementFetchState={procurementFetchState}
+    />
   );
 
   const moduleCounts = useMemo(
@@ -1825,85 +1829,33 @@ function App() {
     modules[0];
 
   return (
-    <div className="ddpro-app">
-      <header className="app-header">
-        <div className="brand-area">
-          <div className="brand-logo">DD</div>
-
-          <div className="brand-content">
-            <strong>DOĞRU DİZAYN PRO</strong>
-            <span>DDPro Dijital Yönetim Sistemi</span>
-          </div>
-        </div>
-
-        <div className={`header-status ${headerStatusTone}`}>
-          <span className={`status-dot ${headerStatusTone}`}></span>
-          {headerStatusLabel}
-        </div>
-      </header>
-
-      <div className="app-layout">
-        <aside className="sidebar">
-          <div className="sidebar-title">
-            ANA MODÜLLER
-          </div>
-
-          <nav className="module-nav">
-            {modules.map((module) => (
-              <button
-                key={module.id}
-                type="button"
-                className={`module-button ${
-                  activeModule === module.id ? "active" : ""
-                }`}
-                onClick={() => handleModuleNavigation(module.id)}
-              >
-                <span className="module-icon">
-                  {module.icon}
-                </span>
-
-                <span className="module-text">
-                  <strong>{module.title}</strong>
-                  <small>{module.short}</small>
-                </span>
-              </button>
-            ))}
-          </nav>
-
-          <div className="sidebar-footer">
-            <div className="sidebar-system">
-              <span className="status-dot"></span>
-              DDPro Core v1.1
-            </div>
-          </div>
-        </aside>
-
-        <main className="main-content">
-          <section className="content-header">
-            <div>
-              <h1>{currentModule.title}</h1>
-              <p>{currentModule.description}</p>
-            </div>
-          </section>
-
-          <section className="content-body">
-            <Suspense
-              fallback={
-                <p
-                  className="module-loading"
-                  role="status"
-                  aria-live="polite"
-                >
-                  Modül yükleniyor...
-                </p>
-              }
-            >
-              {renderModule()}
-            </Suspense>
-          </section>
-        </main>
-      </div>
-    </div>
+    <AppShell
+      activeModule={activeModule}
+      currentModule={currentModule}
+      headerStatusTone={headerStatusTone}
+      headerStatusLabel={headerStatusLabel}
+      notificationCount={notificationCount}
+      globalSearch={globalSearch}
+      onGlobalSearchChange={setGlobalSearch}
+      sidebarItems={filteredSidebarItems}
+      onNavigate={handleModuleNavigation}
+      isSidebarOpen={isSidebarOpen}
+      setIsSidebarOpen={setIsSidebarOpen}
+    >
+      <Suspense
+        fallback={
+          <p
+            className="module-loading"
+            role="status"
+            aria-live="polite"
+          >
+            Modül yükleniyor...
+          </p>
+        }
+      >
+        {renderModule()}
+      </Suspense>
+    </AppShell>
   );
 }
 

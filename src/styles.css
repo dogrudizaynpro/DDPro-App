@@ -1638,3 +1638,236 @@ select {
     width: 100%;
   }
 }
+
+/* =========================================================
+   PREMIUM SHELL EXTENSIONS
+========================================================= */
+
+.premium-shell {
+  background:
+    radial-gradient(circle at top right, rgba(4, 112, 87, 0.14), transparent 32%),
+    radial-gradient(circle at bottom left, rgba(112, 106, 96, 0.14), transparent 36%),
+    linear-gradient(180deg, #0d1115 0%, #0a0d11 100%);
+}
+
+.premium-header {
+  border-bottom-color: rgba(192, 199, 206, 0.14);
+  background: rgba(10, 13, 17, 0.95);
+}
+
+.header-left,
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.header-left {
+  min-width: 0;
+  flex: 0 1 auto;
+}
+
+.header-center {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+}
+
+.global-search {
+  width: min(520px, 100%);
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid rgba(192, 199, 206, 0.18);
+  border-radius: 12px;
+  background: rgba(22, 27, 33, 0.9);
+  color: #dfe8ef;
+}
+
+.global-search::placeholder {
+  color: #768190;
+}
+
+.sidebar-toggle {
+  display: none;
+  width: 38px;
+  height: 38px;
+  border: 1px solid rgba(192, 199, 206, 0.2);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #dce5eb;
+  font-size: 16px;
+}
+
+.header-status.info {
+  border-color: rgba(90, 213, 152, 0.24);
+  background: rgba(90, 213, 152, 0.09);
+  color: #9be5bf;
+}
+
+.header-icon-button {
+  position: relative;
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(192, 199, 206, 0.2);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #dce5eb;
+}
+
+.notification-badge {
+  position: absolute;
+  top: -4px;
+  right: -3px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: #24b97f;
+  color: #04170f;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.user-chip {
+  padding: 6px 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid rgba(192, 199, 206, 0.2);
+  border-radius: 999px;
+  color: #cfd8e0;
+}
+
+.user-chip span {
+  width: 24px;
+  height: 24px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(36, 185, 127, 0.18);
+  color: #9ce8c3;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.user-chip small {
+  font-size: 10px;
+  color: #95a2b1;
+}
+
+.premium-sidebar {
+  border-right-color: rgba(192, 199, 206, 0.16);
+  background:
+    linear-gradient(180deg, rgba(18, 22, 27, 0.98), rgba(10, 12, 15, 0.99));
+}
+
+.kpi-card-button {
+  border: 1px solid rgba(122, 130, 141, 0.25);
+  text-align: left;
+}
+
+.kpi-card-button strong {
+  color: #8ef2c3;
+}
+
+.ai-command-panel .quick-link-card {
+  justify-content: center;
+  min-height: 64px;
+  border-color: rgba(143, 152, 162, 0.2);
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.ai-command-panel .quick-link-card strong {
+  font-size: 11px;
+  text-align: center;
+}
+
+.sidebar-overlay {
+  display: none;
+}
+
+@media (max-width: 1100px) {
+  .header-status.info {
+    display: none;
+  }
+}
+
+@media (max-width: 900px) {
+  .sidebar-toggle {
+    display: inline-grid;
+    place-items: center;
+  }
+
+  .header-center {
+    justify-content: flex-start;
+  }
+
+  .global-search {
+    max-width: 100%;
+  }
+
+  .premium-sidebar {
+    position: fixed;
+    top: 74px;
+    left: 0;
+    z-index: 320;
+    width: min(88vw, 320px);
+    height: calc(100vh - 74px);
+    transform: translateX(-106%);
+    transition: transform 0.22s ease;
+    border-bottom: 0;
+  }
+
+  .premium-sidebar.open {
+    transform: translateX(0);
+  }
+
+  .premium-sidebar .module-nav {
+    flex-direction: column;
+    overflow-x: hidden;
+    padding-bottom: 0;
+  }
+
+  .premium-sidebar .module-button {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .premium-sidebar .sidebar-footer {
+    display: block;
+  }
+
+  .sidebar-overlay {
+    position: fixed;
+    inset: 74px 0 0;
+    z-index: 300;
+    display: block;
+    background: rgba(0, 0, 0, 0.45);
+  }
+}
+
+@media (max-width: 640px) {
+  .header-right {
+    gap: 6px;
+  }
+
+  .global-search {
+    min-height: 36px;
+    font-size: 12px;
+  }
+
+  .header-icon-button,
+  .sidebar-toggle {
+    width: 34px;
+    height: 34px;
+  }
+
+  .user-chip small {
+    display: none;
+  }
+}
