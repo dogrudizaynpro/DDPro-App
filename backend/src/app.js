@@ -62,7 +62,8 @@ app.get("/health", async (req, res) => {
       .from("projects")
       .select("id", { head: true });
 
-    if (error) {
+     if (error) {
+  console.error("❌ Supabase health check error:", error);
       return res.status(503).json({
         status: "degraded",
         service: "ddpro-backend",
