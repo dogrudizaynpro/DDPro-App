@@ -84,7 +84,8 @@ app.get("/health", async (req, res) => {
       },
       timestamp: new Date().toISOString(),
     });
-  } catch {
+  } catch (error) {
+   console.error("❌ Supabase health check exception:", error);
     return res.status(503).json({
       status: "degraded",
       service: "ddpro-backend",
