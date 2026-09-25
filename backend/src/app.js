@@ -58,10 +58,10 @@ app.get("/health", async (req, res) => {
 
   try {
     const supabase = getSupabaseClient();
-    const { error } = await supabase
-      .from("projects")
-      .select("id", { head: true });
-
+    const { data, error } = await supabase
+  .from("projects")
+  .select("id")
+  .limit(1);
      if (error) {
   console.error("❌ Supabase health check error:", error);
       return res.status(503).json({
