@@ -1841,7 +1841,6 @@ function App() {
             placeholder="Modül ara..."
             aria-label="Modüllerde ara"
           />
-          <kbd>⌘ K</kbd>
         </label>
 
         <div className="header-tools">
@@ -1913,7 +1912,7 @@ function App() {
           </div>
         </aside>
 
-        <main className="main-content">
+        <main className={`main-content${activeModule === "dashboard" ? " dashboard-main" : ""}`}>
           <section className="content-header">
             <div>
               <h1>{currentModule.title}</h1>
