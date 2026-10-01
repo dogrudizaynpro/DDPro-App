@@ -52,7 +52,7 @@ const modules = [
     id: "dashboard",
     path: "/dashboard",
     icon: "⌂",
-    title: "Dashboard",
+    title: "Genel Bakış",
     short: "Ana Ekran",
     description:
       "DDPro operasyonlarının merkezi görünümü.",
@@ -323,6 +323,7 @@ function App() {
   const [activeModule, setActiveModule] = useState(() =>
     resolveModuleFromHash(window.location.hash)
   );
+  const [globalSearch, setGlobalSearch] = useState("");
 
   const [apiHealthState, setApiHealthState] = useState({
     status: "loading",
@@ -853,21 +854,38 @@ function App() {
       {
         label: "AKTİF PROJELER",
         value: activeProjects.length,
+        detail: projectsLoading ? "Veriler güncelleniyor" : "Yönetimdeki projeler",
+        tone: projectsFetchState,
       },
       {
         label: "BEKLEYEN TEKLİFLER",
         value: pendingOffers.length,
+        detail: offersLoading ? "Veriler güncelleniyor" : "Yanıt bekleyen teklifler",
+        tone: offersFetchState,
       },
       {
-        label: "ÜRÜNLER",
+        label: "ÜRÜNLER / KATALOG",
         value: products.length,
+        detail: "Kayıtlı katalog öğeleri",
+        tone: "info",
       },
       {
         label: "SİSTEMLER",
         value: systemInventory.length,
+        detail: "Kayıtlı sistem öğeleri",
+        tone: "info",
       },
     ],
-    [activeProjects.length, pendingOffers.length, products.length, systemInventory.length]
+    [
+      activeProjects.length,
+      offersFetchState,
+      offersLoading,
+      pendingOffers.length,
+      products.length,
+      projectsFetchState,
+      projectsLoading,
+      systemInventory.length,
+    ]
   );
 
   const handleModuleNavigation = (moduleId) => {
@@ -885,7 +903,7 @@ function App() {
       case "success":
         return "success";
       case "error":
-        return "warning";
+        return "error";
       case "warning":
         return "warning";
       case "empty":
@@ -925,6 +943,65 @@ function App() {
   const handleOffersReload = () => {
     offerDetailsCacheRef.current.clear();
     setOffersReloadKey((value) => value + 1);
+  };
+
+  const dashboardSearchResults = useMemo(() => {
+    const query = globalSearch.trim().toLocaleLowerCase("tr-TR");
+
+    if (!query) {
+      return [];
+    }
+
+    const moduleResults = modules
+      .filter((module) =>
+        `${module.title} ${module.description}`
+          .toLocaleLowerCase("tr-TR")
+          .includes(query)
+      )
+      .map((module) => ({
+        id: `module-${module.id}`,
+        label: module.title,
+        detail: "Modüle git",
+        moduleId: module.id,
+      }));
+    const dataResults = [
+      ...projects.map((item) => ({ ...item, moduleId: "projects" })),
+      ...offers.map((item) => ({
+        ...item,
+        name: item.title,
+        moduleId: "offers",
+      })),
+      ...procurementItems.map((item) => ({
+        ...item,
+        moduleId: "procurement",
+      })),
+      ...products.map((item) => ({ ...item, moduleId: "products" })),
+      ...customerItems.map((item) => ({ ...item, moduleId: "crm" })),
+    ]
+      .filter((item) =>
+        Boolean(item.name || item.title || item.customerName || item.productName) &&
+        `${item.name || item.title || item.customerName || item.productName} ${item.type || ""} ${item.description || ""}`
+          .toLocaleLowerCase("tr-TR")
+          .includes(query)
+      )
+      .map((item, index) => ({
+        id: `record-${item.moduleId}-${item.id || index}`,
+        label: item.name || item.title || item.customerName || item.productName,
+        detail: modules.find((module) => module.id === item.moduleId)?.title,
+        moduleId: item.moduleId,
+      }));
+
+    return [...dataResults, ...moduleResults].slice(0, 7);
+  }, [customerItems, globalSearch, offers, products, procurementItems, projects]);
+
+  const handleDashboardShortcut = (moduleId, openForm = false) => {
+    if (moduleId === "projects" && openForm) {
+      setShowProjectForm(true);
+    }
+    if (moduleId === "procurement" && openForm) {
+      setShowProcurementForm(true);
+    }
+    handleModuleNavigation(moduleId);
   };
 
   const createProject = async (event) => {
@@ -1349,53 +1426,97 @@ function App() {
 
       <div className="stats-grid">
         {dashboardStats.map((stat) => (
-          <div className="stat-card" key={stat.label}>
-            <span>{stat.label}</span>
+          <article className="stat-card" key={stat.label}>
+            <div className="stat-card-top">
+              <span>{stat.label}</span>
+              <i className={`mini-status ${getConnectionTone(stat.tone)}`} aria-hidden="true" />
+            </div>
             <strong>{stat.value}</strong>
-          </div>
+            <small>{stat.detail}</small>
+            <i className="stat-accent" aria-hidden="true" />
+          </article>
         ))}
       </div>
 
-      <div className="dashboard-grid">
-        <div className="panel">
-          <div className="panel-header">
-            <h2>Proje Özeti</h2>
-          </div>
-
-          <div className="panel-content">
-            <div className="quick-status">
-              <span>Toplam Proje</span>
-              <strong>{projects.length}</strong>
-            </div>
-            <div className="quick-status">
-              <span>Aktif Projeler</span>
-              <strong>
-                {activeProjects.length}
-              </strong>
-            </div>
-            <div className="quick-status">
-              <span>Bekleyen Teklifler</span>
-              <strong>
-                {pendingOffers.length}
-              </strong>
-            </div>
-            <div className="quick-status">
-              <span>Ürün / Sistem Özeti</span>
-              <strong>{products.length + systemInventory.length}</strong>
-            </div>
-          </div>
+      <section className="command-hero" aria-label="DDPro komuta merkezi">
+        <div className="hero-copy">
+          <span className="eyebrow">DDPRO · DİJİTAL İŞ EKOSİSTEMİ</span>
+          <h2>DOĞRU SİSTEM.<br />DOĞRU ÇÖZÜM.</h2>
+          <p>Projeden tedarike, araştırmadan teklife kadar tüm operasyonunu tek merkezden yönet.</p>
+          <button type="button" className="hero-action" onClick={() => handleDashboardShortcut("projects", true)}>
+            + YENİ PROJE OLUŞTUR
+          </button>
         </div>
+        <div className="hero-brand" aria-label="DOĞRU DİZAYN PRO, AI TRADE">
+          <div className="hero-brand-mark">DD</div>
+          <strong>DOĞRU DİZAYN PRO</strong>
+          <span>AI TRADE · KOMUTA MERKEZİ</span>
+          <i aria-hidden="true" />
+        </div>
+      </section>
 
-        <div className="panel">
+      <div className="dashboard-grid dashboard-workspace">
+        <section className="panel projects-panel">
           <div className="panel-header">
-            <h2>Hızlı Erişim Kartları</h2>
+            <div><span className="eyebrow">OPERASYON</span><h2>Aktif Projeler</h2></div>
+            <button type="button" className="text-action" onClick={() => handleModuleNavigation("projects")}>
+              Tüm projeler <span aria-hidden="true">→</span>
+            </button>
           </div>
+          <div className="panel-content">
+            {projectsLoading ? (
+              <p className="empty-state">Projeler yükleniyor...</p>
+            ) : activeProjects.length === 0 ? (
+              <div className="empty-state project-empty">
+                <span aria-hidden="true">▣</span>
+                <strong>Henüz aktif proje yok</strong>
+                <p>Yeni bir proje oluşturarak çalışma alanını başlat.</p>
+                <button type="button" onClick={() => handleDashboardShortcut("projects", true)}>Proje oluştur</button>
+              </div>
+            ) : (
+              <div className="project-card-grid">
+                {activeProjects.slice(0, 6).map((project) => (
+                  <article className="project-card" key={project.id}>
+                    <span className="project-card-icon" aria-hidden="true">⌂</span>
+                    <div className="project-card-copy">
+                      <strong>{project.name}</strong>
+                      <small>{project.type || "Proje"} · {project.date || "Tarih belirtilmedi"}</small>
+                    </div>
+                    <span className="project-status"><i aria-hidden="true" />{project.status}</span>
+                  </article>
+                ))}
+              </div>
+            )}
+          </div>
+        </section>
 
+        <section className="panel ai-command-panel">
+          <div className="panel-header">
+            <div><span className="eyebrow">AKILLI İŞ AKIŞI</span><h2>DDPRO AI KOMUTA MERKEZİ</h2></div>
+            <span className="ai-spark" aria-hidden="true">✦</span>
+          </div>
+          <div className="panel-content">
+            <p className="ai-ready">DDPro AI çalışma alanı hazır.</p>
+            <p className="ai-current-message">{aiMessages[aiMessages.length - 1]?.text}</p>
+            <div className="ai-shortcuts">
+              <button type="button" onClick={() => handleDashboardShortcut("projects", true)}>+ YENİ PROJE OLUŞTUR</button>
+              <button type="button" onClick={() => handleDashboardShortcut("procurement", true)}>+ MALZEME ARAŞTIR</button>
+              <button type="button" onClick={() => handleDashboardShortcut("offers")}>+ TEKLİF KARŞILAŞTIR</button>
+              <button type="button" onClick={() => handleDashboardShortcut("procurement")}>+ TEDARİK ANALİZ ET</button>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <div className="dashboard-grid dashboard-lower">
+        <section className="panel">
+          <div className="panel-header">
+            <div><span className="eyebrow">ÇALIŞMA ALANLARI</span><h2>Hızlı Erişim</h2></div>
+          </div>
           <div className="panel-content quick-links-grid">
-            {modules
-              .filter((module) => module.id !== "dashboard")
-              .slice(0, 6)
-              .map((module) => (
+            {["projects", "procurement", "offers", "crm", "ai-assistant", "systems"].map((moduleId) => {
+              const module = modules.find((item) => item.id === moduleId);
+              return (
                 <button
                   type="button"
                   className="quick-link-card"
@@ -1403,90 +1524,52 @@ function App() {
                   aria-label={`${module.title} modülüne git`}
                   onClick={() => handleModuleNavigation(module.id)}
                 >
-                  <span aria-hidden="true">{module.icon}</span>
-                  <strong>{module.title}</strong>
+                  <span aria-hidden="true">{module.icon}</span><strong>{module.title}</strong><i aria-hidden="true">↗</i>
                 </button>
-              ))}
+              );
+            })}
           </div>
-        </div>
-      </div>
+        </section>
 
-      <div className="dashboard-grid">
-        <div className="panel">
-          <div className="panel-header">
-            <h2>Aktif Projeler</h2>
-          </div>
-
-          <div className="panel-content">
-            {projectsLoading ? (
-              <p className="empty-state">Projeler yükleniyor...</p>
-            ) : activeProjects.length === 0 ? (
-              <p className="empty-state">Henüz veri bulunmuyor.</p>
-            ) : (
-              <div className="log-list">
-                {activeProjects
-                  .slice(0, 6)
-                  .map((project) => (
-                    <div className="log-item" key={project.id}>
-                      <strong>{project.name}</strong>
-                      <small>
-                        {project.type} · {project.date}
-                      </small>
-                    </div>
-                  ))}
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="panel">
-          <div className="panel-header">
-            <h2>Sistem Durumu</h2>
-          </div>
-
-          <div className="panel-content">
-            <div className="quick-status">
-              <span>DDPro Core</span>
-              <strong>Hazır</strong>
+        <div className="activity-column">
+          <section className="panel">
+            <div className="panel-header">
+              <div><span className="eyebrow">BAĞLANTI DURUMU</span><h2>Sistem Durumu</h2></div>
             </div>
-            <div className="quick-status">
-              <span>Projeler API</span>
-              <strong>{getConnectionLabel(projectsFetchState)}</strong>
-            </div>
-            <div className="quick-status">
-              <span>Teklifler API</span>
-              <strong>{getConnectionLabel(offersFetchState)}</strong>
-            </div>
-            <div className="quick-status">
-              <span>Tedarik API</span>
-              <strong>{getConnectionLabel(procurementFetchState)}</strong>
-            </div>
-            <div className="quick-status">
-              <span>Diğer Modüller</span>
-              <strong>API entegrasyonu bekliyor</strong>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="panel">
-        <div className="panel-header">
-          <h2>Son İşlemler</h2>
-        </div>
-
-        <div className="panel-content">
-          {systemLogs.length === 0 ? (
-            <p className="empty-state">Henüz veri bulunmuyor.</p>
-          ) : (
-            <div className="log-list">
-              {systemLogs.slice(0, 8).map((log) => (
-                <div className="log-item" key={log.id}>
-                  <strong>{log.message}</strong>
-                  <small>{log.date}</small>
+            <div className="panel-content system-status-list">
+              {[
+                { label: "Production API", state: apiHealthState.status },
+                { label: "Projeler API", state: projectsFetchState },
+                { label: "Teklifler API", state: offersFetchState },
+                { label: "Tedarik API", state: procurementFetchState },
+              ].map((service) => (
+                <div className={`system-status-row ${getConnectionTone(service.state)}`} key={service.label}>
+                  <span><i aria-hidden="true" />{service.label}</span>
+                  <strong>{service.label === "Production API" ? headerStatusLabel : getConnectionLabel(service.state)}</strong>
                 </div>
               ))}
             </div>
-          )}
+          </section>
+
+          <section className="panel activity-panel">
+            <div className="panel-header">
+              <div><span className="eyebrow">SİSTEM KAYITLARI</span><h2>Son İşlemler</h2></div>
+            </div>
+            <div className="panel-content">
+              {systemLogs.length === 0 ? (
+                <p className="empty-state">Henüz veri bulunmuyor.</p>
+              ) : (
+                <div className="activity-timeline">
+                  {systemLogs.slice(0, 6).map((log) => (
+                    <div className="activity-item" key={log.id}>
+                      <i aria-hidden="true" />
+                      <div><strong>{log.message}</strong><small>{log.date}</small></div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </section>
         </div>
       </div>
     </div>
@@ -1828,17 +1911,69 @@ function App() {
     <div className="ddpro-app">
       <header className="app-header">
         <div className="brand-area">
-          <div className="brand-logo">DD</div>
+          <div className="brand-logo" aria-hidden="true">DD</div>
 
           <div className="brand-content">
             <strong>DOĞRU DİZAYN PRO</strong>
-            <span>DDPro Dijital Yönetim Sistemi</span>
+            <span>Creative Solutions · DDPro Dijital Yönetim Sistemi</span>
           </div>
         </div>
 
-        <div className={`header-status ${headerStatusTone}`}>
-          <span className={`status-dot ${headerStatusTone}`}></span>
-          {headerStatusLabel}
+        <div className="global-search">
+          <span aria-hidden="true">⌕</span>
+          <input
+            type="search"
+            value={globalSearch}
+            onChange={(event) => setGlobalSearch(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") setGlobalSearch("");
+              if (event.key === "Enter" && dashboardSearchResults[0]) {
+                handleModuleNavigation(dashboardSearchResults[0].moduleId);
+                setGlobalSearch("");
+              }
+            }}
+            placeholder="Proje, ürün, müşterı, teklif veya bilgi ara..."
+            aria-label="Global arama"
+            aria-expanded={Boolean(globalSearch.trim())}
+            aria-controls="global-search-results"
+          />
+          {globalSearch.trim() ? (
+            <div className="search-results" id="global-search-results" role="group" aria-label="Arama sonuçları">
+              {dashboardSearchResults.length ? dashboardSearchResults.map((result) => (
+                <button
+                  type="button"
+                  key={result.id}
+                  onClick={() => {
+                    handleModuleNavigation(result.moduleId);
+                    setGlobalSearch("");
+                  }}
+                >
+                  <strong>{result.label}</strong><small>{result.detail}</small>
+                </button>
+              )) : <p>Sonuç bulunamadı.</p>}
+            </div>
+          ) : null}
+        </div>
+
+        <div className="header-controls">
+          <div className="ai-header-status"><span aria-hidden="true">✦</span> AI ÇALIŞMA ALANI</div>
+          <div className={`header-status ${headerStatusTone}`}>
+            <span className={`status-dot ${headerStatusTone}`} aria-hidden="true"></span>
+            <span>{headerStatusLabel}</span>
+          </div>
+          <button
+            type="button"
+            className="header-icon-button"
+            aria-label={`Son işlemler: ${systemLogs.length}`}
+            title={`Son işlemler: ${systemLogs.length}`}
+            onClick={() => handleModuleNavigation("dashboard")}
+          >◷</button>
+          <button
+            type="button"
+            className="header-user-button"
+            aria-label="Sistem ayarlarını aç"
+            onClick={() => handleModuleNavigation("settings")}
+          ><span>DD</span><i aria-hidden="true">⌄</i></button>
         </div>
       </header>
 
@@ -1856,6 +1991,7 @@ function App() {
                 className={`module-button ${
                   activeModule === module.id ? "active" : ""
                 }`}
+                aria-current={activeModule === module.id ? "page" : undefined}
                 onClick={() => handleModuleNavigation(module.id)}
               >
                 <span className="module-icon">
