@@ -14,6 +14,7 @@ import {
   mapOffersToViewModel,
 } from "./services/offers.service.js";
 import {
+  API_BASE_URL,
   CAN_USE_LOCAL_FALLBACK,
   getApiHealth,
 } from "./services/api.js";
@@ -238,6 +239,7 @@ const mergeOffers = (apiOffers, storedOffers) => {
 };
 
 const EMPTY_ITEMS = Object.freeze([]);
+const API_CONFIGURATION_MESSAGE = "Preview API bağlantısı yapılandırılmadı.";
 const LOCAL_ONLY_MODULE_MESSAGE =
   "Bu modül production API'ye bağlı değil. Bu sürümde yalnızca arayüz ve tarayıcı içi kayıt alanı hazır.";
 
@@ -298,7 +300,7 @@ const getApiFailureReason = (error) => {
   }
 
   if (error.code === "API_CONFIGURATION_ERROR") {
-    return error.message;
+    return API_CONFIGURATION_MESSAGE;
   }
 
   if (error.status === 503) {
@@ -325,8 +327,8 @@ function App() {
   );
 
   const [apiHealthState, setApiHealthState] = useState({
-    status: "loading",
-    message: "",
+    status: API_BASE_URL ? "loading" : "unconfigured",
+    message: API_BASE_URL ? "" : API_CONFIGURATION_MESSAGE,
   });
 
   const [projects, setProjects] = useState(() => getInitialItems(STORAGE_KEYS.projects));
@@ -457,6 +459,10 @@ function App() {
   }, [activeModule]);
 
   useEffect(() => {
+    if (!API_BASE_URL) {
+      return undefined;
+    }
+
     let cancelled = false;
 
     getApiHealth()
@@ -475,8 +481,12 @@ function App() {
         if (cancelled) return;
         const reason = getApiFailureReason(error);
         setApiHealthState({
-          status: "error",
-          message: `Production API health kontrolü başarısız: ${reason}`,
+          status:
+            error.code === "API_CONFIGURATION_ERROR" ? "unconfigured" : "error",
+          message:
+            error.code === "API_CONFIGURATION_ERROR"
+              ? API_CONFIGURATION_MESSAGE
+              : `API bağlantı kontrolü başarısız: ${reason}`,
         });
       });
 
@@ -571,17 +581,23 @@ function App() {
                 ? localOfferViewModels[0]?.id || null
                 : null
           );
-          setOffersFetchState("error");
+          setOffersFetchState(
+            error.code === "API_CONFIGURATION_ERROR" ? "unconfigured" : "error"
+          );
           setOffersError(
-            CAN_USE_LOCAL_FALLBACK && localOfferViewModels.length > 0
+            error.code === "API_CONFIGURATION_ERROR"
+              ? API_CONFIGURATION_MESSAGE
+              : CAN_USE_LOCAL_FALLBACK && localOfferViewModels.length > 0
               ? `Teklif API’sine ulaşılamadı (${reason}). Son kaydedilen veriler gösteriliyor.`
               : `Teklif API’sine ulaşılamadı (${reason}). Production ortamında yerel fallback kapalı olduğu için canlı veri gösterilemiyor.`
           );
-          addLog(
-            CAN_USE_LOCAL_FALLBACK
-              ? `Tekliflerde API bağlantı hatası: ${reason}. Yerel veriler kullanıldı.`
-              : `Tekliflerde production API bağlantı hatası: ${reason}.`
-          );
+          if (error.code !== "API_CONFIGURATION_ERROR") {
+            addLog(
+              CAN_USE_LOCAL_FALLBACK
+                ? `Tekliflerde API bağlantı hatası: ${reason}. Yerel veriler kullanıldı.`
+                : `Tekliflerde API bağlantı hatası: ${reason}.`
+            );
+          }
         }
       } finally {
         if (!cancelled) {
@@ -714,17 +730,23 @@ function App() {
           setProcurementItems(
             CAN_USE_LOCAL_FALLBACK ? localProcurementItems : EMPTY_ITEMS
           );
-          setProcurementFetchState("error");
+          setProcurementFetchState(
+            error.code === "API_CONFIGURATION_ERROR" ? "unconfigured" : "error"
+          );
           setProcurementError(
-            CAN_USE_LOCAL_FALLBACK
+            error.code === "API_CONFIGURATION_ERROR"
+              ? API_CONFIGURATION_MESSAGE
+              : CAN_USE_LOCAL_FALLBACK
               ? `Tedarik API erişimi başarısız (${reason}). Yerel tedarik verileri gösteriliyor.`
               : `Tedarik API erişimi başarısız (${reason}). Production ortamında yerel fallback kapalı olduğu için canlı veri gösterilemiyor.`
           );
-          addLog(
-            CAN_USE_LOCAL_FALLBACK
-              ? `Tedarik API bağlantı hatası: ${reason}. Yerel veriler kullanıldı.`
-              : `Tedarik production API bağlantı hatası: ${reason}.`
-          );
+          if (error.code !== "API_CONFIGURATION_ERROR") {
+            addLog(
+              CAN_USE_LOCAL_FALLBACK
+                ? `Tedarik API bağlantı hatası: ${reason}. Yerel veriler kullanıldı.`
+                : `Tedarik API bağlantı hatası: ${reason}.`
+            );
+          }
         }
       } finally {
         if (!cancelled) {
@@ -800,17 +822,23 @@ function App() {
         const reason = getApiFailureReason(error);
         if (!cancelled) {
           setProjects(CAN_USE_LOCAL_FALLBACK ? localProjects : EMPTY_ITEMS);
-          setProjectsFetchState("error");
+          setProjectsFetchState(
+            error.code === "API_CONFIGURATION_ERROR" ? "unconfigured" : "error"
+          );
           setProjectsError(
-            CAN_USE_LOCAL_FALLBACK
+            error.code === "API_CONFIGURATION_ERROR"
+              ? API_CONFIGURATION_MESSAGE
+              : CAN_USE_LOCAL_FALLBACK
               ? `Projeler API erişimi başarısız (${reason}). Yerel proje verileri gösteriliyor.`
               : `Projeler API erişimi başarısız (${reason}). Production ortamında yerel fallback kapalı olduğu için canlı veri gösterilemiyor.`
           );
-          addLog(
-            CAN_USE_LOCAL_FALLBACK
-              ? `Projelerde API bağlantı hatası: ${reason}. Yerel veriler kullanıldı.`
-              : `Projelerde production API bağlantı hatası: ${reason}.`
-          );
+          if (error.code !== "API_CONFIGURATION_ERROR") {
+            addLog(
+              CAN_USE_LOCAL_FALLBACK
+                ? `Projelerde API bağlantı hatası: ${reason}. Yerel veriler kullanıldı.`
+                : `Projelerde API bağlantı hatası: ${reason}.`
+            );
+          }
         }
       } finally {
         if (!cancelled) {
@@ -891,6 +919,8 @@ function App() {
       case "empty":
       case "planned":
         return "info";
+      case "unconfigured":
+        return "neutral";
       case "loading":
       default:
         return "loading";
@@ -907,6 +937,8 @@ function App() {
         return "Bağlantı hatası";
       case "warning":
         return "Yerel fallback";
+      case "unconfigured":
+        return "Yapılandırılmadı";
       case "planned":
         return "API entegrasyonu bekliyor";
       case "loading":
@@ -918,10 +950,12 @@ function App() {
   const headerStatusTone = getConnectionTone(apiHealthState.status);
   const headerStatusLabel =
     apiHealthState.status === "success"
-      ? "Production API Hazır"
+      ? "API Bağlı"
       : apiHealthState.status === "loading"
         ? "API Kontrol Ediliyor"
-        : "Production API Kontrol Gerekli";
+        : apiHealthState.status === "unconfigured"
+          ? "Önizleme Modu"
+          : "API Kontrol Gerekli";
   const handleOffersReload = () => {
     offerDetailsCacheRef.current.clear();
     setOffersReloadKey((value) => value + 1);
@@ -961,11 +995,13 @@ function App() {
         shouldResetForm = true;
       } else {
         setProjectsError(
-          `Proje API'ye kaydedilemedi (${getApiFailureReason(error)}). Yerel fallback production ortamında kapalı.`
+          error.code === "API_CONFIGURATION_ERROR"
+            ? API_CONFIGURATION_MESSAGE
+            : `Proje API'ye kaydedilemedi (${getApiFailureReason(error)}). Yerel fallback bu ortamda kullanılamıyor.`
         );
-        addLog(
-          `Proje oluşturma production API hatası: ${getApiFailureReason(error)}.`
-        );
+        if (error.code !== "API_CONFIGURATION_ERROR") {
+          addLog(`Proje oluşturma API hatası: ${getApiFailureReason(error)}.`);
+        }
       }
     }
 
@@ -1015,9 +1051,11 @@ function App() {
       }
 
       setProjectsError(
-        `Proje silme işlemi API üzerinde tamamlanamadı (${getApiFailureReason(error)}).`
+        error.code === "API_CONFIGURATION_ERROR"
+          ? API_CONFIGURATION_MESSAGE
+          : `Proje silme işlemi API üzerinde tamamlanamadı (${getApiFailureReason(error)}).`
       );
-      if (project) {
+      if (project && error.code !== "API_CONFIGURATION_ERROR") {
         addLog(`Proje silme hatası: ${project.name}`);
       }
     }
@@ -1058,11 +1096,13 @@ function App() {
         shouldResetForm = true;
       } else {
         setProcurementError(
-          `Tedarik kaydı API'ye kaydedilemedi (${getApiFailureReason(error)}). Yerel fallback production ortamında kapalı.`
+          error.code === "API_CONFIGURATION_ERROR"
+            ? API_CONFIGURATION_MESSAGE
+            : `Tedarik kaydı API'ye kaydedilemedi (${getApiFailureReason(error)}). Yerel fallback bu ortamda kullanılamıyor.`
         );
-        addLog(
-          `Tedarik oluşturma production API hatası: ${getApiFailureReason(error)}.`
-        );
+        if (error.code !== "API_CONFIGURATION_ERROR") {
+          addLog(`Tedarik oluşturma API hatası: ${getApiFailureReason(error)}.`);
+        }
       }
     }
 
@@ -1113,10 +1153,12 @@ function App() {
       }
 
       setProcurementError(
-        `Tedarik silme işlemi API üzerinde tamamlanamadı (${getApiFailureReason(error)}).`
+        error.code === "API_CONFIGURATION_ERROR"
+          ? API_CONFIGURATION_MESSAGE
+          : `Tedarik silme işlemi API üzerinde tamamlanamadı (${getApiFailureReason(error)}).`
       );
 
-      if (item) {
+      if (item && error.code !== "API_CONFIGURATION_ERROR") {
         addLog(`Tedarik silme hatası: ${item.name}`);
       }
     }
@@ -1163,13 +1205,17 @@ function App() {
         addLog(`Yeni teklif yerel olarak oluşturuldu: ${newOffer.title}`);
         shouldResetForm = true;
       } else {
-        setOffersFetchState("error");
+        setOffersFetchState(
+          error.code === "API_CONFIGURATION_ERROR" ? "unconfigured" : "error"
+        );
         setOffersError(
-          `Teklif API'ye kaydedilemedi (${getApiFailureReason(error)}). Yerel fallback production ortamında kapalı.`
+          error.code === "API_CONFIGURATION_ERROR"
+            ? API_CONFIGURATION_MESSAGE
+            : `Teklif API'ye kaydedilemedi (${getApiFailureReason(error)}). Yerel fallback bu ortamda kullanılamıyor.`
         );
-        addLog(
-          `Teklif oluşturma production API hatası: ${getApiFailureReason(error)}.`
-        );
+        if (error.code !== "API_CONFIGURATION_ERROR") {
+          addLog(`Teklif oluşturma API hatası: ${getApiFailureReason(error)}.`);
+        }
       }
     }
 
@@ -1238,9 +1284,13 @@ function App() {
         return;
       }
 
-      setOffersError("Teklif silme işlemi API üzerinde tamamlanamadı.");
+      setOffersError(
+        error.code === "API_CONFIGURATION_ERROR"
+          ? API_CONFIGURATION_MESSAGE
+          : "Teklif silme işlemi API üzerinde tamamlanamadı."
+      );
 
-      if (offer) {
+      if (offer && error.code !== "API_CONFIGURATION_ERROR") {
         addLog(`Teklif silme hatası: ${offer.title || offer.name}`);
       }
     }
@@ -1341,92 +1391,134 @@ function App() {
     setAiInput("");
   };
 
-  const renderDashboard = () => (
-    <div className="dashboard-module">
-      {apiHealthState.message ? (
-        <p className="status-banner warning">{apiHealthState.message}</p>
-      ) : null}
+  const renderDashboard = () => {
+    const recentActivity = systemLogs.filter(
+      (log) =>
+        apiHealthState.status !== "unconfigured" ||
+        !/api.*(?:bağlantı|erişim|health|yapılandır|hata|başarısız)/i.test(
+          log.message
+        )
+    );
 
-      <div className="stats-grid">
-        {dashboardStats.map((stat) => (
-          <div className="stat-card" key={stat.label}>
-            <span>{stat.label}</span>
-            <strong>{stat.value}</strong>
+    return (
+      <div className="dashboard-module">
+        {apiHealthState.message ? (
+          <p className="status-banner info" role="status">
+            {apiHealthState.message}
+          </p>
+        ) : null}
+
+        <section className="dashboard-hero">
+          <div className="dashboard-hero-copy">
+            <span className="eyebrow">DDPRO · OPERASYON MERKEZİ</span>
+            <h2>İşinizin tüm akışı, tek merkezde.</h2>
+            <p>
+              Projelerinizi, sistemlerinizi ve günlük operasyonlarınızı buradan
+              yönetin.
+            </p>
+            <div className="dashboard-hero-actions">
+              <button
+                type="button"
+                className="primary-action"
+                onClick={() => {
+                  setShowProjectForm(true);
+                  handleModuleNavigation("projects");
+                }}
+              >
+                <span aria-hidden="true">＋</span> Yeni Proje
+              </button>
+              <button
+                type="button"
+                className="secondary-action"
+                onClick={() => handleModuleNavigation("ai-assistant")}
+              >
+                AI Komuta Merkezi <span aria-hidden="true">↗</span>
+              </button>
+            </div>
           </div>
-        ))}
-      </div>
-
-      <div className="dashboard-grid">
-        <div className="panel">
-          <div className="panel-header">
-            <h2>Proje Özeti</h2>
+          <div className="dashboard-hero-visual" aria-hidden="true">
+            <div className="hero-orbit hero-orbit-outer"></div>
+            <div className="hero-orbit hero-orbit-inner"></div>
+            <div className="hero-core">
+              <span>DD</span>
+              <strong>AI <i>•</i> TRADE</strong>
+            </div>
+            <span className="hero-node hero-node-top"></span>
+            <span className="hero-node hero-node-side"></span>
+            <span className="hero-node hero-node-bottom"></span>
           </div>
+        </section>
 
-          <div className="panel-content">
-            <div className="quick-status">
-              <span>Toplam Proje</span>
-              <strong>{projects.length}</strong>
+        <div className="stats-grid">
+          {dashboardStats.map((stat) => (
+            <div className="stat-card" key={stat.label}>
+              <span>{stat.label}</span>
+              <strong>{stat.value}</strong>
             </div>
-            <div className="quick-status">
-              <span>Aktif Projeler</span>
-              <strong>
-                {activeProjects.length}
-              </strong>
+          ))}
+        </div>
+
+        <div className="dashboard-grid dashboard-overview-grid">
+          <div className="panel">
+            <div className="panel-header">
+              <div>
+                <span className="panel-kicker">ÇALIŞMA ALANLARI</span>
+                <h2>Hızlı Erişim</h2>
+              </div>
             </div>
-            <div className="quick-status">
-              <span>Bekleyen Teklifler</span>
-              <strong>
-                {pendingOffers.length}
-              </strong>
-            </div>
-            <div className="quick-status">
-              <span>Ürün / Sistem Özeti</span>
-              <strong>{products.length + systemInventory.length}</strong>
+
+            <div className="panel-content quick-links-grid">
+              {modules
+                .filter((module) => module.id !== "dashboard")
+                .slice(0, 6)
+                .map((module) => (
+                  <button
+                    type="button"
+                    className="quick-link-card"
+                    key={module.id}
+                    aria-label={`${module.title} modülüne git`}
+                    onClick={() => handleModuleNavigation(module.id)}
+                  >
+                    <span aria-hidden="true">{module.icon}</span>
+                    <strong>{module.title}</strong>
+                    <span className="quick-link-arrow" aria-hidden="true">↗</span>
+                  </button>
+                ))}
             </div>
           </div>
         </div>
 
-        <div className="panel">
-          <div className="panel-header">
-            <h2>Hızlı Erişim Kartları</h2>
-          </div>
+        <div className="dashboard-grid">
+          <div className="panel">
+            <div className="panel-header">
+              <div>
+                <span className="panel-kicker">PORTFÖY</span>
+                <h2>Aktif Projeler</h2>
+              </div>
+            </div>
 
-          <div className="panel-content quick-links-grid">
-            {modules
-              .filter((module) => module.id !== "dashboard")
-              .slice(0, 6)
-              .map((module) => (
-                <button
-                  type="button"
-                  className="quick-link-card"
-                  key={module.id}
-                  aria-label={`${module.title} modülüne git`}
-                  onClick={() => handleModuleNavigation(module.id)}
-                >
-                  <span aria-hidden="true">{module.icon}</span>
-                  <strong>{module.title}</strong>
-                </button>
-              ))}
-          </div>
-        </div>
-      </div>
-
-      <div className="dashboard-grid">
-        <div className="panel">
-          <div className="panel-header">
-            <h2>Aktif Projeler</h2>
-          </div>
-
-          <div className="panel-content">
-            {projectsLoading ? (
-              <p className="empty-state">Projeler yükleniyor...</p>
-            ) : activeProjects.length === 0 ? (
-              <p className="empty-state">Henüz veri bulunmuyor.</p>
-            ) : (
-              <div className="log-list">
-                {activeProjects
-                  .slice(0, 6)
-                  .map((project) => (
+            <div className="panel-content">
+              {projectsLoading ? (
+                <p className="empty-state">Projeler yükleniyor…</p>
+              ) : activeProjects.length === 0 ? (
+                <div className="dashboard-empty-state">
+                  <span className="empty-state-mark" aria-hidden="true">＋</span>
+                  <strong>Henüz aktif proje yok</strong>
+                  <p>İlk projenizi oluşturarak operasyon takibine başlayın.</p>
+                  <button
+                    type="button"
+                    className="text-action"
+                    onClick={() => {
+                      setShowProjectForm(true);
+                      handleModuleNavigation("projects");
+                    }}
+                  >
+                    Yeni Proje Oluştur <span aria-hidden="true">→</span>
+                  </button>
+                </div>
+              ) : (
+                <div className="log-list">
+                  {activeProjects.slice(0, 6).map((project) => (
                     <div className="log-item" key={project.id}>
                       <strong>{project.name}</strong>
                       <small>
@@ -1434,63 +1526,82 @@ function App() {
                       </small>
                     </div>
                   ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="panel">
+            <div className="panel-header">
+              <div>
+                <span className="panel-kicker">BAĞLANTI VE ALTYAPI</span>
+                <h2>Sistem Durumu</h2>
+              </div>
+            </div>
+
+            <div className="panel-content system-status-list">
+              <div className="quick-status success">
+                <span>DDPro Core</span>
+                <strong>Arayüz hazır</strong>
+              </div>
+              <div
+                className={`quick-status ${getConnectionTone(projectsFetchState)}`}
+              >
+                <span>Projeler API</span>
+                <strong>{getConnectionLabel(projectsFetchState)}</strong>
+              </div>
+              <div
+                className={`quick-status ${getConnectionTone(offersFetchState)}`}
+              >
+                <span>Teklifler API</span>
+                <strong>{getConnectionLabel(offersFetchState)}</strong>
+              </div>
+              <div
+                className={`quick-status ${getConnectionTone(procurementFetchState)}`}
+              >
+                <span>Tedarik API</span>
+                <strong>{getConnectionLabel(procurementFetchState)}</strong>
+              </div>
+              <div className="quick-status">
+                <span>Diğer Modüller</span>
+                <strong>Yapılandırılmadı</strong>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="panel activity-panel">
+          <div className="panel-header">
+            <div>
+              <span className="panel-kicker">OPERASYON AKIŞI</span>
+              <h2>Son İşlemler</h2>
+            </div>
+          </div>
+
+          <div className="panel-content">
+            {recentActivity.length === 0 ? (
+              <div className="activity-empty-state">
+                <span className="activity-empty-mark" aria-hidden="true">◎</span>
+                <div>
+                  <strong>Henüz işlem kaydı yok</strong>
+                  <p>Gerçek operasyonlarınız burada zaman sırasına göre görünür.</p>
+                </div>
+              </div>
+            ) : (
+              <div className="log-list">
+                {recentActivity.slice(0, 8).map((log) => (
+                  <div className="log-item" key={log.id}>
+                    <strong>{log.message}</strong>
+                    <small>{log.date}</small>
+                  </div>
+                ))}
               </div>
             )}
           </div>
         </div>
-
-        <div className="panel">
-          <div className="panel-header">
-            <h2>Sistem Durumu</h2>
-          </div>
-
-          <div className="panel-content">
-            <div className="quick-status">
-              <span>DDPro Core</span>
-              <strong>Hazır</strong>
-            </div>
-            <div className="quick-status">
-              <span>Projeler API</span>
-              <strong>{getConnectionLabel(projectsFetchState)}</strong>
-            </div>
-            <div className="quick-status">
-              <span>Teklifler API</span>
-              <strong>{getConnectionLabel(offersFetchState)}</strong>
-            </div>
-            <div className="quick-status">
-              <span>Tedarik API</span>
-              <strong>{getConnectionLabel(procurementFetchState)}</strong>
-            </div>
-            <div className="quick-status">
-              <span>Diğer Modüller</span>
-              <strong>API entegrasyonu bekliyor</strong>
-            </div>
-          </div>
-        </div>
       </div>
-
-      <div className="panel">
-        <div className="panel-header">
-          <h2>Son İşlemler</h2>
-        </div>
-
-        <div className="panel-content">
-          {systemLogs.length === 0 ? (
-            <p className="empty-state">Henüz veri bulunmuyor.</p>
-          ) : (
-            <div className="log-list">
-              {systemLogs.slice(0, 8).map((log) => (
-                <div className="log-item" key={log.id}>
-                  <strong>{log.message}</strong>
-                  <small>{log.date}</small>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
+    );
+  };
 
   const moduleCounts = useMemo(
     () => ({
@@ -1828,8 +1939,6 @@ function App() {
     <div className="ddpro-app">
       <header className="app-header">
         <div className="brand-area">
-          <div className="brand-logo">DD</div>
-
           <div className="brand-content">
             <strong>DOĞRU DİZAYN PRO</strong>
             <span>DDPro Dijital Yönetim Sistemi</span>
