@@ -1783,23 +1783,6 @@ select:focus-visible {
   stroke-width: 1.5;
 }
 
-.notification-button small {
-  position: absolute;
-  top: -5px;
-  right: -5px;
-  min-width: 17px;
-  height: 17px;
-  display: grid;
-  place-items: center;
-  padding: 0 4px;
-  border: 2px solid #0b0f0d;
-  border-radius: 10px;
-  background: #0f7a4f;
-  color: white;
-  font-size: 9px;
-  font-weight: 800;
-}
-
 .user-area {
   min-width: 132px;
   display: flex;
@@ -2402,6 +2385,12 @@ select:focus-visible {
 .empty-state {
   border-color: rgba(184, 192, 192, 0.14);
   color: #7f8b84;
+}
+
+.status-banner.error {
+  border-color: rgba(230, 92, 92, 0.25);
+  background: rgba(180, 45, 45, 0.11);
+  color: #ef9999;
 }
 
 .panel {

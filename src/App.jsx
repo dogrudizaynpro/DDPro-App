@@ -922,7 +922,9 @@ function App() {
       ? "Production API Hazır"
       : apiHealthState.status === "loading"
         ? "API Kontrol Ediliyor"
-        : "Production API Kontrol Gerekli";
+        : apiHealthState.status === "warning"
+          ? "Production API · DB hazır değil"
+          : "Production API bağlantı hatası";
   const handleOffersReload = () => {
     offerDetailsCacheRef.current.clear();
     setOffersReloadKey((value) => value + 1);
@@ -1359,7 +1361,9 @@ function App() {
     return (
       <div className="dashboard-module">
         {apiHealthState.message ? (
-          <p className="status-banner warning">{apiHealthState.message}</p>
+          <p className={`status-banner ${apiHealthState.status}`}>
+            {apiHealthState.message}
+          </p>
         ) : null}
 
         <section className="dashboard-hero" aria-labelledby="dashboard-hero-title">
@@ -1452,7 +1456,11 @@ function App() {
                   <div className="service-row" key={service.label}>
                     <span className={`service-indicator ${tone}`} />
                     <span>{service.label}</span>
-                    <strong className={tone}>{getConnectionLabel(service.state)}</strong>
+                    <strong className={tone}>
+                      {service.label === "Production API" && service.state === "warning"
+                        ? "Yanıt verdi / DB hazır değil"
+                        : getConnectionLabel(service.state)}
+                    </strong>
                   </div>
                 );
               })}
@@ -1848,17 +1856,11 @@ function App() {
             <span className={`status-dot ${headerStatusTone}`} />
             <span>{headerStatusLabel}</span>
           </div>
-          <button
-            type="button"
-            className="notification-button"
-            aria-label={`Son işlem kayıtları, ${systemLogs.length} kayıt`}
-            onClick={() => handleModuleNavigation("dashboard")}
-          >
+          <div className="notification-button" aria-hidden="true">
             <svg aria-hidden="true" viewBox="0 0 24 24">
               <path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" />
             </svg>
-            {systemLogs.length > 0 ? <small>{systemLogs.length}</small> : null}
-          </button>
+          </div>
           <div className="user-area" aria-label="DDPro çalışma alanı">
             <span className="user-avatar">DD</span>
             <span><strong>DDPro</strong><small>Çalışma Alanı</small></span>
