@@ -52,7 +52,7 @@ const modules = [
     id: "dashboard",
     path: "/dashboard",
     icon: "⌂",
-    title: "Dashboard",
+    title: "Genel Bakış",
     short: "Ana Ekran",
     description:
       "DDPro operasyonlarının merkezi görünümü.",
@@ -166,6 +166,24 @@ const modules = [
       "Operasyonel ve yönetsel rapor ekranları için temel yapı.",
   },
   {
+    id: "calendar",
+    path: "/takvim",
+    icon: "▦",
+    title: "Takvim",
+    short: "Operasyon Takvimi",
+    description:
+      "Proje ve operasyon planlarının takibi için merkezi takvim alanı.",
+  },
+  {
+    id: "messages",
+    path: "/mesajlar",
+    icon: "✉",
+    title: "Mesajlar",
+    short: "İletişim Merkezi",
+    description:
+      "Ekip iletişimi ve koordinasyon kayıtları için çalışma alanı.",
+  },
+  {
     id: "settings",
     path: "/ayarlar",
     icon: "⚚",
@@ -175,6 +193,24 @@ const modules = [
       "Uygulama tercihleri ve sistem ayarları yönetimi.",
   },
 ];
+
+const primaryNavigationIds = [
+  "dashboard",
+  "projects",
+  "procurement",
+  "ai-assistant",
+  "calendar",
+  "messages",
+  "reports",
+  "settings",
+];
+
+const primaryNavigationModules = primaryNavigationIds.map((id) =>
+  modules.find((module) => module.id === id)
+);
+const additionalNavigationModules = modules.filter(
+  (module) => !primaryNavigationIds.includes(module.id)
+);
 
 const moduleRouteMap = Object.fromEntries(
   modules.map((module) => [module.id, module.path])
@@ -1347,148 +1383,175 @@ function App() {
         <p className="status-banner warning">{apiHealthState.message}</p>
       ) : null}
 
-      <div className="stats-grid">
+      <section className="dashboard-hero">
+        <div className="dashboard-hero-copy">
+          <span className="eyebrow">MİMARİ TEKNOLOJİ OPERASYON MERKEZİ</span>
+          <p className="dashboard-wordmark">
+            DOĞRU <span>DİZAYN</span> <b>PRO</b>
+          </p>
+          <h2>DOĞRU ÇİZGİ. DOĞRU ÇÖZÜM. DOĞRU SİSTEM.</h2>
+          <p className="dashboard-hero-description">
+            Projeler, tedarik ve karar süreçleri için tek merkezden görünürlük.
+          </p>
+          <button
+            className="hero-action"
+            type="button"
+            onClick={() => handleModuleNavigation("ai-assistant")}
+          >
+            DDPro AI TRADE <span aria-hidden="true">↗</span>
+          </button>
+        </div>
+        <div className="dashboard-hero-meta" aria-label="Platform durumu">
+          <span className="hero-orbit" aria-hidden="true">DD</span>
+          <span className="hero-meta-kicker">OPERASYON DURUMU</span>
+          <strong>{headerStatusLabel}</strong>
+          <small>Canlı modüller ve sistem sağlığı</small>
+        </div>
+      </section>
+
+      <div className="stats-grid dashboard-kpis">
         {dashboardStats.map((stat) => (
-          <div className="stat-card" key={stat.label}>
-            <span>{stat.label}</span>
+          <button
+            className="stat-card"
+            type="button"
+            key={stat.label}
+            onClick={() =>
+              handleModuleNavigation(
+                stat.label === "AKTİF PROJELER"
+                  ? "projects"
+                  : stat.label === "BEKLEYEN TEKLİFLER"
+                    ? "offers"
+                    : "systems"
+              )
+            }
+          >
+            <span className="stat-label">{stat.label}</span>
             <strong>{stat.value}</strong>
-          </div>
+            <small>Modüle git <span aria-hidden="true">↗</span></small>
+          </button>
         ))}
       </div>
 
-      <div className="dashboard-grid">
-        <div className="panel">
+      <div className="dashboard-grid dashboard-workspace">
+        <section className="panel map-panel">
           <div className="panel-header">
-            <h2>Proje Özeti</h2>
+            <div>
+              <span className="panel-kicker">OPERASYONEL GÖRÜNÜM</span>
+              <h2>Proje Haritası</h2>
+            </div>
+            <button type="button" onClick={() => handleModuleNavigation("projects")}>
+              Projeler <span aria-hidden="true">↗</span>
+            </button>
           </div>
-
-          <div className="panel-content">
-            <div className="quick-status">
-              <span>Toplam Proje</span>
-              <strong>{projects.length}</strong>
-            </div>
-            <div className="quick-status">
-              <span>Aktif Projeler</span>
-              <strong>
-                {activeProjects.length}
-              </strong>
-            </div>
-            <div className="quick-status">
-              <span>Bekleyen Teklifler</span>
-              <strong>
-                {pendingOffers.length}
-              </strong>
-            </div>
-            <div className="quick-status">
-              <span>Ürün / Sistem Özeti</span>
-              <strong>{products.length + systemInventory.length}</strong>
+          <div className="map-visual">
+            <svg className="world-map" viewBox="0 0 640 300" role="img" aria-label="Dünya haritası üzerinde proje görünümü">
+              <path d="m68 75 22-25 33-7 21 14 30-2 20 20-7 18-19 5-7 23-20 8-3 24-22 9-13-13-26-1-13-18-21-5-7-21 15-14-2-15 19-10Z" />
+              <path d="m170 168 20 5 13 22-4 29-16 17-4 35-17 18-12-17 5-25-12-23 8-27-8-18 12-16Z" />
+              <path d="m286 76 22-16 29 5 13 15-10 17-25 3-11 21-24-5-8-20 14-20Z" />
+              <path d="m341 95 31-19 47 4 27-14 51 5 35 21 39 6 21 22-13 17-33-4-18 16-26 2-22 21-26-7-15-19-21 7-26-15-21 6-19-14-28 6-18-20 11-18Z" />
+              <path d="m360 172 28-12 27 8 23 20-9 32-24 14-12 28-24-4-9-26-20-18 4-26-10-16Z" />
+              <path d="m530 206 20-10 24 7 9 17-19 14-26-5-8-12Z" />
+            </svg>
+            {activeProjects.length > 0 ? (
+              <div className="map-project-count">
+                <strong>{activeProjects.length}</strong>
+                <span>aktif proje<br />konum verisi bekleniyor</span>
+              </div>
+            ) : (
+              <p className="map-empty-note">
+                <span className="status-dot" />
+                Proje konumları, kayıt eklendikçe burada görünür.
+              </p>
+            )}
+            <div className="map-coordinates" aria-hidden="true">
+              <span>DDPRO / GLOBAL OPERATIONS</span>
+              <span>LAT — / LONG —</span>
             </div>
           </div>
-        </div>
+        </section>
 
-        <div className="panel">
+        <section className="panel active-projects-panel">
           <div className="panel-header">
-            <h2>Hızlı Erişim Kartları</h2>
+            <div>
+              <span className="panel-kicker">SAHA & SÜREÇ</span>
+              <h2>Aktif Projeler</h2>
+            </div>
+            <button type="button" onClick={() => handleModuleNavigation("projects")}>
+              Tümü <span aria-hidden="true">↗</span>
+            </button>
           </div>
-
-          <div className="panel-content quick-links-grid">
-            {modules
-              .filter((module) => module.id !== "dashboard")
-              .slice(0, 6)
-              .map((module) => (
-                <button
-                  type="button"
-                  className="quick-link-card"
-                  key={module.id}
-                  aria-label={`${module.title} modülüne git`}
-                  onClick={() => handleModuleNavigation(module.id)}
-                >
-                  <span aria-hidden="true">{module.icon}</span>
-                  <strong>{module.title}</strong>
-                </button>
-              ))}
-          </div>
-        </div>
-      </div>
-
-      <div className="dashboard-grid">
-        <div className="panel">
-          <div className="panel-header">
-            <h2>Aktif Projeler</h2>
-          </div>
-
-          <div className="panel-content">
+          <div className="panel-content project-preview-list">
             {projectsLoading ? (
               <p className="empty-state">Projeler yükleniyor...</p>
             ) : activeProjects.length === 0 ? (
-              <p className="empty-state">Henüz veri bulunmuyor.</p>
-            ) : (
-              <div className="log-list">
-                {activeProjects
-                  .slice(0, 6)
-                  .map((project) => (
-                    <div className="log-item" key={project.id}>
-                      <strong>{project.name}</strong>
-                      <small>
-                        {project.type} · {project.date}
-                      </small>
-                    </div>
-                  ))}
+              <div className="project-empty-state">
+                <span className="empty-emblem" aria-hidden="true">01</span>
+                <p>Henüz aktif proje kaydı yok.</p>
+                <button type="button" onClick={() => handleModuleNavigation("projects")}>
+                  İlk projeyi oluştur <span aria-hidden="true">↗</span>
+                </button>
               </div>
+            ) : (
+              activeProjects.slice(0, 5).map((project, index) => (
+                <button
+                  className="project-preview-row"
+                  key={project.id}
+                  type="button"
+                  onClick={() => handleModuleNavigation("projects")}
+                >
+                  <span className="project-preview-index">{String(index + 1).padStart(2, "0")}</span>
+                  <span className="project-preview-copy">
+                    <strong>{project.name}</strong>
+                    <small>{project.type || "Proje"} · {project.date}</small>
+                  </span>
+                  <span className="project-preview-status">AKTİF</span>
+                  <span className="project-preview-arrow" aria-hidden="true">↗</span>
+                </button>
+              ))
             )}
           </div>
-        </div>
+        </section>
 
-        <div className="panel">
+        <section className="panel calendar-panel">
           <div className="panel-header">
-            <h2>Sistem Durumu</h2>
+            <div>
+              <span className="panel-kicker">ZAMAN ÇİZELGESİ</span>
+              <h2>Yaklaşan Takvim</h2>
+            </div>
+            <button type="button" onClick={() => handleModuleNavigation("calendar")}>
+              Takvim <span aria-hidden="true">↗</span>
+            </button>
           </div>
-
-          <div className="panel-content">
-            <div className="quick-status">
-              <span>DDPro Core</span>
-              <strong>Hazır</strong>
+          <div className="panel-content agenda-preview">
+            <div className="agenda-date">
+              <strong>{new Date().toLocaleDateString("tr-TR", { day: "2-digit" })}</strong>
+              <span>{new Date().toLocaleDateString("tr-TR", { month: "short" }).replace(".", "").toUpperCase()}</span>
             </div>
-            <div className="quick-status">
-              <span>Projeler API</span>
-              <strong>{getConnectionLabel(projectsFetchState)}</strong>
+            <div className="agenda-copy">
+              <strong>Planlı etkinlik yok</strong>
+              <small>Takvim kayıtları bu alanda listelenir.</small>
             </div>
-            <div className="quick-status">
-              <span>Teklifler API</span>
-              <strong>{getConnectionLabel(offersFetchState)}</strong>
-            </div>
-            <div className="quick-status">
-              <span>Tedarik API</span>
-              <strong>{getConnectionLabel(procurementFetchState)}</strong>
-            </div>
-            <div className="quick-status">
-              <span>Diğer Modüller</span>
-              <strong>API entegrasyonu bekliyor</strong>
-            </div>
+            <span className="agenda-indicator" aria-label="Etkinlik bekleniyor" />
           </div>
-        </div>
+          <button
+            className="agenda-open-button"
+            type="button"
+            onClick={() => handleModuleNavigation("calendar")}
+          >
+            Takvimi görüntüle <span aria-hidden="true">↗</span>
+          </button>
+        </section>
       </div>
 
-      <div className="panel">
-        <div className="panel-header">
-          <h2>Son İşlemler</h2>
+      <section className="dashboard-statusbar">
+        <p>DOĞRU ÇİZGİ <span>•</span> DOĞRU ÇÖZÜM <span>•</span> DOĞRU SİSTEM</p>
+        <div>
+          <span><i className={`status-dot ${headerStatusTone}`} />{headerStatusLabel}</span>
+          <button type="button" onClick={() => handleModuleNavigation("systems")}>
+            Sistem durumu <span aria-hidden="true">↗</span>
+          </button>
         </div>
-
-        <div className="panel-content">
-          {systemLogs.length === 0 ? (
-            <p className="empty-state">Henüz veri bulunmuyor.</p>
-          ) : (
-            <div className="log-list">
-              {systemLogs.slice(0, 8).map((log) => (
-                <div className="log-item" key={log.id}>
-                  <strong>{log.message}</strong>
-                  <small>{log.date}</small>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
+      </section>
     </div>
   );
 
@@ -1683,6 +1746,56 @@ function App() {
           message: LOCAL_ONLY_MODULE_MESSAGE,
         },
       },
+      calendar: {
+        title: "Yaklaşan Takvim",
+        description:
+          "Proje tarihleri ve planlı operasyonlar için takvim çalışma alanı.",
+        sections: [
+          {
+            id: "calendar-schedule",
+            title: "Planlı Etkinlikler",
+            description:
+              "Takvim servisine bağlı planlı etkinlikler burada listelenir.",
+            count: 0,
+          },
+          {
+            id: "calendar-projects",
+            title: "Proje Tarihleri",
+            description:
+              "Projeler modülünde tanımlanan tarihler takvim entegrasyonu sonrası görünür.",
+            count: 0,
+          },
+        ],
+        statusNote: {
+          tone: "info",
+          message: LOCAL_ONLY_MODULE_MESSAGE,
+        },
+      },
+      messages: {
+        title: "Mesajlar & Koordinasyon",
+        description:
+          "Ekip içi iletişim ve operasyon koordinasyonu için merkezi alan.",
+        sections: [
+          {
+            id: "messages-inbox",
+            title: "Gelen Kutusu",
+            description:
+              "Mesaj servisi yapılandırıldığında yeni iletişimler burada görünür.",
+            count: 0,
+          },
+          {
+            id: "messages-team",
+            title: "Ekip Kanalları",
+            description:
+              "Proje ve operasyon bazlı ekip kanalları için çalışma alanı.",
+            count: 0,
+          },
+        ],
+        statusNote: {
+          tone: "info",
+          message: LOCAL_ONLY_MODULE_MESSAGE,
+        },
+      },
       settings: {
         title: "Ayarlar",
         description: "Uygulama tercihleri ve yapılandırma alanı.",
@@ -1811,6 +1924,7 @@ function App() {
           sendAiMessage={sendAiMessage}
           aiInput={aiInput}
           setAiInput={setAiInput}
+          onNavigate={handleModuleNavigation}
         />
       );
     }
@@ -1828,8 +1942,6 @@ function App() {
     <div className="ddpro-app">
       <header className="app-header">
         <div className="brand-area">
-          <div className="brand-logo">DD</div>
-
           <div className="brand-content">
             <strong>DOĞRU DİZAYN PRO</strong>
             <span>DDPro Dijital Yönetim Sistemi</span>
@@ -1849,13 +1961,14 @@ function App() {
           </div>
 
           <nav className="module-nav">
-            {modules.map((module) => (
+            {[...primaryNavigationModules, ...additionalNavigationModules].map((module, index) => (
               <button
                 key={module.id}
                 type="button"
                 className={`module-button ${
                   activeModule === module.id ? "active" : ""
                 }`}
+                data-primary={index < primaryNavigationModules.length}
                 onClick={() => handleModuleNavigation(module.id)}
               >
                 <span className="module-icon">
