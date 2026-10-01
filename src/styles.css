@@ -1773,6 +1773,16 @@ select:focus-visible {
   font-size: 18px;
 }
 
+.notification-button svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.5;
+}
+
 .notification-button small {
   position: absolute;
   top: -5px;

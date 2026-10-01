@@ -1854,7 +1854,9 @@ function App() {
             aria-label={`Son işlem kayıtları, ${systemLogs.length} kayıt`}
             onClick={() => handleModuleNavigation("dashboard")}
           >
-            <span aria-hidden="true">♧</span>
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" />
+            </svg>
             {systemLogs.length > 0 ? <small>{systemLogs.length}</small> : null}
           </button>
           <div className="user-area" aria-label="DDPro çalışma alanı">
