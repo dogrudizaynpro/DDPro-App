@@ -1,8 +1,10 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
+const base = process.env.VERCEL === "1" ? "/" : "/DDPro-App/";
+
 export default defineConfig({
-  base: "/DDPro-App/",
+  base,
   plugins: [react()],
   build: {
     cssCodeSplit: true,

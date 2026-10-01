@@ -38,6 +38,13 @@ DDPro-App; gerçek veriler, gerçek projeler ve kontrollü entegrasyonlar üzeri
 - Backend deployment şablonu `render.yaml` dosyasında tanımlanmıştır. Backend ayağa kaldırıldıktan sonra gerçek origin değeri GitHub repository variable `VITE_API_URL` olarak girilmelidir.
 - Backend health endpoint'i `/health` yolunda çalışır ve veritabanı hazır değilse deploy smoke testi başarısız olacak şekilde kullanılır.
 
+### PR #16 Vercel Preview
+
+- `vercel.json` yalnızca `copilot/implement-main-ui-dashboard-design` branch'inin Vercel deployment'ına izin verir; `main` ve diğer branch'ler devre dışıdır. GitHub Pages production workflow'u ayrı kalır.
+- Vercel GitHub entegrasyonu ile repository'yi ayrı bir Vercel projesine bağlayın.
+- Backend URL'sini tahmin etmeden, doğrulanmış `VITE_API_URL` değerini Vercel projesinin yalnızca **Preview** ortamına ekleyin.
+- Preview alan adını backend `ALLOWED_ORIGINS` listesine ekleyin; aksi halde tarayıcı istekleri CORS tarafından engellenir.
+
 ### Backend Notları
 
 - Backend kodu `/backend` altında Node.js + Express + Supabase yapısındadır.
