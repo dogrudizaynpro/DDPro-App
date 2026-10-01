@@ -124,7 +124,7 @@ const modules = [
     id: "procurement",
     path: "/tedarik",
     icon: "⌕",
-    title: "Tedarik",
+    title: "Tedarik & Araştırma",
     short: "Tedarik Yönetimi",
     description:
       "Tedarik araştırmaları ve kayıtları için operasyon ekranı.",
@@ -1402,7 +1402,6 @@ function App() {
           </button>
         </div>
         <div className="dashboard-hero-meta" aria-label="Platform durumu">
-          <span className="hero-orbit" aria-hidden="true">DD</span>
           <span className="hero-meta-kicker">OPERASYON DURUMU</span>
           <strong>{headerStatusLabel}</strong>
           <small>Canlı modüller ve sistem sağlığı</small>
