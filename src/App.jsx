@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import ddproMasterLogo from "../DDPRO_LOGO_MASTER_V1_EXACT.png";
 import {
   createProject as createProjectRequest,
   deleteProject as deleteProjectRequest,
@@ -1918,8 +1919,12 @@ function App() {
     <div className="ddpro-app">
       <header className="app-header">
         <div className="brand-area">
+          <img
+            className="brand-logo"
+            src={ddproMasterLogo}
+            alt="DOĞRU DİZAYN PRO"
+          />
           <div className="brand-content">
-            <strong>DOĞRU <span>DİZAYN</span> <em>PRO</em></strong>
             <span>CREATIVE SOLUTIONS <i /> AI TRADE</span>
           </div>
         </div>
