@@ -1482,8 +1482,8 @@ function App() {
             return (
               <div className="calendar-widget">
                 <div className="calendar-weekdays" aria-hidden="true">
-                  {["P", "S", "Ç", "P", "C", "C", "P"].map((day, index) => (
-                    <span key={`${day}-${index}`}>{day}</span>
+                  {["Pt", "Sa", "Ça", "Pe", "Cu", "Ct", "Pa"].map((day) => (
+                    <span key={day}>{day}</span>
                   ))}
                 </div>
                 <div className="calendar-days">
@@ -1922,8 +1922,13 @@ function App() {
 
           <div className="brand-content">
             <strong>DOĞRU DİZAYN PRO</strong>
-            <span>DDPro Dijital Yönetim Sistemi</span>
+            <span>Creative Solutions · AI Trade Platform</span>
           </div>
+        </div>
+
+        <div className="header-welcome">
+          <span>Hoş Geldiniz</span>
+          <strong>DOĞRU DİZAYN PRO</strong>
         </div>
 
         <div className={`header-status ${headerStatusTone}`}>
@@ -1968,7 +1973,7 @@ function App() {
           </div>
         </aside>
 
-        <main className="main-content">
+        <main className={`main-content ${activeModule === "dashboard" ? "dashboard-main" : ""}`}>
           <section className="content-header">
             <div>
               <h1>{currentModule.title}</h1>
@@ -1993,6 +1998,23 @@ function App() {
           </section>
         </main>
       </div>
+
+      <footer className="app-footer">
+        <div className="footer-slogan">
+          <span>DOĞRU <strong>ÇİZGİ</strong></span>
+          <i />
+          <span>DOĞRU <strong>ÇÖZÜM</strong></span>
+          <i />
+          <span>DOĞRU <strong>SİSTEM</strong></span>
+        </div>
+        <div className="footer-status">
+          <span className="footer-clock" aria-hidden="true">◷</span>
+          <span>{new Intl.DateTimeFormat("tr-TR", { dateStyle: "medium" }).format(new Date())}</span>
+          <i />
+          <span className="status-dot" />
+          <span>Sistem Aktif</span>
+        </div>
+      </footer>
     </div>
   );
 }
