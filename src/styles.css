@@ -1639,6 +1639,384 @@ select {
   }
 }
 
+/* Reference-led finish for the existing DDPro dashboard and AI workspace. */
+.app-header {
+  border-bottom-color: rgba(195, 190, 174, 0.34);
+  background:
+    linear-gradient(105deg, rgba(45, 46, 44, 0.3), transparent 38%),
+    linear-gradient(135deg, #242524, #101111 60%, #1b1c1b);
+  box-shadow:
+    0 8px 30px rgba(0, 0, 0, 0.48),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    inset 0 -1px 0 rgba(165, 214, 75, 0.08);
+}
+
+.brand-area {
+  gap: 20px;
+}
+
+.brand-logo {
+  width: 96px;
+  height: 96px;
+  min-width: 96px;
+}
+
+.brand-content > span {
+  color: #c4c4bb;
+  text-shadow: 0 1px 6px #000;
+}
+
+.header-welcome {
+  border-color: rgba(194, 189, 170, 0.5);
+  background:
+    linear-gradient(145deg, rgba(62, 63, 60, 0.38), transparent 48%),
+    linear-gradient(135deg, #232423, #111212);
+  box-shadow:
+    0 8px 22px rgba(0, 0, 0, 0.42),
+    inset 0 1px rgba(255, 255, 255, 0.14),
+    inset 0 -1px rgba(0, 0, 0, 0.75);
+}
+
+.header-welcome strong {
+  color: #d1d1c8;
+  letter-spacing: 0.16em;
+}
+
+.dashboard-module {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.stats-grid,
+.dashboard-overview-grid,
+.dashboard-footer-grid {
+  margin-top: 0;
+}
+
+.stat-card {
+  min-height: 154px;
+  border-color: rgba(203, 199, 183, 0.38);
+  background:
+    radial-gradient(ellipse at 12% 0%, rgba(255, 255, 255, 0.11), transparent 45%),
+    radial-gradient(circle at 15% 52%, rgba(165, 214, 75, 0.13), transparent 34%),
+    linear-gradient(145deg, #323431 0%, #1c1e1c 46%, #111212 100%);
+  box-shadow:
+    0 12px 28px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.17),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.92);
+}
+
+.stat-card:nth-child(2) {
+  background:
+    radial-gradient(ellipse at 12% 0%, rgba(255, 255, 255, 0.1), transparent 45%),
+    radial-gradient(circle at 15% 52%, rgba(180, 138, 81, 0.15), transparent 34%),
+    linear-gradient(145deg, #323230 0%, #1c1d1c 46%, #111212 100%);
+}
+
+.stat-card:nth-child(3) {
+  background:
+    radial-gradient(ellipse at 12% 0%, rgba(255, 255, 255, 0.1), transparent 45%),
+    radial-gradient(circle at 15% 52%, rgba(165, 214, 75, 0.15), transparent 34%),
+    linear-gradient(145deg, #323431 0%, #1c1e1c 46%, #111212 100%);
+}
+
+.stat-card:nth-child(4) {
+  background:
+    radial-gradient(ellipse at 12% 0%, rgba(255, 255, 255, 0.09), transparent 45%),
+    radial-gradient(circle at 15% 52%, rgba(165, 214, 75, 0.08), transparent 34%),
+    linear-gradient(145deg, #303130 0%, #1c1d1d 46%, #111212 100%);
+}
+
+.stat-icon {
+  border-color: rgba(211, 207, 189, 0.42);
+  background:
+    radial-gradient(circle at 34% 26%, rgba(255, 255, 255, 0.25), transparent 38%),
+    radial-gradient(circle at 50% 60%, #363936, #151716 76%);
+  box-shadow:
+    0 0 0 4px rgba(0, 0, 0, 0.42),
+    0 0 16px rgba(165, 214, 75, 0.09),
+    inset 0 1px 3px rgba(255, 255, 255, 0.24);
+}
+
+.stat-label {
+  color: #deded5;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+}
+
+.stat-card strong {
+  color: #f1f0e8;
+  text-shadow: 0 2px 9px #000, 0 0 15px rgba(255, 255, 255, 0.08);
+}
+
+.stat-card small {
+  color: #b9bbb1;
+}
+
+.panel {
+  position: relative;
+  border-color: rgba(199, 194, 176, 0.34);
+  background:
+    linear-gradient(145deg, rgba(61, 62, 59, 0.26), transparent 32%),
+    linear-gradient(150deg, rgba(36, 37, 35, 0.98), rgba(19, 20, 20, 0.99) 50%, #111212);
+  box-shadow:
+    0 14px 30px rgba(0, 0, 0, 0.48),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.88);
+}
+
+.panel::before {
+  position: absolute;
+  top: 1px;
+  left: 18px;
+  right: 18px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(230, 226, 208, 0.36), transparent);
+  content: "";
+  pointer-events: none;
+}
+
+.panel-header {
+  border-bottom-color: rgba(198, 194, 176, 0.22);
+}
+
+.panel-header h2 {
+  color: #f0efe7;
+  letter-spacing: 0.1em;
+  text-shadow: 0 1px 5px #000;
+}
+
+.panel-kicker,
+.calendar-month {
+  color: #c3b18b;
+  letter-spacing: 0.12em;
+}
+
+.project-map-canvas {
+  border-color: rgba(194, 190, 174, 0.28);
+  background:
+    radial-gradient(ellipse at 52% 48%, rgba(111, 143, 76, 0.2), transparent 58%),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.035), transparent 42%),
+    #0c0e0e;
+  box-shadow:
+    inset 0 0 34px rgba(0, 0, 0, 0.82),
+    0 0 0 3px rgba(0, 0, 0, 0.22);
+}
+
+.world-map > rect:first-child {
+  color: rgba(193, 196, 177, 0.17);
+}
+
+.world-map > rect:last-child {
+  color: rgba(204, 207, 188, 0.29);
+  opacity: 0.4;
+}
+
+.map-land {
+  fill: rgba(173, 176, 158, 0.24);
+  stroke: rgba(217, 216, 196, 0.46);
+  stroke-width: 1.3;
+  filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.78));
+}
+
+.map-network {
+  filter: drop-shadow(0 0 7px rgba(165, 214, 75, 0.8));
+}
+
+.map-network path {
+  stroke: rgba(165, 214, 75, 0.46);
+  stroke-dasharray: 2 5;
+}
+
+.map-center-stat strong {
+  color: #fffef5;
+  text-shadow: 0 0 16px rgba(165, 214, 75, 0.26), 0 2px 8px #000;
+}
+
+.project-preview {
+  border-bottom-color: rgba(199, 194, 176, 0.2);
+}
+
+.project-preview:hover {
+  background: linear-gradient(90deg, rgba(165, 214, 75, 0.08), transparent 78%);
+}
+
+.project-preview-mark {
+  border-color: rgba(210, 204, 184, 0.33);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.1), transparent 48%),
+    linear-gradient(145deg, #3e403c, #1b1d1c 70%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.17),
+    0 3px 8px rgba(0, 0, 0, 0.42);
+}
+
+.project-preview-copy strong {
+  color: #eeede5;
+}
+
+.project-preview-copy small {
+  color: #b4b5ac;
+}
+
+.project-status {
+  border-color: rgba(165, 214, 75, 0.34);
+  background: rgba(165, 214, 75, 0.055);
+  color: #d1e6a6;
+}
+
+.calendar-day {
+  border-color: rgba(199, 194, 176, 0.06);
+  background: rgba(255, 255, 255, 0.018);
+}
+
+.calendar-day.today {
+  border-color: rgba(183, 225, 103, 0.8);
+  background: linear-gradient(145deg, rgba(165, 214, 75, 0.2), rgba(165, 214, 75, 0.055));
+  box-shadow:
+    0 0 13px rgba(165, 214, 75, 0.2),
+    inset 0 1px rgba(255, 255, 255, 0.1);
+}
+
+.system-status-item,
+.quick-link-card {
+  border-color: rgba(199, 194, 176, 0.22);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.045), transparent 55%),
+    rgba(5, 6, 6, 0.33);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.055);
+}
+
+.system-status-item strong {
+  color: #cbe49b;
+}
+
+.ai-trade-hero {
+  isolation: isolate;
+  border-color: rgba(202, 198, 180, 0.42);
+  background:
+    radial-gradient(ellipse at 11% 52%, rgba(165, 214, 75, 0.23), transparent 31%),
+    radial-gradient(ellipse at 86% 3%, rgba(180, 138, 81, 0.18), transparent 38%),
+    linear-gradient(112deg, #30312e, #191b1a 47%, #0d0f0f);
+  box-shadow:
+    0 16px 35px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.92);
+}
+
+.ai-trade-hero::before {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  background:
+    linear-gradient(rgba(205, 204, 185, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(205, 204, 185, 0.035) 1px, transparent 1px),
+    linear-gradient(115deg, transparent 30%, rgba(255, 255, 255, 0.035) 50%, transparent 68%);
+  background-size: 28px 28px, 28px 28px, 100% 100%;
+  content: "";
+  mask-image: linear-gradient(90deg, #000, transparent 75%);
+  pointer-events: none;
+}
+
+.ai-orbital-mark {
+  border-color: rgba(218, 214, 193, 0.72);
+  box-shadow:
+    0 0 0 7px rgba(165, 214, 75, 0.075),
+    0 0 42px rgba(165, 214, 75, 0.22),
+    inset 0 0 25px rgba(165, 214, 75, 0.16),
+    inset 0 1px 2px rgba(255, 255, 255, 0.2);
+}
+
+.ai-orbital-mark::before {
+  border-color: rgba(182, 226, 103, 0.58);
+}
+
+.ai-orbital-mark::after {
+  border-color: rgba(196, 159, 100, 0.65);
+}
+
+.ai-capabilities,
+.ai-conversation-panel {
+  border-color: rgba(199, 194, 176, 0.34);
+  background:
+    linear-gradient(145deg, rgba(61, 62, 59, 0.22), transparent 38%),
+    linear-gradient(145deg, #242624, #111313 68%);
+  box-shadow:
+    0 14px 30px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.11),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.88);
+}
+
+.ai-capability {
+  border-color: rgba(198, 194, 176, 0.2);
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.045), rgba(0, 0, 0, 0.2));
+}
+
+.ai-capability-icon {
+  border-color: rgba(165, 214, 75, 0.38);
+  background: radial-gradient(circle at 35% 25%, rgba(255, 255, 255, 0.12), transparent 48%);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.12), 0 0 12px rgba(165, 214, 75, 0.08);
+}
+
+.ai-chat {
+  border-color: rgba(198, 194, 176, 0.22);
+  background:
+    linear-gradient(rgba(205, 204, 185, 0.022) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(205, 204, 185, 0.022) 1px, transparent 1px),
+    radial-gradient(circle at 94% 0, rgba(165, 214, 75, 0.09), transparent 32%),
+    #0d0f0f;
+  background-size: 26px 26px, 26px 26px, auto, auto;
+  box-shadow: inset 0 0 30px rgba(0, 0, 0, 0.54);
+}
+
+.ai-message.assistant {
+  border-color: rgba(165, 214, 75, 0.3);
+  background: linear-gradient(135deg, rgba(165, 214, 75, 0.1), rgba(165, 214, 75, 0.025));
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.055);
+}
+
+.ai-form {
+  border-color: rgba(198, 194, 176, 0.26);
+  background: linear-gradient(145deg, #1c1e1d, #101212);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.07);
+}
+
+.ai-form button {
+  border-color: rgba(173, 214, 94, 0.48);
+  background: linear-gradient(145deg, #465237, #22291b 62%, #171b14);
+  box-shadow:
+    inset 0 1px rgba(255, 255, 255, 0.14),
+    0 5px 14px rgba(0, 0, 0, 0.38);
+}
+
+@media (max-width: 900px) {
+  .brand-logo {
+    width: 76px;
+    height: 76px;
+    min-width: 76px;
+  }
+}
+
+@media (max-width: 640px) {
+  .brand-area {
+    gap: 9px;
+  }
+
+  .brand-logo {
+    width: 52px;
+    height: 52px;
+    min-width: 52px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stat-card,
+  .module-button {
+    transition: none;
+  }
+}
+
 /* =========================================================
    DDPRO GRAPHITE / EMERALD DESIGN SYSTEM
 ========================================================= */

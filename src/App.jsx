@@ -53,7 +53,7 @@ const modules = [
     id: "dashboard",
     path: "/dashboard",
     icon: "⌂",
-    title: "Dashboard",
+    title: "Genel Bakış",
     short: "Ana Ekran",
     description:
       "DDPro operasyonlarının merkezi görünümü.",
