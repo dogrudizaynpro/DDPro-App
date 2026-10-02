@@ -872,19 +872,19 @@ function App() {
         moduleId: "procurement",
       },
       {
-        label: "SİSTEMLER",
-        value: systemInventory.length,
-        detail: "Kayıtlı sistem bileşenleri",
-        icon: "⚙",
-        moduleId: "systems",
+        label: "AI ETKİLEŞİMİ",
+        value: aiMessages.filter((message) => message.role === "user").length,
+        detail: "Asistan sohbet isteği",
+        icon: "AI",
+        moduleId: "ai-assistant",
       },
     ],
     [
       activeProjects.length,
+      aiMessages,
       offers.length,
       pendingOffers.length,
       procurementItems.length,
-      systemInventory.length,
     ]
   );
 
@@ -1446,7 +1446,7 @@ function App() {
                 </button>
               </div>
             ) : (
-              activeProjects.slice(0, 5).map((project, index) => (
+              activeProjects.slice(0, 4).map((project, index) => (
                 <button
                   className="project-preview"
                   key={project.id}
@@ -1918,11 +1918,9 @@ function App() {
     <div className="ddpro-app">
       <header className="app-header">
         <div className="brand-area">
-          <div className="brand-logo">DD</div>
-
           <div className="brand-content">
-            <strong>DOĞRU DİZAYN PRO</strong>
-            <span>Creative Solutions · AI Trade Platform</span>
+            <strong>DOĞRU <span>DİZAYN</span> <em>PRO</em></strong>
+            <span>CREATIVE SOLUTIONS <i /> AI TRADE</span>
           </div>
         </div>
 
