@@ -1892,19 +1892,6 @@ select {
   color: #cbe49b;
 }
 
-.ai-trade-hero {
-  isolation: isolate;
-  border-color: rgba(202, 198, 180, 0.42);
-  background:
-    radial-gradient(ellipse at 11% 52%, rgba(165, 214, 75, 0.23), transparent 31%),
-    radial-gradient(ellipse at 86% 3%, rgba(180, 138, 81, 0.18), transparent 38%),
-    linear-gradient(112deg, #30312e, #191b1a 47%, #0d0f0f);
-  box-shadow:
-    0 16px 35px rgba(0, 0, 0, 0.5),
-    inset 0 1px 0 rgba(255, 255, 255, 0.16),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.92);
-}
-
 .ai-trade-hero::before {
   position: absolute;
   z-index: -1;
@@ -1917,46 +1904,6 @@ select {
   content: "";
   mask-image: linear-gradient(90deg, #000, transparent 75%);
   pointer-events: none;
-}
-
-.ai-orbital-mark {
-  border-color: rgba(218, 214, 193, 0.72);
-  box-shadow:
-    0 0 0 7px rgba(165, 214, 75, 0.075),
-    0 0 42px rgba(165, 214, 75, 0.22),
-    inset 0 0 25px rgba(165, 214, 75, 0.16),
-    inset 0 1px 2px rgba(255, 255, 255, 0.2);
-}
-
-.ai-orbital-mark::before {
-  border-color: rgba(182, 226, 103, 0.58);
-}
-
-.ai-orbital-mark::after {
-  border-color: rgba(196, 159, 100, 0.65);
-}
-
-.ai-capabilities,
-.ai-conversation-panel {
-  border-color: rgba(199, 194, 176, 0.34);
-  background:
-    linear-gradient(145deg, rgba(61, 62, 59, 0.22), transparent 38%),
-    linear-gradient(145deg, #242624, #111313 68%);
-  box-shadow:
-    0 14px 30px rgba(0, 0, 0, 0.45),
-    inset 0 1px 0 rgba(255, 255, 255, 0.11),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.88);
-}
-
-.ai-capability {
-  border-color: rgba(198, 194, 176, 0.2);
-  background: linear-gradient(145deg, rgba(255, 255, 255, 0.045), rgba(0, 0, 0, 0.2));
-}
-
-.ai-capability-icon {
-  border-color: rgba(165, 214, 75, 0.38);
-  background: radial-gradient(circle at 35% 25%, rgba(255, 255, 255, 0.12), transparent 48%);
-  box-shadow: inset 0 1px rgba(255, 255, 255, 0.12), 0 0 12px rgba(165, 214, 75, 0.08);
 }
 
 .ai-chat {
@@ -2683,8 +2630,7 @@ select:focus-visible {
   font-size: 11px;
 }
 
-.dashboard-empty-state button,
-.calendar-action {
+.dashboard-empty-state button {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -2755,11 +2701,6 @@ select:focus-visible {
   line-height: 1.5;
 }
 
-.calendar-action {
-  width: 100%;
-  border-top: 1px solid rgba(194, 189, 170, 0.13);
-}
-
 .dashboard-footer-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
@@ -2781,6 +2722,15 @@ select:focus-visible {
   width: 6px;
   height: 6px;
   min-width: 6px;
+}
+
+.system-overall.warning {
+  color: #d9b987;
+}
+
+.system-overall.loading,
+.system-overall.info {
+  color: #bec4b4;
 }
 
 .system-status-list {
@@ -2974,70 +2924,74 @@ textarea::placeholder {
 }
 
 .ai-trade-hero {
+  isolation: isolate;
   position: relative;
-  min-height: 210px;
-  display: flex;
+  min-height: 300px;
+  display: grid;
+  grid-template-columns: minmax(80px, 1fr) minmax(0, 2.4fr) minmax(120px, 1fr);
   align-items: center;
-  gap: clamp(20px, 5vw, 66px);
-  padding: clamp(21px, 3vw, 38px);
+  gap: 22px;
+  padding: clamp(30px, 4vw, 54px);
   overflow: hidden;
-  border: 1px solid rgba(194, 189, 170, 0.27);
+  border: 1px solid rgba(198, 167, 111, 0.48);
   border-radius: 13px;
   background:
-    radial-gradient(circle at 13% 47%, rgba(165, 214, 75, 0.21), transparent 27%),
-    radial-gradient(ellipse at 80% 0%, rgba(180, 138, 81, 0.14), transparent 36%),
-    linear-gradient(125deg, #30312e, #181a19 52%, #101111);
+    radial-gradient(ellipse at 50% 103%, rgba(165, 214, 75, 0.14), transparent 49%),
+    radial-gradient(ellipse at 87% 7%, rgba(180, 138, 81, 0.25), transparent 41%),
+    radial-gradient(ellipse at 0% 50%, rgba(255, 255, 255, 0.045), transparent 32%),
+    linear-gradient(125deg, #30312e, #1b1d1c 48%, #0d0f0f);
   box-shadow:
-    0 14px 33px rgba(0, 0, 0, 0.4),
-    inset 0 1px rgba(255, 255, 255, 0.14),
-    inset 0 -1px rgba(0, 0, 0, 0.8);
+    0 20px 42px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.19),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.88);
 }
 
 .ai-orbital-mark {
   position: relative;
-  width: 124px;
-  height: 124px;
-  min-width: 124px;
+  width: clamp(118px, 14vw, 184px);
+  height: clamp(118px, 14vw, 184px);
+  min-width: 0;
   display: grid;
   place-items: center;
-  border: 1px solid rgba(197, 192, 173, 0.58);
+  justify-self: center;
+  border: 1px solid rgba(221, 207, 168, 0.72);
   border-radius: 50%;
   background:
-    radial-gradient(circle at 38% 30%, rgba(200, 219, 162, 0.3), transparent 25%),
-    radial-gradient(circle, #31372d, #141615 69%);
+    radial-gradient(circle at 35% 25%, rgba(255, 255, 255, 0.16), transparent 24%),
+    radial-gradient(circle, #444938 0%, #1d211b 46%, #111313 75%);
   color: #d6ebaa;
-  box-shadow: 0 0 0 7px rgba(165, 214, 75, 0.05), 0 0 36px rgba(165, 214, 75, 0.16), inset 0 0 22px rgba(165, 214, 75, 0.12);
+  box-shadow:
+    0 0 0 8px rgba(165, 214, 75, 0.055),
+    0 0 48px rgba(165, 214, 75, 0.22),
+    0 0 82px rgba(180, 138, 81, 0.12),
+    inset 0 0 30px rgba(165, 214, 75, 0.2),
+    inset 0 1px 4px rgba(255, 255, 255, 0.28);
 }
 
 .ai-orbital-mark::before,
 .ai-orbital-mark::after {
   position: absolute;
-  inset: -9px 12px;
-  border: 1px solid rgba(165, 214, 75, 0.45);
+  inset: -13px 16px;
+  border: 1px solid rgba(195, 229, 124, 0.62);
   border-radius: 50%;
   content: "";
   transform: rotate(44deg);
+  box-shadow: 0 0 14px rgba(165, 214, 75, 0.25);
 }
 
 .ai-orbital-mark::after {
-  inset: 12px -9px;
-  border-color: rgba(180, 138, 81, 0.54);
+  inset: 16px -13px;
+  border-color: rgba(202, 166, 111, 0.64);
   transform: rotate(-42deg);
-}
-
-.ai-orbital-mark span {
-  font-size: 36px;
-  font-weight: 800;
-  letter-spacing: -0.09em;
-  text-shadow: 0 0 16px rgba(165, 214, 75, 0.44);
+  box-shadow: 0 0 14px rgba(180, 138, 81, 0.2);
 }
 
 .ai-trade-copy {
-  max-width: 560px;
+  max-width: 700px;
 }
 
 .ai-eyebrow {
-  color: #b6d17f;
+  color: #c6a873;
   font-size: 9px;
   font-weight: 700;
   letter-spacing: 0.18em;
@@ -3046,14 +3000,16 @@ textarea::placeholder {
 .ai-trade-copy h2 {
   margin: 10px 0 9px;
   color: #e5e4dc;
-  font-size: clamp(23px, 3vw, 38px);
+  font-size: clamp(29px, 3.8vw, 48px);
   font-weight: 550;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.085em;
+  text-shadow: 0 3px 15px rgba(0, 0, 0, 0.6);
 }
 
 .ai-trade-copy h2 strong {
-  color: var(--emerald);
+  color: #bddb80;
   font-weight: 800;
+  text-shadow: 0 0 24px rgba(165, 214, 75, 0.18);
 }
 
 .ai-trade-copy p {
@@ -3066,17 +3022,28 @@ textarea::placeholder {
 .ai-role-tags {
   display: flex;
   flex-wrap: wrap;
-  gap: 7px;
-  margin-top: 15px;
+  gap: 9px;
+  margin-top: 21px;
 }
 
 .ai-role-tags span {
-  padding: 6px 8px;
-  border: 1px solid rgba(165, 214, 75, 0.2);
-  border-radius: 4px;
-  color: #c4d79c;
-  font-size: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 10px;
+  border: 1px solid rgba(198, 168, 115, 0.32);
+  border-radius: 5px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.055), rgba(0, 0, 0, 0.22));
+  color: #e0d4b8;
+  font-size: 9px;
   letter-spacing: 0.08em;
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.075);
+}
+
+.ai-role-tags span i {
+  color: #a5d64b;
+  font-size: 7px;
+  font-style: normal;
 }
 
 .ai-online-indicator {
@@ -3084,14 +3051,17 @@ textarea::placeholder {
   align-items: center;
   gap: 8px;
   align-self: flex-start;
-  margin-left: auto;
+  justify-self: end;
+  align-self: start;
   padding: 9px 11px;
-  border: 1px solid rgba(165, 214, 75, 0.21);
+  border: 1px solid rgba(165, 214, 75, 0.28);
   border-radius: 6px;
+  background: rgba(8, 10, 9, 0.4);
   color: #cad4b5;
-  font-size: 8px;
+  font-size: 9px;
   letter-spacing: 0.08em;
   white-space: nowrap;
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.075);
 }
 
 .ai-online-indicator .status-dot {
@@ -3102,8 +3072,8 @@ textarea::placeholder {
 
 .ai-workspace {
   display: grid;
-  grid-template-columns: minmax(220px, 0.72fr) minmax(0, 1.8fr);
-  gap: 14px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
 }
 
 .ai-capabilities {
@@ -3116,10 +3086,15 @@ textarea::placeholder {
 .ai-conversation-panel {
   min-width: 0;
   padding: 17px;
-  border: 1px solid var(--line-metal);
+  border: 1px solid rgba(199, 190, 164, 0.35);
   border-radius: 12px;
-  background: linear-gradient(145deg, #222422, #121414);
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.32), inset 0 1px rgba(255, 255, 255, 0.08);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.05), transparent 38%),
+    linear-gradient(145deg, #272927, #121414 68%);
+  box-shadow:
+    0 15px 32px rgba(0, 0, 0, 0.43),
+    inset 0 1px rgba(255, 255, 255, 0.13),
+    inset 0 -1px rgba(0, 0, 0, 0.86);
 }
 
 .ai-section-heading {
@@ -3141,9 +3116,9 @@ textarea::placeholder {
 }
 
 .ai-capability-list {
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 9px;
   margin-top: 12px;
 }
 
@@ -3151,12 +3126,18 @@ textarea::placeholder {
   display: flex;
   align-items: center;
   gap: 10px;
+  min-height: 73px;
   padding: 11px 9px;
-  border: 1px solid rgba(194, 189, 170, 0.14);
+  border: 1px solid rgba(198, 168, 115, 0.21);
   border-radius: 7px;
-  background: rgba(255, 255, 255, 0.025);
+  background:
+    radial-gradient(ellipse at 0 0, rgba(165, 214, 75, 0.08), transparent 67%),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.05), rgba(0, 0, 0, 0.24));
   color: #e0e0d8;
   text-align: left;
+  box-shadow:
+    inset 0 1px rgba(255, 255, 255, 0.1),
+    0 6px 14px rgba(0, 0, 0, 0.21);
 }
 
 .ai-capability:hover {
@@ -3170,9 +3151,10 @@ textarea::placeholder {
   min-width: 33px;
   display: grid;
   place-items: center;
-  border: 1px solid rgba(165, 214, 75, 0.24);
+  border: 1px solid rgba(198, 168, 115, 0.45);
   border-radius: 50%;
-  color: var(--emerald);
+  background: radial-gradient(circle at 35% 25%, rgba(255, 255, 255, 0.13), transparent 50%);
+  color: #c6a873;
 }
 
 .ai-capability > span:last-child {
@@ -3402,6 +3384,17 @@ textarea::placeholder {
     grid-template-columns: 1fr;
   }
 
+  .ai-trade-hero {
+    grid-template-columns: 115px minmax(0, 1fr);
+    min-height: 260px;
+  }
+
+  .ai-online-indicator {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+  }
+
   .ai-capability-list {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -3527,24 +3520,24 @@ textarea::placeholder {
 
   .ai-trade-hero {
     min-height: auto;
-    align-items: flex-start;
-    gap: 15px;
-    padding: 19px 15px;
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+    gap: 16px;
+    padding: 31px 17px 22px;
   }
 
   .ai-orbital-mark {
-    width: 66px;
-    height: 66px;
-    min-width: 66px;
-  }
-
-  .ai-orbital-mark span {
-    font-size: 23px;
+    width: 84px;
+    height: 84px;
+    min-width: 0;
   }
 
   .ai-trade-copy h2 {
-    margin: 7px 0;
-    font-size: 18px;
+    font-size: 21px;
+  }
+
+  .ai-trade-copy {
+    text-align: center;
   }
 
   .ai-trade-copy p {
@@ -3552,6 +3545,7 @@ textarea::placeholder {
   }
 
   .ai-role-tags {
+    justify-content: center;
     gap: 4px;
     margin-top: 9px;
   }
@@ -3564,7 +3558,7 @@ textarea::placeholder {
   .ai-online-indicator {
     position: absolute;
     right: 12px;
-    bottom: 10px;
+    top: 10px;
     padding: 5px 7px;
     font-size: 9px;
   }
@@ -3594,52 +3588,43 @@ textarea::placeholder {
 .dashboard-shell .sidebar-master-card {
   display: grid;
   place-items: center;
-  min-height: 150px;
-  margin-bottom: 12px;
-  padding: 8px;
+  min-height: 224px;
+  margin-bottom: 17px;
+  padding: 12px;
   overflow: hidden;
-  border: 1px solid rgba(194, 189, 170, 0.36);
-  border-radius: 8px;
+  border: 1px solid rgba(206, 199, 178, 0.5);
+  border-radius: 10px;
   background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.06), transparent 52%),
-    linear-gradient(145deg, #202221, #0e1010);
+    radial-gradient(ellipse at 50% 0%, rgba(165, 214, 75, 0.12), transparent 57%),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.075), transparent 52%),
+    linear-gradient(145deg, #242624, #0e1010 72%);
   box-shadow:
-    inset 0 1px rgba(255, 255, 255, 0.1),
-    0 8px 18px rgba(0, 0, 0, 0.28);
+    inset 0 1px rgba(255, 255, 255, 0.17),
+    inset 0 -1px rgba(0, 0, 0, 0.9),
+    0 12px 25px rgba(0, 0, 0, 0.42);
 }
 
 .sidebar-master-logo {
   display: block;
-  width: min(100%, 170px);
-  max-height: 150px;
+  width: min(100%, 224px);
+  max-height: 224px;
   object-fit: contain;
-}
-
-.ai-trade-hero {
-  border-color: rgba(198, 167, 111, 0.42);
-  background:
-    radial-gradient(ellipse at 13% 50%, rgba(165, 214, 75, 0.18), transparent 30%),
-    radial-gradient(ellipse at 81% 0%, rgba(180, 138, 81, 0.23), transparent 38%),
-    linear-gradient(112deg, #2c2d2a, #191b1a 47%, #0d0f0f);
-}
-
-.ai-trade-copy > .ai-eyebrow {
-  color: #c6a873;
+  filter: drop-shadow(0 7px 13px rgba(0, 0, 0, 0.62));
 }
 
 .ai-orbital-core {
-  width: 28px;
-  height: 28px;
+  width: 40px;
+  height: 40px;
   display: block;
   border: 1px solid rgba(222, 197, 145, 0.75);
   border-radius: 50%;
   background:
-    radial-gradient(circle at 35% 28%, rgba(255, 255, 255, 0.82), transparent 19%),
-    radial-gradient(circle at 48% 44%, #c6a873 0%, #80984f 40%, #222820 76%);
+    radial-gradient(circle at 35% 28%, rgba(255, 255, 255, 0.9), transparent 19%),
+    radial-gradient(circle at 48% 44%, #d0ae72 0%, #91a953 43%, #222820 77%);
   box-shadow:
-    0 0 13px rgba(198, 168, 115, 0.48),
-    0 0 25px rgba(165, 214, 75, 0.32),
-    inset 0 1px 3px rgba(255, 255, 255, 0.55);
+    0 0 17px rgba(198, 168, 115, 0.58),
+    0 0 37px rgba(165, 214, 75, 0.42),
+    inset 0 1px 4px rgba(255, 255, 255, 0.62);
 }
 
 @media (max-width: 900px) {
@@ -3650,8 +3635,8 @@ textarea::placeholder {
 
 @media (max-width: 640px) {
   .ai-orbital-core {
-    width: 18px;
-    height: 18px;
+    width: 22px;
+    height: 22px;
   }
 
   .ai-form {
@@ -3704,28 +3689,6 @@ textarea::placeholder {
 
 .dashboard-shell .main-content {
   padding: clamp(22px, 2.35vw, 38px);
-}
-
-.dashboard-shell .sidebar-master-card {
-  min-height: 224px;
-  margin-bottom: 17px;
-  padding: 12px;
-  border-color: rgba(206, 199, 178, 0.5);
-  border-radius: 10px;
-  background:
-    radial-gradient(ellipse at 50% 0%, rgba(165, 214, 75, 0.12), transparent 57%),
-    linear-gradient(145deg, rgba(255, 255, 255, 0.075), transparent 52%),
-    linear-gradient(145deg, #242624, #0e1010 72%);
-  box-shadow:
-    inset 0 1px rgba(255, 255, 255, 0.17),
-    inset 0 -1px rgba(0, 0, 0, 0.9),
-    0 12px 25px rgba(0, 0, 0, 0.42);
-}
-
-.sidebar-master-logo {
-  width: min(100%, 224px);
-  max-height: 224px;
-  filter: drop-shadow(0 7px 13px rgba(0, 0, 0, 0.62));
 }
 
 .dashboard-shell .stat-card {
@@ -3814,160 +3777,6 @@ textarea::placeholder {
   font-size: 11px;
 }
 
-.ai-trade-hero {
-  min-height: 300px;
-  display: grid;
-  grid-template-columns: minmax(80px, 1fr) minmax(0, 2.4fr) minmax(120px, 1fr);
-  align-items: center;
-  gap: 22px;
-  padding: clamp(30px, 4vw, 54px);
-  border-color: rgba(198, 167, 111, 0.48);
-  background:
-    radial-gradient(ellipse at 50% 103%, rgba(165, 214, 75, 0.14), transparent 49%),
-    radial-gradient(ellipse at 87% 7%, rgba(180, 138, 81, 0.25), transparent 41%),
-    radial-gradient(ellipse at 0% 50%, rgba(255, 255, 255, 0.045), transparent 32%),
-    linear-gradient(125deg, #30312e, #1b1d1c 48%, #0d0f0f);
-  box-shadow:
-    0 20px 42px rgba(0, 0, 0, 0.5),
-    inset 0 1px 0 rgba(255, 255, 255, 0.19),
-    inset 0 -2px 0 rgba(0, 0, 0, 0.88);
-}
-
-.ai-trade-copy > .ai-eyebrow {
-  color: #c6a873;
-}
-
-.ai-orbital-mark {
-  width: clamp(118px, 14vw, 184px);
-  height: clamp(118px, 14vw, 184px);
-  min-width: 0;
-  justify-self: center;
-  border-color: rgba(221, 207, 168, 0.72);
-  background:
-    radial-gradient(circle at 35% 25%, rgba(255, 255, 255, 0.16), transparent 24%),
-    radial-gradient(circle, #444938 0%, #1d211b 46%, #111313 75%);
-  box-shadow:
-    0 0 0 8px rgba(165, 214, 75, 0.055),
-    0 0 48px rgba(165, 214, 75, 0.22),
-    0 0 82px rgba(180, 138, 81, 0.12),
-    inset 0 0 30px rgba(165, 214, 75, 0.2),
-    inset 0 1px 4px rgba(255, 255, 255, 0.28);
-}
-
-.ai-orbital-mark::before {
-  inset: -13px 16px;
-  border-color: rgba(195, 229, 124, 0.62);
-  box-shadow: 0 0 14px rgba(165, 214, 75, 0.25);
-}
-
-.ai-orbital-mark::after {
-  inset: 16px -13px;
-  border-color: rgba(202, 166, 111, 0.64);
-  box-shadow: 0 0 14px rgba(180, 138, 81, 0.2);
-}
-
-.ai-orbital-core {
-  width: 40px;
-  height: 40px;
-  background:
-    radial-gradient(circle at 35% 28%, rgba(255, 255, 255, 0.9), transparent 19%),
-    radial-gradient(circle at 48% 44%, #d0ae72 0%, #91a953 43%, #222820 77%);
-  box-shadow:
-    0 0 17px rgba(198, 168, 115, 0.58),
-    0 0 37px rgba(165, 214, 75, 0.42),
-    inset 0 1px 4px rgba(255, 255, 255, 0.62);
-}
-
-.ai-trade-copy {
-  max-width: 700px;
-}
-
-.ai-trade-copy h2 {
-  font-size: clamp(29px, 3.8vw, 48px);
-  letter-spacing: 0.085em;
-  text-shadow: 0 3px 15px rgba(0, 0, 0, 0.6);
-}
-
-.ai-trade-copy h2 strong {
-  color: #bddb80;
-  text-shadow: 0 0 24px rgba(165, 214, 75, 0.18);
-}
-
-.ai-role-tags {
-  gap: 9px;
-  margin-top: 21px;
-}
-
-.ai-role-tags span {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 8px 10px;
-  border-color: rgba(198, 168, 115, 0.32);
-  border-radius: 5px;
-  background: linear-gradient(145deg, rgba(255, 255, 255, 0.055), rgba(0, 0, 0, 0.22));
-  color: #e0d4b8;
-  box-shadow: inset 0 1px rgba(255, 255, 255, 0.075);
-}
-
-.ai-role-tags span i {
-  color: #a5d64b;
-  font-size: 7px;
-  font-style: normal;
-}
-
-.ai-online-indicator {
-  justify-self: end;
-  align-self: start;
-  border-color: rgba(165, 214, 75, 0.28);
-  background: rgba(8, 10, 9, 0.4);
-  box-shadow: inset 0 1px rgba(255, 255, 255, 0.075);
-}
-
-.ai-workspace {
-  grid-template-columns: minmax(0, 1fr);
-  gap: 16px;
-}
-
-.ai-capabilities,
-.ai-conversation-panel {
-  border-color: rgba(199, 190, 164, 0.35);
-  background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.05), transparent 38%),
-    linear-gradient(145deg, #272927, #121414 68%);
-  box-shadow:
-    0 15px 32px rgba(0, 0, 0, 0.43),
-    inset 0 1px rgba(255, 255, 255, 0.13),
-    inset 0 -1px rgba(0, 0, 0, 0.86);
-}
-
-.ai-capability-list {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 9px;
-}
-
-.ai-capability {
-  min-height: 73px;
-  border-color: rgba(198, 168, 115, 0.21);
-  background:
-    radial-gradient(ellipse at 0 0, rgba(165, 214, 75, 0.08), transparent 67%),
-    linear-gradient(145deg, rgba(255, 255, 255, 0.05), rgba(0, 0, 0, 0.24));
-  box-shadow:
-    inset 0 1px rgba(255, 255, 255, 0.1),
-    0 6px 14px rgba(0, 0, 0, 0.21);
-}
-
-.ai-capability strong {
-  line-height: 1.4;
-}
-
-.ai-capability-icon {
-  border-color: rgba(198, 168, 115, 0.45);
-  background: radial-gradient(circle at 35% 25%, rgba(255, 255, 255, 0.13), transparent 50%);
-  color: #c6a873;
-}
-
 @media (max-width: 900px) {
   .dashboard-shell .app-header {
     min-height: 108px;
@@ -3986,28 +3795,10 @@ textarea::placeholder {
     height: auto;
   }
 
-  .dashboard-shell .sidebar-master-card {
-    display: none;
-  }
-
   .dashboard-shell .app-layout {
     min-height: calc(100vh - 162px);
   }
 
-  .ai-trade-hero {
-    grid-template-columns: 115px minmax(0, 1fr);
-    min-height: 260px;
-  }
-
-  .ai-online-indicator {
-    position: absolute;
-    top: 15px;
-    right: 15px;
-  }
-
-  .ai-capability-list {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
 }
 
 @media (max-width: 640px) {
@@ -4036,44 +3827,5 @@ textarea::placeholder {
 
   .dashboard-shell .stat-card {
     min-height: 116px;
-  }
-
-  .ai-trade-hero {
-    grid-template-columns: minmax(0, 1fr);
-    justify-items: center;
-    gap: 16px;
-    padding: 31px 17px 22px;
-  }
-
-  .ai-orbital-mark {
-    width: 84px;
-    height: 84px;
-  }
-
-  .ai-orbital-core {
-    width: 22px;
-    height: 22px;
-  }
-
-  .ai-trade-copy {
-    text-align: center;
-  }
-
-  .ai-trade-copy h2 {
-    font-size: 21px;
-  }
-
-  .ai-role-tags {
-    justify-content: center;
-  }
-
-  .ai-online-indicator {
-    top: 10px;
-    right: 10px;
-    padding: 5px 7px;
-  }
-
-  .ai-capability-list {
-    grid-template-columns: 1fr;
   }
 }

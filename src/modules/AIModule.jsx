@@ -46,7 +46,7 @@ function AIModule({ aiMessages, sendAiMessage, aiInput, setAiInput }) {
             <span><i>03</i> AI YÖNETİCİ</span>
           </div>
         </div>
-        <div className="ai-online-indicator"><span className="status-dot" /> ÇALIŞMAYA HAZIR</div>
+        <div className="ai-online-indicator"><span className="status-dot" /> YEREL ALAN HAZIR</div>
       </section>
 
       <div className="ai-workspace">
@@ -84,7 +84,7 @@ function AIModule({ aiMessages, sendAiMessage, aiInput, setAiInput }) {
               <span className="ai-eyebrow">AKILLI ÇALIŞMA ALANI</span>
               <h3>AI Asistan / Partner</h3>
             </div>
-            <span className="ai-session-badge"><i /> OTURUM AÇIK</span>
+            <span className="ai-session-badge"><i /> YEREL OTURUM</span>
           </div>
           <div className="ai-chat" aria-live="polite">
             {aiMessages.map((message) => (

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useId, useMemo, useRef, useState } from "react";
 import ddproMasterLogo from "../DDPRO_LOGO_MASTER_V1_EXACT.png";
 import {
   createProject as createProjectRequest,
@@ -185,6 +185,13 @@ const routeModuleMap = Object.fromEntries(
   modules.map((module) => [module.path, module.id])
 );
 const moduleIds = new Set(modules.map((module) => module.id));
+const calendarMonthFormatter = new Intl.DateTimeFormat("tr-TR", {
+  month: "short",
+  year: "numeric",
+});
+const footerDateFormatter = new Intl.DateTimeFormat("tr-TR", {
+  dateStyle: "medium",
+});
 
 const normalizeModulePath = (pathValue) => {
   const sanitizedPath = (pathValue || "").trim();
@@ -290,6 +297,50 @@ const formatDate = () =>
     timeStyle: "short",
   });
 
+function DashboardCalendar() {
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const leadingDays = (monthStart.getDay() + 6) % 7;
+
+  return (
+    <section className="panel calendar-panel">
+      <div className="panel-header">
+        <h2>YAKLAŞAN TAKVİM</h2>
+        <span className="calendar-month">{calendarMonthFormatter.format(now)}</span>
+      </div>
+      <div className="calendar-widget">
+        <div className="calendar-weekdays" aria-hidden="true">
+          {["Pt", "Sa", "Ça", "Pe", "Cu", "Ct", "Pa"].map((day) => (
+            <span key={day}>{day}</span>
+          ))}
+        </div>
+        <div className="calendar-days">
+          {Array.from({ length: leadingDays }, (_, index) => (
+            <span className="calendar-day muted" key={`blank-${index}`} aria-hidden="true" />
+          ))}
+          {Array.from({ length: daysInMonth }, (_, index) => {
+            const day = index + 1;
+            return (
+              <span
+                className={`calendar-day${day === now.getDate() ? " today" : ""}`}
+                key={day}
+                aria-current={day === now.getDate() ? "date" : undefined}
+              >
+                {day}
+              </span>
+            );
+          })}
+        </div>
+        <div className="calendar-empty">
+          <span className="status-dot" />
+          <p>Etkinlik verileri bağlandığında burada listelenecek.</p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 const getInitialItems = (key, fallback = EMPTY_ITEMS) =>
   CAN_USE_LOCAL_FALLBACK ? getStoredData(key, fallback) : fallback;
 
@@ -321,6 +372,7 @@ const getApiStatusCode = (error) =>
   error?.status || error?.statusCode || error?.data?.statusCode || null;
 
 function App() {
+  const dashboardMapId = useId().replace(/:/g, "");
   const [activeModule, setActiveModule] = useState(() =>
     resolveModuleFromHash(window.location.hash)
   );
@@ -1392,14 +1444,14 @@ function App() {
           <div className="project-map-canvas">
             <svg className="world-map" viewBox="0 0 600 320" aria-hidden="true">
               <defs>
-                <pattern id="map-grid" width="28" height="28" patternUnits="userSpaceOnUse">
+                <pattern id={`${dashboardMapId}-grid`} width="28" height="28" patternUnits="userSpaceOnUse">
                   <path d="M 28 0 L 0 0 0 28" fill="none" stroke="currentColor" strokeWidth="0.7" />
                 </pattern>
-                <pattern id="map-dots" width="9" height="9" patternUnits="userSpaceOnUse">
+                <pattern id={`${dashboardMapId}-dots`} width="9" height="9" patternUnits="userSpaceOnUse">
                   <circle cx="2" cy="2" r="1.1" fill="currentColor" />
                 </pattern>
               </defs>
-              <rect width="600" height="320" fill="url(#map-grid)" />
+              <rect width="600" height="320" fill={`url(#${dashboardMapId}-grid)`} />
               <g className="map-land">
                 <path d="m67 83 23-17 35-3 13-13 32 3 18 17 32 7 8 17-20 10-8 17-27 4-12 19-21-2-13 16-21-5-9-19-22-5-17-23-20-4-7-17zM166 160l28 8 17 20 2 27-14 22-10 28-16 21-14-17-1-26-13-24 1-30 10-29zM273 74l23-14 24 5 13-12 28 4 11-12 36 8 10 15 30 5 19 20-12 18-29 3-6 19-18 6-15 27-20 4-13 20-21-7-7-20-22-11-3-20-20-7-6-18-19-7-9-20 16-6zM310 181l18 6 11 18 16 7 17 22-5 28-17 19-17-8-5-20-19-13-6-23-12-15zM452 218l21-9 28 8 18 19-9 17-27 3-18-13-18-2z" />
                 <path d="m60 70 57-26 45 4 36 21 32 16-14 24-29 10-18 27-26-4-16 16-19-18-25-7-19-22-21-9zM270 64l38-16 31 8 35-8 30 14 41 8 34 24-8 27-28 8-15 23-28 10-14 29-25 8-17-16-14-20-28-5-19-18-23-9-16-28-19-12z" />
@@ -1416,7 +1468,7 @@ function App() {
                 <circle cx="365" cy="218" r="4" />
                 <circle cx="236" cy="205" r="4" />
               </g>
-              <rect width="600" height="320" fill="url(#map-dots)" />
+              <rect width="600" height="320" fill={`url(#${dashboardMapId}-dots)`} />
             </svg>
             <div className="map-legend"><span /> Proje ağı görünümü</div>
           </div>
@@ -1463,64 +1515,17 @@ function App() {
           </div>
         </section>
 
-        <section className="panel calendar-panel">
-          <div className="panel-header">
-            <h2>YAKLAŞAN TAKVİM</h2>
-            <span className="calendar-month">
-              {new Intl.DateTimeFormat("tr-TR", { month: "short", year: "numeric" }).format(new Date())}
-            </span>
-          </div>
-          {(() => {
-            const now = new Date();
-            const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-            const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-            const leadingDays = (monthStart.getDay() + 6) % 7;
-            return (
-              <div className="calendar-widget">
-                <div className="calendar-weekdays" aria-hidden="true">
-                  {["Pt", "Sa", "Ça", "Pe", "Cu", "Ct", "Pa"].map((day) => (
-                    <span key={day}>{day}</span>
-                  ))}
-                </div>
-                <div className="calendar-days">
-                  {Array.from({ length: leadingDays }, (_, index) => (
-                    <span className="calendar-day muted" key={`blank-${index}`} aria-hidden="true" />
-                  ))}
-                  {Array.from({ length: daysInMonth }, (_, index) => {
-                    const day = index + 1;
-                    return (
-                      <span
-                        className={`calendar-day${day === now.getDate() ? " today" : ""}`}
-                        key={day}
-                        aria-current={day === now.getDate() ? "date" : undefined}
-                      >
-                        {day}
-                      </span>
-                    );
-                  })}
-                </div>
-                <div className="calendar-empty">
-                  <span className="status-dot" />
-                  <p>Etkinlik verileri bağlandığında burada listelenecek.</p>
-                </div>
-                <button
-                  className="calendar-action"
-                  type="button"
-                  onClick={() => handleModuleNavigation("projects")}
-                >
-                  Projeleri görüntüle <span aria-hidden="true">→</span>
-                </button>
-              </div>
-            );
-          })()}
-        </section>
+        <DashboardCalendar />
       </div>
 
       <div className="dashboard-footer-grid">
         <section className="panel system-panel">
           <div className="panel-header">
             <h2>SİSTEM DURUMLARI</h2>
-            <span className="system-overall"><span className="status-dot" /> CANLI</span>
+            <span className={`system-overall ${headerStatusTone}`}>
+              <span className={`status-dot ${headerStatusTone}`} />
+              API: {getConnectionLabel(apiHealthState.status)}
+            </span>
           </div>
           <div className="system-status-list">
             <div className="system-status-item">
@@ -2021,10 +2026,10 @@ function App() {
         </div>
         <div className="footer-status">
           <span className="footer-clock" aria-hidden="true">◷</span>
-          <span>{new Intl.DateTimeFormat("tr-TR", { dateStyle: "medium" }).format(new Date())}</span>
+          <span>{footerDateFormatter.format(new Date())}</span>
           <i />
           <span className="status-dot" />
-          <span>Sistem Aktif</span>
+          <span>Arayüz Aktif</span>
         </div>
       </footer>
     </div>
