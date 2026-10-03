@@ -8,6 +8,12 @@ import researchRouter from "./routes/research.routes.js";
 import offersRouter from "./routes/offers.routes.js";
 import aiRouter from "./routes/ai.routes.js";
 import integrationsRouter from "./routes/integrations.routes.js";
+import crmRouter from "./routes/crm.routes.js";
+import {
+  getWhatsAppWebhookChallenge,
+  postWebsiteLead,
+  postWhatsAppWebhook,
+} from "./controllers/integration-workspace.controller.js";
 import { getSupabaseClient, isSupabaseAvailable } from "./config/supabase.js";
 
 const app = express();
@@ -30,7 +36,12 @@ app.use(
 );
 
 // Body parser
-app.use(express.json());
+app.use(express.json({
+  limit: "1mb",
+  verify: (req, _res, buffer) => {
+    req.rawBody = Buffer.from(buffer);
+  },
+}));
 app.use(express.urlencoded({ extended: true }));
 
 // ============================================================
@@ -42,6 +53,10 @@ app.use("/api/research", researchRouter);
 app.use("/api/offers", offersRouter);
 app.use("/api/ai", aiRouter);
 app.use("/api/integrations", integrationsRouter);
+app.use("/api/crm", crmRouter);
+app.get("/webhooks/whatsapp", getWhatsAppWebhookChallenge);
+app.post("/webhooks/whatsapp", postWhatsAppWebhook);
+app.post("/webhooks/website/leads", postWebsiteLead);
 
 // ============================================================
 // HEALTH CHECK ENDPOINT
