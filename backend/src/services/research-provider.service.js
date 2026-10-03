@@ -5,6 +5,7 @@ export const searchResearchProvider = async (query) => {
   if (!API_URL || !API_KEY) {
     const error = new Error("Web research provider is not configured.");
     error.statusCode = 503;
+    error.expose = true;
     throw error;
   }
 
@@ -14,11 +15,13 @@ export const searchResearchProvider = async (query) => {
   } catch {
     const error = new Error("RESEARCH_API_URL must be a valid HTTPS URL.");
     error.statusCode = 503;
+    error.expose = true;
     throw error;
   }
   if (url.protocol !== "https:" && !["localhost", "127.0.0.1", "::1"].includes(url.hostname)) {
     const error = new Error("Research provider URL must use HTTPS.");
     error.statusCode = 503;
+    error.expose = true;
     throw error;
   }
 
@@ -34,6 +37,7 @@ export const searchResearchProvider = async (query) => {
   if (!response.ok) {
     const error = new Error(`Research provider request failed (HTTP ${response.status}).`);
     error.statusCode = 502;
+    error.expose = true;
     throw error;
   }
 
@@ -41,6 +45,7 @@ export const searchResearchProvider = async (query) => {
   if (!Array.isArray(payload?.results)) {
     const error = new Error("Research provider response must contain a results array.");
     error.statusCode = 502;
+    error.expose = true;
     throw error;
   }
 
