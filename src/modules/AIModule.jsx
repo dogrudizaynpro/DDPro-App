@@ -1,7 +1,18 @@
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import aiTradeDesignReference from "../assets/DDPro-AI-Trade-Referans.png";
 import aiCharacterFront from "../assets/ddpro-ai-character-front.png";
 import aiCharacterBack from "../assets/ddpro-ai-character-back.png";
+import { getAiProviderStatus } from "../services/ai.service.js";
+
+const MODULE_TITLES = {
+  projects: "Projeler",
+  offers: "Teklifler",
+  procurement: "Tedarik & Araştırma",
+  calendar: "Takvim",
+  crm: "Müşteriler / CRM",
+  reports: "Raporlar",
+  "price-analysis": "Fiyat Analizi",
+};
 
 const capabilities = [
   {
@@ -61,8 +72,24 @@ function AIModule({
   setAiInput,
   onNavigate,
   messagesOnly = false,
+  aiSending = false,
 }) {
   const promptFieldRef = useRef(null);
+  const [providerStatus, setProviderStatus] = useState("checking");
+
+  useEffect(() => {
+    let active = true;
+    getAiProviderStatus()
+      .then((status) => {
+        if (active) setProviderStatus(status.configured ? "ready" : "unconfigured");
+      })
+      .catch(() => {
+        if (active) setProviderStatus("unavailable");
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const activateRole = (prompt) => {
     setAiInput(prompt);
@@ -131,8 +158,8 @@ function AIModule({
             </div>
             <div className="ai-specification">
               <span>ÇALIŞMA DURUMU</span>
-              <strong><i aria-hidden="true" /> Yerel oturum aktif</strong>
-              <p>Mesajlar bu çalışma alanında saklanır. Gelişmiş AI bağlantısı yapılandırıldığında etkinleşir.</p>
+              <strong><i aria-hidden="true" /> {providerStatus === "ready" ? "AI sağlayıcısı yapılandırıldı" : providerStatus === "checking" ? "AI sağlayıcısı kontrol ediliyor" : "AI sağlayıcısı bağlı değil"}</strong>
+              <p>{providerStatus === "ready" ? "Yanıtlar sunucu tarafındaki AI sağlayıcısından istenir." : "Gerçek yanıt için backend AI_API_URL, AI_API_KEY ve AI_MODEL değişkenleri gerekir. İstek başarısız olursa yanıt uydurulmaz."}</p>
             </div>
           </aside>
         ) : null}
@@ -158,6 +185,15 @@ function AIModule({
                 </strong>
                 <p>{message.text}</p>
                 <small>{message.date}</small>
+                {message.moduleSuggestion && MODULE_TITLES[message.moduleSuggestion] ? (
+                  <button
+                    className="ai-module-suggestion"
+                    type="button"
+                    onClick={() => onNavigate(message.moduleSuggestion)}
+                  >
+                    {MODULE_TITLES[message.moduleSuggestion]} modülüne geç
+                  </button>
+                ) : null}
               </div>
             ))}
           </div>
@@ -168,9 +204,10 @@ function AIModule({
               placeholder="DDPro AI için mesajını yaz..."
               value={aiInput}
               onChange={(event) => setAiInput(event.target.value)}
+              disabled={aiSending}
             />
-            <button type="submit">
-              <span>Analizi başlat</span>
+            <button type="submit" disabled={aiSending || !aiInput.trim()}>
+              <span>{aiSending ? "Yanıt bekleniyor…" : "Analizi başlat"}</span>
               <span aria-hidden="true">→</span>
             </button>
           </form>

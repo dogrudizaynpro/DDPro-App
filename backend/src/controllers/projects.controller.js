@@ -171,6 +171,67 @@ export const createProject = async (req, res, next) => {
   }
 };
 
+export const updateProject = async (req, res, next) => {
+  try {
+    if (!isSupabaseAvailable()) {
+      return res.status(503).json({
+        status: "error",
+        message: "Database service is not configured",
+      });
+    }
+
+    const updates = {};
+    const { status, area_m2: areaM2, systems, notes } = req.body || {};
+
+    if (status !== undefined) {
+      if (typeof status !== "string" || !status.trim()) {
+        return res.status(400).json({ status: "error", message: "Project status is invalid." });
+      }
+      updates.status = status.trim();
+    }
+
+    if (areaM2 !== undefined) {
+      const parsedArea = areaM2 === null || areaM2 === "" ? null : Number(areaM2);
+      if (parsedArea !== null && (!Number.isFinite(parsedArea) || parsedArea < 0)) {
+        return res.status(400).json({ status: "error", message: "Project area must be non-negative." });
+      }
+      updates.area_m2 = parsedArea;
+    }
+
+    if (systems !== undefined) {
+      if (!Array.isArray(systems) || systems.length > 100 || systems.some((item) => typeof item !== "string" || item.length > 150)) {
+        return res.status(400).json({ status: "error", message: "Project systems are invalid." });
+      }
+      updates.systems = systems.map((item) => item.trim()).filter(Boolean);
+    }
+
+    if (notes !== undefined) {
+      if (typeof notes !== "string" || notes.length > 20_000) {
+        return res.status(400).json({ status: "error", message: "Project notes are invalid." });
+      }
+      updates.notes = notes.trim();
+    }
+
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ status: "error", message: "No project fields to update." });
+    }
+
+    const { data, error } = await getSupabaseClient()
+      .from("projects")
+      .update({ ...updates, updated_at: new Date().toISOString() })
+      .eq("id", req.params.id)
+      .select("*")
+      .maybeSingle();
+
+    if (error) return next(error);
+    if (!data) return res.status(404).json({ status: "error", message: "Project not found." });
+
+    return res.status(200).json({ status: "success", data });
+  } catch (error) {
+    return next(error);
+  }
+};
+
 // ============================================================
 // DELETE PROJECT
 // ============================================================

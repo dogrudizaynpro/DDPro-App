@@ -5,6 +5,7 @@ import {
   createProject as createProjectRequest,
   deleteProject as deleteProjectRequest,
   getProjects,
+  updateProject as updateProjectRequest,
 } from "./services/projects.service.js";
 import "./styles.css";
 import {
@@ -19,6 +20,7 @@ import {
   CAN_USE_LOCAL_FALLBACK,
   getApiHealth,
 } from "./services/api.js";
+import { requestAiCompletion } from "./services/ai.service.js";
 import {
   createResearchItem as createProcurementRequest,
   deleteResearchItem as deleteProcurementRequest,
@@ -31,6 +33,7 @@ const OffersModule = lazy(() => import("./modules/OffersModule.jsx"));
 const SystemsModule = lazy(() => import("./modules/SystemsModule.jsx"));
 const AIModule = lazy(() => import("./modules/AIModule.jsx"));
 const SkeletonModule = lazy(() => import("./modules/SkeletonModule.jsx"));
+const OperationsModule = lazy(() => import("./modules/OperationsModule.jsx"));
 
 const STORAGE_KEYS = {
   projects: "ddpro_projects_v1",
@@ -38,7 +41,6 @@ const STORAGE_KEYS = {
   offers: "ddpro_offers_v1",
   memory: "ddpro_memory_v1",
   logs: "ddpro_system_logs_v1",
-  integrations: "ddpro_integrations_v1",
   products: "ddpro_products_v1",
   systems: "ddpro_system_inventory_v1",
   priceAnalysis: "ddpro_price_analysis_v1",
@@ -194,6 +196,15 @@ const modules = [
     description:
       "Uygulama tercihleri ve sistem ayarları yönetimi.",
   },
+  {
+    id: "website",
+    path: "/web-sitesi",
+    icon: "↗",
+    title: "Web Sitesi",
+    short: "Resmi Site",
+    description:
+      "Resmi DOĞRU DİZAYN PRO web sitesi ve açıkça belirtilen entegrasyon durumu.",
+  },
 ];
 
 const dashboardReferenceNavigation = [
@@ -205,6 +216,7 @@ const dashboardReferenceNavigation = [
   { label: "Mesajlar ve AI çalışma alanı", moduleId: "messages" },
   { label: "Raporlar", moduleId: "reports" },
   { label: "Ayarlar", moduleId: "settings" },
+  { label: "Web sitesi", moduleId: "website" },
 ];
 
 const moduleRouteMap = Object.fromEntries(
@@ -333,7 +345,7 @@ const formatDate = () =>
     timeStyle: "short",
   });
 
-function DashboardCalendar({ now, title = "YAKLAŞAN TAKVİM" }) {
+function DashboardCalendar({ now, title = "YAKLAŞAN TAKVİM", onOpenCalendar }) {
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
   const leadingDays = (monthStart.getDay() + 6) % 7;
@@ -342,7 +354,13 @@ function DashboardCalendar({ now, title = "YAKLAŞAN TAKVİM" }) {
     <section className="panel calendar-panel">
       <div className="panel-header">
         <h2>{title}</h2>
-        <span className="calendar-month">{calendarMonthFormatter.format(now)}</span>
+        {onOpenCalendar ? (
+          <button type="button" className="calendar-open-button" onClick={onOpenCalendar}>
+            {calendarMonthFormatter.format(now)}
+          </button>
+        ) : (
+          <span className="calendar-month">{calendarMonthFormatter.format(now)}</span>
+        )}
       </div>
       <div className="calendar-widget">
         <div className="calendar-weekdays" aria-hidden="true">
@@ -412,6 +430,10 @@ function App() {
   const [activeModule, setActiveModule] = useState(() =>
     resolveModuleFromHash(window.location.hash)
   );
+  const [selectedProjectId, setSelectedProjectId] = useState(() => {
+    const hashPath = window.location.hash.replace(/^#/, "");
+    return new URLSearchParams(hashPath.slice(hashPath.indexOf("?") + 1)).get("id") || "";
+  });
   const [showDashboardReference, setShowDashboardReference] = useState(true);
   const dashboardReferenceDialogRef = useRef(null);
   const dashboardReferenceLiveRef = useRef(null);
@@ -460,22 +482,6 @@ function App() {
     getStoredData(STORAGE_KEYS.logs)
   );
 
-  const [integrations, setIntegrations] = useState(() =>
-    getStoredData(STORAGE_KEYS.integrations, [
-      {
-        id: "ddpro-core",
-        name: "DDPro Core",
-        status: "Aktif",
-        description: "Merkezi uygulama ve veri yönetim katmanı.",
-      },
-      {
-        id: "local-storage",
-        name: "Local Storage",
-        status: "Aktif",
-        description: "Tarayıcı içi kalıcı kayıt sistemi.",
-      },
-    ])
-  );
   const [products] = useStoredDataState(STORAGE_KEYS.products);
   const [systemInventory] = useStoredDataState(STORAGE_KEYS.systems);
   const [priceAnalysisItems] = useStoredDataState(STORAGE_KEYS.priceAnalysis);
@@ -505,6 +511,7 @@ function App() {
   const [memoryContent, setMemoryContent] = useState("");
 
   const [aiInput, setAiInput] = useState("");
+  const [aiSending, setAiSending] = useState(false);
 
   const [aiMessages, setAiMessages] = useState([
     {
@@ -524,6 +531,10 @@ function App() {
   useEffect(() => {
     const syncModuleFromHash = () => {
       const nextModule = resolveModuleFromHash(window.location.hash);
+      const hashPath = window.location.hash.replace(/^#/, "");
+      setSelectedProjectId(
+        new URLSearchParams(hashPath.slice(hashPath.indexOf("?") + 1)).get("id") || ""
+      );
       setActiveModule((currentModule) =>
         currentModule === nextModule ? currentModule : nextModule
       );
@@ -910,13 +921,6 @@ function App() {
   }, [systemLogs]);
 
   useEffect(() => {
-    localStorage.setItem(
-      STORAGE_KEYS.integrations,
-      JSON.stringify(integrations)
-    );
-  }, [integrations]);
-
-  useEffect(() => {
     let cancelled = false;
 
     const fetchProjectsFromApi = async () => {
@@ -1048,17 +1052,22 @@ function App() {
     ]
   );
 
-  const handleModuleNavigation = (moduleId) => {
+  const handleModuleNavigation = (moduleId, params = {}) => {
     if (moduleId === "dashboard") {
       setShowDashboardReference(true);
     }
 
     const nextRoute = moduleRouteMap[moduleId] || "/dashboard";
-    if (window.location.hash !== `#${nextRoute}`) {
-      window.location.hash = nextRoute;
+    const query = moduleId === "projects" && params.id
+      ? `?id=${encodeURIComponent(params.id)}`
+      : "";
+    const nextHash = `#${nextRoute}${query}`;
+    if (window.location.hash !== nextHash) {
+      window.location.hash = `${nextRoute}${query}`;
       return;
     }
 
+    setSelectedProjectId(params.id || "");
     setActiveModule(moduleId);
   };
 
@@ -1205,18 +1214,57 @@ function App() {
     }
   };
 
+  const updateProject = async (id, updates) => {
+    projectsTouchedRef.current = true;
+    const project = projects.find((item) => item.id === id);
+
+    if (!project) return false;
+    if (!isUuid(id)) {
+      setProjects((current) =>
+        current.map((item) => item.id === id ? { ...item, ...updates } : item)
+      );
+      addLog(`Yerel proje ayrıntıları güncellendi: ${project.name}`);
+      return true;
+    }
+
+    try {
+      const updatedProject = await updateProjectRequest(id, updates);
+      if (!updatedProject) return false;
+      setProjects((current) =>
+        current.map((item) => item.id === id ? updatedProject : item)
+      );
+      setProjectsError(null);
+      addLog(`Proje API üzerinden güncellendi: ${project.name}`);
+      return true;
+    } catch (error) {
+      setProjectsError(
+        `Proje ayrıntıları kaydedilemedi (${getApiFailureReason(error)}).`
+      );
+      return false;
+    }
+  };
+
   const createProcurement = async (event) => {
     event.preventDefault();
 
     if (!procurementName.trim()) return;
     procurementTouchedRef.current = true;
     let shouldResetForm = false;
+    const formValues = Object.fromEntries(new FormData(event.currentTarget).entries());
 
     const newProcurement = {
       id: createId(),
       name: procurementName.trim(),
       note: procurementNote.trim() || "Not eklenmedi.",
       date: formatDate(),
+      source: formValues.source.trim(),
+      product: formValues.product.trim(),
+      manufacturer: formValues.manufacturer.trim(),
+      technicalInfo: formValues.technicalInfo.trim(),
+      price: formValues.price.trim(),
+      priceVerification: formValues.priceVerification || "Doğrulanmadı",
+      url: formValues.url.trim(),
+      status: formValues.status || "Taslak",
     };
 
     setProcurementError(null);
@@ -1464,36 +1512,13 @@ function App() {
     }
   };
 
-  const toggleIntegration = (id) => {
-    const integration = integrations.find((item) => item.id === id);
 
-    if (!integration) return;
-
-    const nextStatus =
-      integration.status === "Aktif" ? "Pasif" : "Aktif";
-
-    setIntegrations((currentItems) =>
-      currentItems.map((item) =>
-        item.id === id
-          ? {
-              ...item,
-              status: nextStatus,
-            }
-          : item
-      )
-    );
-
-    addLog(
-      `${integration.name} entegrasyon durumu değiştirildi: ${nextStatus}`
-    );
-  };
-
-  const sendAiMessage = (event) => {
+  const sendAiMessage = async (event) => {
     event.preventDefault();
 
     const message = aiInput.trim();
 
-    if (!message) return;
+    if (!message || aiSending) return;
 
     const userMessage = {
       id: createId(),
@@ -1501,26 +1526,116 @@ function App() {
       text: message,
       date: formatDate(),
     };
+    setAiMessages((currentMessages) => [...currentMessages, userMessage]);
+    setAiInput("");
+    setAiSending(true);
 
-    const assistantMessage = {
-      id: createId(),
-      role: "assistant",
-      text:
-        `Mesaj alındı: "${message}". ` +
-        "DDPro AI çalışma alanı bu mesajı kayıt altına aldı. " +
-        "Gelişmiş AI/API entegrasyonu sonraki altyapı aşamasında bu alana bağlanabilir.",
-      date: formatDate(),
+    const normalizedMessage = message.toLocaleLowerCase("tr-TR");
+    const suggestedModuleId =
+      /teklif|offer/.test(normalizedMessage) ? "offers"
+        : /tedarik|araştır|malzeme/.test(normalizedMessage) ? "procurement"
+          : /takvim|toplantı|saha ziyareti/.test(normalizedMessage) ? "calendar"
+            : /crm|müşteri|firma|iletişim/.test(normalizedMessage) ? "crm"
+              : /rapor/.test(normalizedMessage) ? "reports"
+                : /proje/.test(normalizedMessage) ? "projects"
+                  : /fiyat|maliyet/.test(normalizedMessage) ? "price-analysis"
+                    : null;
+
+    const context = {
+      projects: projects.slice(0, 30).map(({ id, name, type, status, areaM2, systems, notes }) => ({
+        id,
+        name,
+        type,
+        status,
+        areaM2,
+        systems,
+        notes,
+      })),
+      offers: offers.slice(0, 30).map(({ id, title, amountDisplay, status, source }) => ({
+        id,
+        title,
+        amount: amountDisplay,
+        status,
+        source,
+      })),
+      research: procurementItems.slice(0, 30).map(({
+        id,
+        name,
+        note,
+        status,
+        source,
+        product,
+        manufacturer,
+        technicalInfo,
+        price,
+        priceVerification,
+        url,
+      }) => ({
+        id,
+        name,
+        note,
+        status,
+        source,
+        product,
+        manufacturer,
+        technicalInfo,
+        price,
+        priceVerification,
+        url,
+      })),
+      crm: getStoredData("ddpro_crm_contacts_v1")
+        .slice(0, 20)
+        .map(({ name, company, request, project, system, status }) => ({
+          name,
+          company,
+          request,
+          project,
+          system,
+          status,
+        })),
+      calendar: getStoredData("ddpro_calendar_events_v1")
+        .slice(0, 20)
+        .map(({ title, type, date, project, notes }) => ({
+          title,
+          type,
+          date,
+          project,
+          notes,
+        })),
     };
 
-    setAiMessages((currentMessages) => [
-      ...currentMessages,
-      userMessage,
-      assistantMessage,
-    ]);
-
-    addLog(`DDPro AI mesajı gönderildi: ${message}`);
-
-    setAiInput("");
+    try {
+      const completion = await requestAiCompletion({ message, context });
+      setAiMessages((currentMessages) => [
+        ...currentMessages,
+        {
+          id: createId(),
+          role: "assistant",
+          text: completion.answer,
+          date: formatDate(),
+          moduleSuggestion: suggestedModuleId,
+        },
+      ]);
+      addLog("DDPro AI isteği yapılandırılmış sağlayıcıya gönderildi.");
+    } catch (error) {
+      const explanation =
+        error.code === "AI_PROVIDER_NOT_CONFIGURED" || error.status === 503
+          ? "AI sağlayıcısı şu anda bağlı değil. Gerçek yanıt için backend ortamında AI_API_URL, AI_API_KEY ve AI_MODEL yapılandırılmalıdır."
+          : `AI sağlayıcısından yanıt alınamadı (${getApiFailureReason(error)}). Mesajın yanıtlandığı varsayılmadı.`;
+      setAiMessages((currentMessages) => [
+        ...currentMessages,
+        {
+          id: createId(),
+          role: "assistant",
+          text: explanation,
+          date: formatDate(),
+          status: "unavailable",
+          moduleSuggestion: suggestedModuleId,
+        },
+      ]);
+    } finally {
+      setAiSending(false);
+    }
   };
 
   const renderDashboard = () => (
@@ -1610,7 +1725,7 @@ function App() {
                   className="project-preview"
                   key={project.id}
                   type="button"
-                  onClick={() => handleModuleNavigation("projects")}
+                  onClick={() => handleModuleNavigation("projects", { id: project.id })}
                 >
                   <span className={`project-preview-mark mark-${index % 4}`} aria-hidden="true">
                     {project.name.slice(0, 1).toLocaleUpperCase("tr-TR")}
@@ -1626,7 +1741,10 @@ function App() {
           </div>
         </section>
 
-        <DashboardCalendar now={currentDate} />
+        <DashboardCalendar
+          now={currentDate}
+          onOpenCalendar={() => handleModuleNavigation("calendar")}
+        />
       </div>
 
       <div className="dashboard-footer-grid">
@@ -1707,7 +1825,6 @@ function App() {
       documents: documentItems.length,
       finance: financeItems.length,
       reports: reportItems.length,
-      integrations: integrations.length,
     }),
     [
       products.length,
@@ -1717,7 +1834,6 @@ function App() {
       documentItems.length,
       financeItems.length,
       reportItems.length,
-      integrations.length,
     ]
   );
 
@@ -1903,7 +2019,7 @@ function App() {
             id: "settings-integrations",
             title: "Sistem Yapılandırması",
             description: "API ve entegrasyon ayarları.",
-            count: moduleCounts.integrations,
+            count: 0,
           },
         ],
         statusNote: {
@@ -1936,6 +2052,9 @@ function App() {
           projectsError={projectsError}
           projects={projects}
           deleteProject={deleteProject}
+          updateProject={updateProject}
+          selectedProjectId={selectedProjectId}
+          onNavigate={handleModuleNavigation}
         />
       );
     }
@@ -1953,8 +2072,7 @@ function App() {
           setMemoryContent={setMemoryContent}
           memoryItems={memoryItems}
           deleteMemory={deleteMemory}
-          integrations={integrations}
-          toggleIntegration={toggleIntegration}
+          onNavigate={handleModuleNavigation}
           statusNote={{
             tone: "info",
             message: LOCAL_ONLY_MODULE_MESSAGE,
@@ -2018,19 +2136,8 @@ function App() {
           aiInput={aiInput}
           setAiInput={setAiInput}
           onNavigate={handleModuleNavigation}
+          aiSending={aiSending}
         />
-      );
-    }
-
-    if (activeModule === "calendar") {
-      return (
-        <div className="calendar-route">
-          <DashboardCalendar now={currentDate} title="TAKVİM" />
-          <p className="calendar-route-status">
-            Bu görünüm yalnızca mevcut ayı gösterir. Etkinlik verileri şu anda
-            bağlı değil.
-          </p>
-        </div>
       );
     }
 
@@ -2043,6 +2150,34 @@ function App() {
           setAiInput={setAiInput}
           messagesOnly
           onNavigate={handleModuleNavigation}
+          aiSending={aiSending}
+        />
+      );
+    }
+
+    if (
+      [
+        "products",
+        "price-analysis",
+        "material-analysis",
+        "crm",
+        "documents",
+        "finance",
+        "calendar",
+        "reports",
+        "settings",
+        "website",
+      ].includes(activeModule)
+    ) {
+      return (
+        <OperationsModule
+          moduleId={activeModule}
+          onNavigate={handleModuleNavigation}
+          setAiInput={setAiInput}
+          projects={projects}
+          offers={offers}
+          research={procurementItems}
+          aiMessages={aiMessages}
         />
       );
     }

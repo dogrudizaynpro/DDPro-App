@@ -3941,6 +3941,119 @@ textarea::placeholder {
   font-size: 11px;
 }
 
+.operations-module {
+  display: grid;
+  gap: 14px;
+}
+
+.operations-module .data-form label {
+  display: grid;
+  gap: 6px;
+  color: #d8d6cb;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.operations-module .data-form input,
+.operations-module .data-form select,
+.operations-module .data-form textarea {
+  width: 100%;
+}
+
+.operations-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.operations-grid .data-card {
+  min-height: 120px;
+}
+
+.operations-module pre {
+  max-width: 100%;
+  overflow: auto;
+  padding: 12px;
+  border: 1px solid rgba(194, 189, 170, 0.2);
+  border-radius: 6px;
+  background: #0d0f0f;
+  color: #d2d3ca;
+  font: 11px/1.5 ui-monospace, monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.project-detail-link {
+  flex: 1;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.project-detail-link:hover h3,
+.project-detail-link:focus-visible h3 {
+  color: var(--emerald);
+}
+
+.project-detail-link:focus-visible {
+  outline: 2px solid var(--emerald);
+  outline-offset: 4px;
+}
+
+.calendar-open-button {
+  padding: 5px 8px;
+  border: 1px solid rgba(194, 189, 170, 0.26);
+  border-radius: 5px;
+  background: linear-gradient(145deg, #292b28, #111313);
+  color: #c7c8c0;
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.website-access {
+  display: grid;
+  justify-items: start;
+  gap: 12px;
+}
+
+.website-access p {
+  margin: 0;
+}
+
+.module-action-link,
+.ai-module-suggestion {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 9px 12px;
+  border: 1px solid rgba(202, 166, 111, 0.45);
+  border-radius: 6px;
+  background: linear-gradient(145deg, #403526, #211c15);
+  color: #e3c394;
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.ai-module-suggestion {
+  margin-top: 8px;
+}
+
+.ai-form button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+@media (max-width: 640px) {
+  .operations-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .dashboard-reference-screen {
   position: fixed;
   z-index: 1000;

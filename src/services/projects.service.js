@@ -69,6 +69,9 @@ export const mapProjectToViewModel = (project = {}) => {
     name,
     type,
     status: toProjectStatusLabel(project.status),
+    areaM2: project.area_m2 ?? project.areaM2 ?? "",
+    systems: Array.isArray(project.systems) ? project.systems : [],
+    notes: project.notes || "",
     date: formatProjectDate(createdAt),
     createdAt,
     updatedAt,
@@ -91,7 +94,7 @@ export const getProjects = async () => {
     const data = await fetchAPI("/api/projects");
     return mapProjectsToViewModel(data.data || []);
   } catch (error) {
-    console.error("Failed to fetch projects:", error.message);
+    console.warn("Projects API unavailable:", error.message);
     throw error;
   }
 };
@@ -116,7 +119,7 @@ export const getProjectById = async (id) => {
       console.warn(`Project not found: ${id}`);
       return null;
     }
-    console.error("Failed to fetch project:", error.message);
+    console.warn("Project API unavailable:", error.message);
     throw error;
   }
 };
@@ -159,9 +162,27 @@ export const createProject = async (project) => {
 
     return data.data ? mapProjectToViewModel(data.data) : null;
   } catch (error) {
-    console.error("Failed to create project:", error.message);
+    console.warn("Project creation API unavailable:", error.message);
     throw error;
   }
+};
+
+export const updateProject = async (id, project) => {
+  if (!id) throw new Error("Project ID is required");
+  const payload = {
+    status: project.status,
+    area_m2: project.areaM2 === "" ? null : Number(project.areaM2),
+    systems: Array.isArray(project.systems) ? project.systems : [],
+    notes: typeof project.notes === "string" ? project.notes.trim() : "",
+  };
+  if (payload.area_m2 !== null && (!Number.isFinite(payload.area_m2) || payload.area_m2 < 0)) {
+    throw new Error("Project area must be a non-negative number");
+  }
+  const data = await fetchAPI(`/api/projects/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+  return data.data ? mapProjectToViewModel(data.data) : null;
 };
 
 export const deleteProject = async (id) => {
@@ -176,7 +197,7 @@ export const deleteProject = async (id) => {
 
     return data.data ? mapProjectToViewModel(data.data) : null;
   } catch (error) {
-    console.error("Failed to delete project:", error.message);
+    console.warn("Project deletion API unavailable:", error.message);
     throw error;
   }
 };

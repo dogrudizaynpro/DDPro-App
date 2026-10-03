@@ -35,11 +35,37 @@ const getResearchPayload = (body = {}) => {
     typeof body.status === "string" && body.status.trim()
       ? body.status.trim()
       : DEFAULT_RESEARCH_STATUS;
+  const url =
+    typeof body.url === "string" && body.url.trim()
+      ? body.url.trim()
+      : null;
+
+  if (url && !/^https?:\/\/\S+$/i.test(url)) {
+    const error = new Error("Research source URL must use HTTP or HTTPS.");
+    error.statusCode = 400;
+    throw error;
+  }
 
   return {
     title,
     description,
     status,
+    source: typeof body.source === "string" ? body.source.trim() || null : null,
+    product: typeof body.product === "string" ? body.product.trim() || null : null,
+    manufacturer:
+      typeof body.manufacturer === "string"
+        ? body.manufacturer.trim() || null
+        : null,
+    technical_info:
+      typeof body.technical_info === "string"
+        ? body.technical_info.trim() || null
+        : null,
+    price: typeof body.price === "string" ? body.price.trim() || null : null,
+    price_verification:
+      typeof body.price_verification === "string"
+        ? body.price_verification.trim() || "Doğrulanmadı"
+        : "Doğrulanmadı",
+    url,
   };
 };
 
