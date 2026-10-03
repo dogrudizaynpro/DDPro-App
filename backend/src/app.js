@@ -3,6 +3,7 @@ import cors from "cors";
 import helmet from "helmet";
 import { notFound } from "./middleware/notFound.js";
 import { errorHandler } from "./middleware/errorHandler.js";
+import { createRateLimiter } from "./middleware/rateLimit.js";
 import projectsRouter from "./routes/projects.routes.js";
 import researchRouter from "./routes/research.routes.js";
 import offersRouter from "./routes/offers.routes.js";
@@ -54,9 +55,21 @@ app.use("/api/offers", offersRouter);
 app.use("/api/ai", aiRouter);
 app.use("/api/integrations", integrationsRouter);
 app.use("/api/crm", crmRouter);
-app.get("/webhooks/whatsapp", getWhatsAppWebhookChallenge);
-app.post("/webhooks/whatsapp", postWhatsAppWebhook);
-app.post("/webhooks/website/leads", postWebsiteLead);
+app.get(
+  "/webhooks/whatsapp",
+  createRateLimiter({ limit: 120 }),
+  getWhatsAppWebhookChallenge
+);
+app.post(
+  "/webhooks/whatsapp",
+  createRateLimiter({ limit: 600 }),
+  postWhatsAppWebhook
+);
+app.post(
+  "/webhooks/website/leads",
+  createRateLimiter({ limit: 120 }),
+  postWebsiteLead
+);
 
 // ============================================================
 // HEALTH CHECK ENDPOINT

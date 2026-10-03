@@ -22,7 +22,8 @@ export const verifyWhatsAppChallenge = (query) => {
     token &&
       query["hub.mode"] === "subscribe" &&
       query["hub.verify_token"] === token &&
-      typeof query["hub.challenge"] === "string"
+      typeof query["hub.challenge"] === "string" &&
+      /^[\da-z_-]{1,256}$/i.test(query["hub.challenge"])
   );
 };
 

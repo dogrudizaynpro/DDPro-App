@@ -64,7 +64,7 @@ const setCookie = (res, name, value, maxAge, path = "/api") => {
   const secure = process.env.NODE_ENV === "production";
   res.append(
     "Set-Cookie",
-    `${name}=${encodeURIComponent(value)}; HttpOnly; Path=${path}; Max-Age=${maxAge}; SameSite=${secure ? "None; Secure" : "Lax"}`
+    `${name}=${encodeURIComponent(value)}; HttpOnly; Path=${path}; Max-Age=${maxAge}; Secure; SameSite=${secure ? "None" : "Lax"}`
   );
 };
 
@@ -142,7 +142,7 @@ export const completeGoogleOAuth = async (req, res, next) => {
   const cookieNonce = cookieValue(req, "ddpro_oauth_state");
   res.append(
     "Set-Cookie",
-    `ddpro_oauth_state=; HttpOnly; Path=/api/integrations/google/callback; Max-Age=0; SameSite=${process.env.NODE_ENV === "production" ? "None; Secure" : "Lax"}`
+    `ddpro_oauth_state=; HttpOnly; Path=/api/integrations/google/callback; Max-Age=0; Secure; SameSite=${process.env.NODE_ENV === "production" ? "None" : "Lax"}`
   );
   const separator = state.lastIndexOf(".");
   const statePayload = separator > 0 ? state.slice(0, separator) : "";
@@ -320,7 +320,7 @@ export const revokeGoogleSession = async (req, res, next) => {
   }
   res.append(
     "Set-Cookie",
-    `ddpro_integration_session=; HttpOnly; Path=/api; Max-Age=0; SameSite=${process.env.NODE_ENV === "production" ? "None; Secure" : "Lax"}`
+    `ddpro_integration_session=; HttpOnly; Path=/api; Max-Age=0; Secure; SameSite=${process.env.NODE_ENV === "production" ? "None" : "Lax"}`
   );
   return res.status(200).json({ status: "success", data: { disconnected: true } });
 };
