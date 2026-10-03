@@ -1,3 +1,4 @@
+import aiTradeDesignReference from "../../DDPro-AI-Trade-Referans.png";
 import aiCharacterFront from "../assets/ddpro-ai-character-front.png";
 import aiCharacterBack from "../assets/ddpro-ai-character-back.png";
 
@@ -32,28 +33,14 @@ const capabilities = [
 function AIModule({ aiMessages, sendAiMessage, aiInput, setAiInput }) {
   return (
     <div className="module-page ai-module">
-      <section className="ai-trade-hero">
-        <figure className="ai-character-pair">
-          <div className="ai-character-views">
-            <img src={aiCharacterFront} alt="DDPro AI TRADE karakterinin referanstaki ön görünümü" />
-            <img src={aiCharacterBack} alt="DDPro AI TRADE karakterinin referanstaki arka görünümü" />
-          </div>
-          <figcaption>DDPRO AI PARTNER · ÖN / ARKA</figcaption>
-        </figure>
-        <div className="ai-trade-copy">
-          <span className="ai-eyebrow">DDPRO INTELLIGENCE SYSTEM</span>
-          <h2>DDPRO <strong>AI TRADE</strong></h2>
-          <p>
-            Tasarım ve proje süreçlerinde analiz eden, yön gösteren çalışma
-            partneriniz.
-          </p>
-          <div className="ai-role-tags">
-            <span><i aria-hidden="true">01</i> AI ASİSTAN</span>
-            <span><i aria-hidden="true">02</i> AI PARTNER</span>
-            <span><i aria-hidden="true">03</i> AI YÖNETİCİ</span>
-          </div>
-        </div>
-        <div className="ai-online-indicator"><span className="status-dot" aria-hidden="true" /> YEREL ALAN HAZIR</div>
+      <section className="ai-trade-master-reference" aria-label="DDPro AI TRADE ana tasarım referansı">
+        <img
+          className="ai-trade-master-image"
+          src={aiTradeDesignReference}
+          alt="DDPro AI TRADE'in kadın karakteri, marka dili ve merkezi teknik kompozisyonunu içeren ana referans"
+        />
+        <img className="ai-character-crop ai-character-front" src={aiCharacterFront} alt="" aria-hidden="true" />
+        <img className="ai-character-crop ai-character-back" src={aiCharacterBack} alt="" aria-hidden="true" />
       </section>
 
       <div className="ai-workspace">

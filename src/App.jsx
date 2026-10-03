@@ -178,6 +178,17 @@ const modules = [
   },
 ];
 
+const dashboardReferenceNavigation = [
+  { label: "Genel Bakış", moduleId: "dashboard" },
+  { label: "Projeler", moduleId: "projects" },
+  { label: "Tedarik ve araştırma", moduleId: "procurement" },
+  { label: "AI Asistan", moduleId: "ai-assistant" },
+  { label: "Takvim ve proje planı", moduleId: "projects" },
+  { label: "Mesajlar ve AI çalışma alanı", moduleId: "ai-assistant" },
+  { label: "Raporlar", moduleId: "reports" },
+  { label: "Ayarlar", moduleId: "settings" },
+];
+
 const moduleRouteMap = Object.fromEntries(
   modules.map((module) => [module.id, module.path])
 );
@@ -377,6 +388,7 @@ function App() {
   const [activeModule, setActiveModule] = useState(() =>
     resolveModuleFromHash(window.location.hash)
   );
+  const [showDashboardReference, setShowDashboardReference] = useState(true);
 
   const [apiHealthState, setApiHealthState] = useState({
     status: "loading",
@@ -953,6 +965,10 @@ function App() {
   );
 
   const handleModuleNavigation = (moduleId) => {
+    if (moduleId === "dashboard") {
+      setShowDashboardReference(true);
+    }
+
     const nextRoute = moduleRouteMap[moduleId] || "/dashboard";
     if (window.location.hash !== `#${nextRoute}`) {
       window.location.hash = nextRoute;
@@ -1940,7 +1956,7 @@ function App() {
     modules[0];
 
   return (
-    <div className={`ddpro-app${activeModule === "dashboard" ? " dashboard-shell" : ""}`}>
+    <div className={`ddpro-app${activeModule === "dashboard" ? " dashboard-shell" : ""}${activeModule === "dashboard" && showDashboardReference ? " dashboard-reference-active" : ""}`}>
       <header className="app-header">
         <div className="brand-area">
           <img
@@ -2016,6 +2032,15 @@ function App() {
               <h1>{currentModule.title}</h1>
               <p>{currentModule.description}</p>
             </div>
+            {activeModule === "dashboard" ? (
+              <button
+                className="dashboard-reference-return"
+                type="button"
+                onClick={() => setShowDashboardReference(true)}
+              >
+                ANA TASARIM GÖRÜNÜMÜ
+              </button>
+            ) : null}
           </section>
 
           <section className="content-body">
@@ -2052,6 +2077,80 @@ function App() {
           <span>Arayüz Aktif</span>
         </div>
       </footer>
+
+      {activeModule === "dashboard" && showDashboardReference ? (
+        <section className="dashboard-reference-screen" aria-label="Ana Dashboard referans görünümü">
+          <div className="dashboard-reference-canvas">
+            <img
+              className="dashboard-reference-image"
+              src={dashboardDesignReference}
+              alt="DOĞRU DİZAYN PRO'nun grafit, metalik ve zümrüt operasyon merkezi Dashboard tasarımı"
+            />
+            <img
+              className="dashboard-reference-master-logo"
+              src={ddproMasterLogo}
+              alt="DOĞRU DİZAYN PRO gerçek master logosu"
+            />
+            <nav className="dashboard-reference-primary-nav" aria-label="Ana modüller">
+              {dashboardReferenceNavigation.map((item, index) => (
+                <button
+                  className={`dashboard-reference-hotspot dashboard-reference-nav-${index}`}
+                  key={`${item.label}-${item.moduleId}`}
+                  type="button"
+                  aria-label={item.label}
+                  onClick={() => handleModuleNavigation(item.moduleId)}
+                />
+              ))}
+            </nav>
+            <div className="dashboard-reference-kpis" aria-label="Dashboard KPI modülleri">
+              {dashboardStats.map((stat, index) => (
+                <button
+                  className={`dashboard-reference-hotspot dashboard-reference-kpi-${index}`}
+                  key={stat.label}
+                  type="button"
+                  aria-label={`${stat.label}: ${stat.value}. Modülü aç`}
+                  onClick={() => handleModuleNavigation(stat.moduleId)}
+                />
+              ))}
+            </div>
+            <button
+              className="dashboard-reference-hotspot dashboard-reference-projects"
+              type="button"
+              aria-label="Aktif projeleri aç"
+              onClick={() => handleModuleNavigation("projects")}
+            />
+            <button
+              className="dashboard-reference-hotspot dashboard-reference-calendar"
+              type="button"
+              aria-label="Proje takvimini aç"
+              onClick={() => handleModuleNavigation("projects")}
+            />
+            <button
+              className="dashboard-reference-hotspot dashboard-reference-systems"
+              type="button"
+              aria-label="Sistem durumlarını aç"
+              onClick={() => handleModuleNavigation("systems")}
+            />
+            <details className="dashboard-reference-all-modules">
+              <summary>TÜM MODÜLLER</summary>
+              <nav aria-label="Tüm uygulama modülleri">
+                <button type="button" onClick={() => setShowDashboardReference(false)}>
+                  Canlı Dashboard verilerini aç
+                </button>
+                {modules.map((module) => (
+                  <button
+                    key={module.id}
+                    type="button"
+                    onClick={() => handleModuleNavigation(module.id)}
+                  >
+                    {module.title}
+                  </button>
+                ))}
+              </nav>
+            </details>
+          </div>
+        </section>
+      ) : null}
     </div>
   );
 }
