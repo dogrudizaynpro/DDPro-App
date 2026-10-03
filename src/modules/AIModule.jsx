@@ -1,32 +1,32 @@
-function AIModule({ aiMessages, sendAiMessage, aiInput, setAiInput }) {
-  const capabilities = [
-    {
-      icon: "▣",
-      title: "Proje & süreç",
-      prompt: "Aktif projelerimi ve süreçlerimi gözden geçir, öncelikli adımları öner.",
-    },
-    {
-      icon: "◈",
-      title: "Analiz & raporlama",
-      prompt: "Operasyonel durumumu analiz et ve yönetim raporu taslağı hazırla.",
-    },
-    {
-      icon: "⌕",
-      title: "Tedarik araştırması",
-      prompt: "Bir tedarik araştırması için değerlendirme kriterleri öner.",
-    },
-    {
-      icon: "▤",
-      title: "Teklif yönetimi",
-      prompt: "Tekliflerimi karşılaştırmak için bir değerlendirme ve kontrol listesi hazırla.",
-    },
-    {
-      icon: "✦",
-      title: "Karar desteği",
-      prompt: "Mevcut seçenekleri risk, etki ve öncelik açısından değerlendirmek için bir karar çerçevesi oluştur.",
-    },
-  ];
+const capabilities = [
+  {
+    icon: "▣",
+    title: "Proje & süreç",
+    prompt: "Aktif projelerimi ve süreçlerimi gözden geçir, öncelikli adımları öner.",
+  },
+  {
+    icon: "◈",
+    title: "Analiz & raporlama",
+    prompt: "Operasyonel durumumu analiz et ve yönetim raporu taslağı hazırla.",
+  },
+  {
+    icon: "⌕",
+    title: "Tedarik araştırması",
+    prompt: "Bir tedarik araştırması için değerlendirme kriterleri öner.",
+  },
+  {
+    icon: "▤",
+    title: "Teklif yönetimi",
+    prompt: "Tekliflerimi karşılaştırmak için bir değerlendirme ve kontrol listesi hazırla.",
+  },
+  {
+    icon: "✦",
+    title: "Karar desteği",
+    prompt: "Mevcut seçenekleri risk, etki ve öncelik açısından değerlendirmek için bir karar çerçevesi oluştur.",
+  },
+];
 
+function AIModule({ aiMessages, sendAiMessage, aiInput, setAiInput }) {
   return (
     <div className="module-page ai-module">
       <section className="ai-trade-hero">

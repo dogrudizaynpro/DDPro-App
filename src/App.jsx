@@ -1501,14 +1501,14 @@ function App() {
                 </div>
                 <div className="calendar-empty">
                   <span className="status-dot" />
-                  <p>Planlanmış yaklaşan etkinlik bulunmuyor.</p>
+                  <p>Etkinlik verileri bağlandığında burada listelenecek.</p>
                 </div>
                 <button
                   className="calendar-action"
                   type="button"
                   onClick={() => handleModuleNavigation("projects")}
                 >
-                  Proje takvimini görüntüle <span aria-hidden="true">→</span>
+                  Projeleri görüntüle <span aria-hidden="true">→</span>
                 </button>
               </div>
             );
@@ -1549,6 +1549,7 @@ function App() {
                   type="button"
                   className="quick-link-card"
                   key={module.id}
+                  aria-label={`${module.title} modülüne git`}
                   onClick={() => handleModuleNavigation(module.id)}
                 >
                   <span aria-hidden="true">{module.icon}</span>

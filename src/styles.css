@@ -2136,8 +2136,8 @@ select:focus-visible {
 
   .brand-content > span {
     gap: 6px;
-    font-size: 6px;
-    letter-spacing: 0.14em;
+    font-size: 10px;
+    letter-spacing: 0.08em;
   }
 
   .brand-content > span i {
@@ -3422,7 +3422,7 @@ textarea::placeholder {
   .header-status {
     gap: 6px;
     padding: 7px 8px;
-    font-size: 8px;
+    font-size: 9px;
   }
 
   .sidebar {
@@ -3456,7 +3456,7 @@ textarea::placeholder {
   }
 
   .stat-label {
-    font-size: 8px;
+    font-size: 9px;
   }
 
   .stat-card strong {
@@ -3464,7 +3464,7 @@ textarea::placeholder {
   }
 
   .stat-card small {
-    font-size: 8px;
+    font-size: 9px;
   }
 
   .dashboard-overview-grid,
@@ -3500,7 +3500,7 @@ textarea::placeholder {
   }
 
   .quick-link-card strong {
-    font-size: 8px;
+    font-size: 10px;
   }
 
   .app-footer {
@@ -3517,7 +3517,7 @@ textarea::placeholder {
   }
 
   .footer-slogan span {
-    font-size: 8px;
+    font-size: 9px;
     letter-spacing: 0.06em;
   }
 
@@ -3558,7 +3558,7 @@ textarea::placeholder {
 
   .ai-role-tags span {
     padding: 5px;
-    font-size: 7px;
+    font-size: 9px;
   }
 
   .ai-online-indicator {
@@ -3566,7 +3566,7 @@ textarea::placeholder {
     right: 12px;
     bottom: 10px;
     padding: 5px 7px;
-    font-size: 7px;
+    font-size: 9px;
   }
 
   .ai-capabilities,
@@ -3583,7 +3583,7 @@ textarea::placeholder {
   }
 
   .ai-session-badge {
-    font-size: 7px;
+    font-size: 9px;
   }
 
   .ai-chat {
@@ -4013,6 +4013,11 @@ textarea::placeholder {
 @media (max-width: 640px) {
   .dashboard-shell .app-header {
     min-height: 72px;
+  }
+
+  .dashboard-shell .brand-content > span {
+    font-size: 10px;
+    letter-spacing: 0.08em;
   }
 
   .dashboard-shell .brand-logo {
