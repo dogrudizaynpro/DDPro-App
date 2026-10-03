@@ -7,26 +7,31 @@ const capabilities = [
     icon: "▣",
     title: "Proje & süreç",
     prompt: "Aktif projelerimi ve süreçlerimi gözden geçir, öncelikli adımları öner.",
+    moduleId: "projects",
   },
   {
     icon: "◈",
     title: "Analiz & raporlama",
     prompt: "Operasyonel durumumu analiz et ve yönetim raporu taslağı hazırla.",
+    moduleId: "reports",
   },
   {
     icon: "⌕",
     title: "Tedarik araştırması",
     prompt: "Bir tedarik araştırması için değerlendirme kriterleri öner.",
+    moduleId: "procurement",
   },
   {
     icon: "▤",
     title: "Teklif yönetimi",
     prompt: "Tekliflerimi karşılaştırmak için bir değerlendirme ve kontrol listesi hazırla.",
+    moduleId: "offers",
   },
   {
     icon: "✦",
     title: "Karar desteği",
     prompt: "Mevcut seçenekleri risk, etki ve öncelik açısından değerlendirmek için bir karar çerçevesi oluştur.",
+    moduleId: "ai-assistant",
   },
 ];
 
@@ -48,7 +53,14 @@ const aiTradeRoles = [
   },
 ];
 
-function AIModule({ aiMessages, sendAiMessage, aiInput, setAiInput }) {
+function AIModule({
+  aiMessages,
+  sendAiMessage,
+  aiInput,
+  setAiInput,
+  onNavigate,
+  messagesOnly = false,
+}) {
   const activateRole = (prompt) => {
     setAiInput(prompt);
     window.requestAnimationFrame(() => {
@@ -58,9 +70,19 @@ function AIModule({ aiMessages, sendAiMessage, aiInput, setAiInput }) {
     });
   };
 
+  const selectCapability = (capability) => {
+    setAiInput(capability.prompt);
+    if (capability.moduleId === "ai-assistant") {
+      activateRole(capability.prompt);
+      return;
+    }
+    onNavigate(capability.moduleId);
+  };
+
   return (
-    <div className="module-page ai-module">
-      <section className="ai-trade-master-reference" aria-label="DDPro AI TRADE ana tasarım referansı">
+    <div className={`module-page ai-module${messagesOnly ? " ai-messages-module" : ""}`}>
+      {!messagesOnly ? (
+        <section className="ai-trade-master-reference" aria-label="DDPro AI TRADE ana tasarım referansı">
         <img
           className="ai-trade-master-image"
           src={aiTradeDesignReference}
@@ -79,10 +101,12 @@ function AIModule({ aiMessages, sendAiMessage, aiInput, setAiInput }) {
             />
           ))}
         </div>
-      </section>
+        </section>
+      ) : null}
 
-      <div className="ai-workspace">
-        <aside className="ai-capabilities">
+      <div className={`ai-workspace${messagesOnly ? " ai-messages-workspace" : ""}`}>
+        {!messagesOnly ? (
+          <aside className="ai-capabilities">
           <div className="ai-section-heading">
             <span>DDPRO AI TRADE</span>
             <h3>Yetenekler</h3>
@@ -93,7 +117,7 @@ function AIModule({ aiMessages, sendAiMessage, aiInput, setAiInput }) {
                 className="ai-capability"
                 key={capability.title}
                 type="button"
-                onClick={() => setAiInput(capability.prompt)}
+                onClick={() => selectCapability(capability)}
               >
                 <span className="ai-capability-icon" aria-hidden="true">{capability.icon}</span>
                 <span>
@@ -108,13 +132,14 @@ function AIModule({ aiMessages, sendAiMessage, aiInput, setAiInput }) {
             <strong><i aria-hidden="true" /> Yerel oturum aktif</strong>
             <p>Mesajlar bu çalışma alanında saklanır. Gelişmiş AI bağlantısı yapılandırıldığında etkinleşir.</p>
           </div>
-        </aside>
+          </aside>
+        ) : null}
 
         <section className="ai-conversation-panel">
           <div className="ai-conversation-header">
             <div>
-              <span className="ai-eyebrow">AKILLI ÇALIŞMA ALANI</span>
-              <h3>AI Asistan / Partner</h3>
+              <span className="ai-eyebrow">{messagesOnly ? "YEREL MESAJ AKIŞI" : "AKILLI ÇALIŞMA ALANI"}</span>
+              <h3>{messagesOnly ? "Mesajlar" : "AI Asistan / Partner"}</h3>
             </div>
             <span className="ai-session-badge"><i aria-hidden="true" /> YEREL OTURUM</span>
           </div>

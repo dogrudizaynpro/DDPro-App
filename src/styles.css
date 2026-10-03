@@ -2705,6 +2705,23 @@ select:focus-visible {
   line-height: 1.5;
 }
 
+.calendar-route {
+  display: grid;
+  max-width: 900px;
+  gap: 10px;
+}
+
+.calendar-route-status {
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid rgba(194, 189, 170, 0.2);
+  border-radius: 7px;
+  background: linear-gradient(145deg, #222422, #111313);
+  color: #b9bbb2;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .dashboard-footer-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
@@ -3993,6 +4010,70 @@ textarea::placeholder {
 .dashboard-reference-calendar { left: 75.5%; top: 52.4%; width: 23.5%; height: 39%; }
 .dashboard-reference-systems { left: 89%; top: 92.3%; width: 9.5%; height: 5.2%; }
 
+.dashboard-reference-module-menu {
+  position: absolute;
+  z-index: 3;
+  top: 53.6%;
+  left: 45%;
+}
+
+.dashboard-reference-module-menu summary {
+  width: clamp(28px, 3vw, 44px);
+  height: clamp(28px, 3vw, 44px);
+  border-radius: 5px;
+  cursor: pointer;
+  list-style: none;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.dashboard-reference-module-menu summary::-webkit-details-marker {
+  display: none;
+}
+
+.dashboard-reference-module-menu summary:focus-visible,
+.dashboard-reference-module-menu[open] summary {
+  outline: 2px solid rgba(191, 221, 125, 0.9);
+  background: rgba(165, 214, 75, 0.13);
+}
+
+.dashboard-reference-module-menu nav {
+  position: absolute;
+  top: calc(100% + 7px);
+  left: 0;
+  display: grid;
+  width: clamp(220px, 24vw, 340px);
+  max-height: min(72vh, 560px);
+  overflow: auto;
+  padding: 7px;
+  border: 1px solid rgba(202, 166, 111, 0.6);
+  border-radius: 8px;
+  background: linear-gradient(145deg, rgba(39, 42, 37, 0.98), rgba(10, 12, 12, 0.99));
+  box-shadow: 0 16px 38px rgba(0, 0, 0, 0.75), inset 0 1px rgba(255, 255, 255, 0.12);
+}
+
+.dashboard-reference-module-menu nav button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #e0d4b8;
+  cursor: pointer;
+  font-size: 12px;
+  text-align: left;
+  touch-action: manipulation;
+}
+
+.dashboard-reference-module-menu nav button:hover,
+.dashboard-reference-module-menu nav button:focus-visible {
+  outline: 1px solid rgba(191, 221, 125, 0.65);
+  background: rgba(165, 214, 75, 0.15);
+}
+
 .dashboard-reference-mobile-nav {
   display: none;
 }
@@ -4107,6 +4188,10 @@ textarea::placeholder {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
     padding-bottom: 12px;
+  }
+
+  .dashboard-reference-module-menu {
+    display: none;
   }
 
   .dashboard-reference-mobile-nav button {

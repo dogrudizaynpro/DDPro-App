@@ -150,6 +150,24 @@ const modules = [
       "DDPro AI çalışma alanı ve asistan konuşma akışı.",
   },
   {
+    id: "calendar",
+    path: "/takvim",
+    icon: "▦",
+    title: "Takvim",
+    short: "Proje Takvimi",
+    description:
+      "Aylık takvim görünümü. Etkinlik verileri backend bağlantısı bekliyor.",
+  },
+  {
+    id: "messages",
+    path: "/mesajlar",
+    icon: "✉",
+    title: "Mesajlar",
+    short: "Yerel Mesajlar",
+    description:
+      "Mevcut DDPro AI yerel sohbet akışındaki mesajlar.",
+  },
+  {
     id: "finance",
     path: "/finans-maliyet",
     icon: "⟐",
@@ -183,8 +201,8 @@ const dashboardReferenceNavigation = [
   { label: "Projeler", moduleId: "projects" },
   { label: "Tedarik ve araştırma", moduleId: "procurement" },
   { label: "AI Asistan", moduleId: "ai-assistant" },
-  { label: "Takvim ve proje planı", moduleId: "projects" },
-  { label: "Mesajlar ve AI çalışma alanı", moduleId: "ai-assistant" },
+  { label: "Takvim ve proje planı", moduleId: "calendar" },
+  { label: "Mesajlar ve AI çalışma alanı", moduleId: "messages" },
   { label: "Raporlar", moduleId: "reports" },
   { label: "Ayarlar", moduleId: "settings" },
 ];
@@ -197,6 +215,12 @@ const routeModuleMap = Object.fromEntries(
   modules.map((module) => [module.path, module.id])
 );
 const moduleIds = new Set(modules.map((module) => module.id));
+const dashboardQuickAccessModuleIds = new Set([
+  "offers",
+  "procurement",
+  "ai-assistant",
+  "reports",
+]);
 const calendarMonthFormatter = new Intl.DateTimeFormat("tr-TR", {
   month: "short",
   year: "numeric",
@@ -309,7 +333,7 @@ const formatDate = () =>
     timeStyle: "short",
   });
 
-function DashboardCalendar({ now }) {
+function DashboardCalendar({ now, title = "YAKLAŞAN TAKVİM" }) {
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
   const leadingDays = (monthStart.getDay() + 6) % 7;
@@ -317,7 +341,7 @@ function DashboardCalendar({ now }) {
   return (
     <section className="panel calendar-panel">
       <div className="panel-header">
-        <h2>YAKLAŞAN TAKVİM</h2>
+        <h2>{title}</h2>
         <span className="calendar-month">{calendarMonthFormatter.format(now)}</span>
       </div>
       <div className="calendar-widget">
@@ -1575,7 +1599,7 @@ function App() {
           </div>
           <div className="quick-links-grid">
             {modules
-              .filter((module) => ["offers", "procurement", "ai-assistant", "reports"].includes(module.id))
+              .filter((module) => dashboardQuickAccessModuleIds.has(module.id))
               .map((module) => (
                 <button
                   type="button"
@@ -1942,6 +1966,32 @@ function App() {
           sendAiMessage={sendAiMessage}
           aiInput={aiInput}
           setAiInput={setAiInput}
+          onNavigate={handleModuleNavigation}
+        />
+      );
+    }
+
+    if (activeModule === "calendar") {
+      return (
+        <div className="calendar-route">
+          <DashboardCalendar now={currentDate} title="TAKVİM" />
+          <p className="calendar-route-status">
+            Etkinlik verileri şu anda bağlı değil; bu görünüm yalnızca tarih
+            navigasyonunu gösterir.
+          </p>
+        </div>
+      );
+    }
+
+    if (activeModule === "messages") {
+      return (
+        <AIModule
+          aiMessages={aiMessages}
+          sendAiMessage={sendAiMessage}
+          aiInput={aiInput}
+          setAiInput={setAiInput}
+          messagesOnly
+          onNavigate={handleModuleNavigation}
         />
       );
     }
@@ -2124,7 +2174,7 @@ function App() {
               className="dashboard-reference-hotspot dashboard-reference-calendar"
               type="button"
               aria-label="Proje takvimini aç"
-              onClick={() => handleModuleNavigation("projects")}
+              onClick={() => handleModuleNavigation("calendar")}
             />
             <button
               className="dashboard-reference-hotspot dashboard-reference-systems"
@@ -2132,15 +2182,32 @@ function App() {
               aria-label="Sistem durumlarını aç"
               onClick={() => handleModuleNavigation("systems")}
             />
+            <details className="dashboard-reference-module-menu">
+              <summary aria-label="Tüm uygulama modüllerini aç">
+                <span className="sr-only">Tüm uygulama modülleri</span>
+              </summary>
+              <nav aria-label="Tüm uygulama modülleri">
+                {modules.map((module) => (
+                  <button
+                    key={module.id}
+                    type="button"
+                    onClick={() => handleModuleNavigation(module.id)}
+                  >
+                    <span aria-hidden="true">{module.icon}</span>
+                    {module.title}
+                  </button>
+                ))}
+              </nav>
+            </details>
           </div>
           <nav className="dashboard-reference-mobile-nav" aria-label="Dashboard modülleri">
-            {dashboardReferenceNavigation.map((item) => (
+            {modules.map((module) => (
               <button
-                key={`${item.label}-${item.moduleId}`}
+                key={module.id}
                 type="button"
-                onClick={() => handleModuleNavigation(item.moduleId)}
+                onClick={() => handleModuleNavigation(module.id)}
               >
-                {item.label}
+                {module.title}
               </button>
             ))}
           </nav>
