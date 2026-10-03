@@ -22,6 +22,11 @@ export const getIntegrationStatus = (_req, res) => {
           ? "oauth_implementation_required"
           : "credentials_required",
       },
+      research: {
+        configured: Boolean(
+          process.env.RESEARCH_API_URL && process.env.RESEARCH_API_KEY
+        ),
+      },
       google: {
         configured: googleOAuthConfigured,
         status: googleOAuthConfigured

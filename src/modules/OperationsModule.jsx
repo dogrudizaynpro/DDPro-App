@@ -120,6 +120,9 @@ function IntegrationSettings({ onNavigate }) {
           <div><h3>Gmail / Google</h3><p>OAuth akışı henüz uygulanmadı; e-posta okunmaz veya gönderilmez.</p><small>{status ? readiness(status.gmail?.configured, "OAuth bilgileri tanımlı; OAuth akışı uygulanmalı.", "GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET ve GOOGLE_REDIRECT_URI bekleniyor.") : "Backend durumu kontrol ediliyor."}<br /><button type="button" onClick={() => onNavigate("messages")}>Mesaj merkezini aç</button></small></div>
         </article>
         <article className="data-card">
+          <div><h3>Web araştırma sağlayıcısı</h3><p>Gerçek sağlayıcıya bağlı sunucu tarafı araştırma adapter’ı.</p><small>{status ? readiness(status.research?.configured, "API bilgileri tanımlı; sağlayıcı sözleşmesi ve yanıtı ayrıca doğrulanmalı.", "RESEARCH_API_URL ve RESEARCH_API_KEY bekleniyor.") : "Backend durumu kontrol ediliyor."}<br /><button type="button" onClick={() => onNavigate("procurement")}>Tedarik &amp; Araştırma modülünü aç</button></small></div>
+        </article>
+        <article className="data-card">
           <div><h3>CRM</h3><p>İletişim kayıtları bu tarayıcıda saklanıyor; backend CRM servisi bağlı değil.</p><small>Merkezi CRM endpoint ve erişim kontrolü gerekli.<br /><button type="button" onClick={() => onNavigate("crm")}>CRM kayıtlarını aç</button></small></div>
         </article>
         <article className="data-card">

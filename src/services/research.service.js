@@ -82,6 +82,14 @@ export const getResearchItems = async () => {
   }
 };
 
+export const runResearchAgent = async (query) => {
+  const data = await fetchAPI("/api/research/agent", {
+    method: "POST",
+    body: JSON.stringify({ query }),
+  });
+  return data.data || [];
+};
+
 // ============================================================
 // GET RESEARCH ITEM BY ID
 // ============================================================

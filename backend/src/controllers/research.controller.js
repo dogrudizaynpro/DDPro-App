@@ -5,8 +5,44 @@
 // ============================================================
 
 import { getSupabaseClient, isSupabaseAvailable } from "../config/supabase.js";
+import { searchResearchProvider } from "../services/research-provider.service.js";
 
 const DEFAULT_RESEARCH_STATUS = "Aktif";
+const RESEARCH_API_URL = process.env.RESEARCH_API_URL;
+const RESEARCH_API_KEY = process.env.RESEARCH_API_KEY;
+
+export const getResearchProviderStatus = (_req, res) => {
+  res.status(200).json({
+    status: "success",
+    data: {
+      configured: Boolean(RESEARCH_API_URL && RESEARCH_API_KEY),
+      provider: (() => {
+        try {
+          return RESEARCH_API_URL ? new URL(RESEARCH_API_URL).hostname : null;
+        } catch {
+          return null;
+        }
+      })(),
+    },
+  });
+};
+
+export const createResearchSearch = async (req, res, next) => {
+  const query = typeof req.body?.query === "string" ? req.body.query.trim() : "";
+  if (!query || query.length > 500) {
+    return res.status(400).json({
+      status: "error",
+      message: "Research query is required and must be at most 500 characters.",
+    });
+  }
+
+  try {
+    const results = await searchResearchProvider(query);
+    return res.status(200).json({ status: "success", data: results });
+  } catch (error) {
+    return next(error);
+  }
+};
 
 const getResearchPayload = (body = {}) => {
   const title =

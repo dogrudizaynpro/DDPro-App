@@ -1,3 +1,6 @@
+import { useState } from "react";
+import { runResearchAgent } from "../services/research.service.js";
+
 function ProcurementModule({
   showProcurementForm,
   setShowProcurementForm,
@@ -10,9 +13,60 @@ function ProcurementModule({
   procurementLoading,
   procurementItems,
   deleteProcurement,
+  saveResearchResult,
 }) {
+  const [researchQuery, setResearchQuery] = useState("");
+  const [researchResults, setResearchResults] = useState([]);
+  const [researchError, setResearchError] = useState("");
+  const [researchLoading, setResearchLoading] = useState(false);
+
+  const searchResearch = async (event) => {
+    event.preventDefault();
+    if (!researchQuery.trim()) return;
+    setResearchLoading(true);
+    setResearchError("");
+    setResearchResults([]);
+    try {
+      setResearchResults(await runResearchAgent(researchQuery.trim()));
+    } catch (error) {
+      setResearchError(error.message || "Araştırma sağlayıcısına erişilemedi.");
+    } finally {
+      setResearchLoading(false);
+    }
+  };
+
   return (
     <div className="module-page">
+      <form className="data-form" onSubmit={searchResearch}>
+        <h2>Harici web araştırması</h2>
+        <p className="status-banner info">Sağlayıcı bağlı değilse sonuç üretilmez. Dönen fiyatlar kullanıcı tarafından doğrulanana kadar doğrulanmamış kabul edilir.</p>
+        <input
+          type="search"
+          value={researchQuery}
+          onChange={(event) => setResearchQuery(event.target.value)}
+          placeholder="Ürün, üretici veya teknik özellik ara"
+          maxLength={500}
+          required
+        />
+        <button type="submit" disabled={researchLoading}>
+          {researchLoading ? "Araştırılıyor…" : "Gerçek sağlayıcıda ara"}
+        </button>
+      </form>
+      {researchError ? <p className="status-banner warning">Araştırma başlatılamadı: {researchError}</p> : null}
+      {researchResults.map((result, index) => (
+        <article className="data-card" key={`${result.url}-${index}`}>
+          <div>
+            <h3>{result.product || "Adsız ürün"}</h3>
+            <p>{[result.manufacturer, result.source].filter(Boolean).join(" · ")}</p>
+            {result.technicalInfo ? <p>{result.technicalInfo}</p> : null}
+            {result.price ? <p>Kaynakta görünen fiyat: {result.price} · Doğrulanmadı</p> : null}
+            {/^https?:\/\//i.test(result.url || "") ? <p><a href={result.url} target="_blank" rel="noopener noreferrer">Kaynağı aç ↗</a></p> : null}
+            <small>{result.date} · {result.status}</small>
+          </div>
+          <button type="button" onClick={() => saveResearchResult(result)}>Araştırma kaydına ekle</button>
+        </article>
+      ))}
+
       <div className="module-toolbar">
         <button
           type="button"

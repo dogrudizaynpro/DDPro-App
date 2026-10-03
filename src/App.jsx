@@ -1244,29 +1244,9 @@ function App() {
     }
   };
 
-  const createProcurement = async (event) => {
-    event.preventDefault();
-
-    if (!procurementName.trim()) return;
+  const persistProcurementRecord = async (newProcurement) => {
     procurementTouchedRef.current = true;
     let shouldResetForm = false;
-    const formValues = Object.fromEntries(new FormData(event.currentTarget).entries());
-
-    const newProcurement = {
-      id: createId(),
-      name: procurementName.trim(),
-      note: procurementNote.trim() || "Not eklenmedi.",
-      date: formatDate(),
-      source: formValues.source.trim(),
-      product: formValues.product.trim(),
-      manufacturer: formValues.manufacturer.trim(),
-      technicalInfo: formValues.technicalInfo.trim(),
-      price: formValues.price.trim(),
-      priceVerification: formValues.priceVerification || "Doğrulanmadı",
-      url: formValues.url.trim(),
-      status: formValues.status || "Taslak",
-    };
-
     setProcurementError(null);
 
     try {
@@ -1301,6 +1281,48 @@ function App() {
       setProcurementNote("");
       setShowProcurementForm(false);
     }
+  };
+
+  const createProcurement = async (event) => {
+    event.preventDefault();
+    if (!procurementName.trim()) return;
+    const formValues = Object.fromEntries(new FormData(event.currentTarget).entries());
+    await persistProcurementRecord({
+      id: createId(),
+      name: procurementName.trim(),
+      note: procurementNote.trim() || "Not eklenmedi.",
+      date: formatDate(),
+      source: formValues.source.trim(),
+      product: formValues.product.trim(),
+      manufacturer: formValues.manufacturer.trim(),
+      technicalInfo: formValues.technicalInfo.trim(),
+      price: formValues.price.trim(),
+      priceVerification: formValues.priceVerification || "Doğrulanmadı",
+      url: formValues.url.trim(),
+      status: formValues.status || "Taslak",
+    });
+  };
+
+  const saveResearchResult = async (result) => {
+    const title = result.product || result.manufacturer || result.source;
+    if (!title) {
+      setProcurementError("Sonuçta kaydedilebilir ürün, üretici veya kaynak adı yok.");
+      return;
+    }
+    await persistProcurementRecord({
+      id: createId(),
+      name: title,
+      note: result.technicalInfo || "Harici araştırma sonucu; kaynak kullanıcı tarafından kontrol edilmedi.",
+      date: formatDate(),
+      source: result.source || "",
+      product: result.product || "",
+      manufacturer: result.manufacturer || "",
+      technicalInfo: result.technicalInfo || "",
+      price: result.price || "",
+      priceVerification: "Doğrulanmadı",
+      url: result.url || "",
+      status: "Harici sonuç · doğrulama bekliyor",
+    });
   };
 
   const deleteProcurement = async (id) => {
@@ -2124,6 +2146,7 @@ function App() {
           procurementLoading={procurementLoading}
           procurementItems={procurementItems}
           deleteProcurement={deleteProcurement}
+          saveResearchResult={saveResearchResult}
         />
       );
     }

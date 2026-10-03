@@ -8,12 +8,17 @@
 import express from "express";
 import {
   createResearchItem,
+  createResearchSearch,
   deleteResearchItem,
+  getResearchProviderStatus,
   getResearchItemById,
   getResearchItems,
 } from "../controllers/research.controller.js";
 
 const router = express.Router();
+
+router.get("/provider-status", getResearchProviderStatus);
+router.post("/agent", createResearchSearch);
 
 // ============================================================
 // GET ROUTES
