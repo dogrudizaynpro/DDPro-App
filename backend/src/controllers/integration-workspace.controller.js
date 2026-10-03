@@ -1,3 +1,4 @@
+import escapeHtml from "escape-html";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { createCrmContact } from "../services/crm.service.js";
 import {
@@ -48,10 +49,11 @@ export const getWhatsAppWebhookChallenge = (req, res) => {
   if (!verifyWhatsAppChallenge(req.query)) {
     return res.status(403).send("Webhook verification failed.");
   }
+  const challenge = escapeHtml(req.query["hub.challenge"]);
   return res
     .status(200)
     .type("text/plain")
-    .end(Buffer.from(req.query["hub.challenge"], "utf8"));
+    .end(Buffer.from(challenge, "utf8"));
 };
 
 export const postWhatsAppWebhook = async (req, res, next) => {
