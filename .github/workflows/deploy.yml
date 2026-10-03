@@ -71,6 +71,8 @@ jobs:
           node -e 'const fs=require("fs"); const data=JSON.parse(fs.readFileSync("/tmp/ddpro-health.json","utf8")); if(!data || !data.service || !["ok","degraded"].includes(data.status)){console.error("Unexpected health response", data); process.exit(1)} if(data.status !== "ok"){console.error("Backend health is not ready", data); process.exit(1)} console.log("Health OK:", data.service);'
 
       - name: Build DDPro
+        env:
+          VITE_BASE_PATH: /DDPro-App/
         run: npm run build
 
       - name: Setup Pages

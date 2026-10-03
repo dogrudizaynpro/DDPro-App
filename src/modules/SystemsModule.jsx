@@ -9,8 +9,7 @@ function SystemsModule({
   setMemoryContent,
   memoryItems,
   deleteMemory,
-  integrations,
-  toggleIntegration,
+  onNavigate,
   statusNote,
 }) {
   return (
@@ -104,29 +103,12 @@ function SystemsModule({
         </div>
       </div>
 
-      <div className="panel">
-        <div className="panel-header">
-          <h2>Entegrasyonlar</h2>
-        </div>
-
-        <div className="data-list">
-          {integrations.map((item) => (
-            <div className="data-card" key={item.id}>
-              <div>
-                <h3>{item.name}</h3>
-                <p>{item.description}</p>
-                <small>Durum: {item.status}</small>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => toggleIntegration(item.id)}
-              >
-                {item.status === "Aktif" ? "Pasifleştir" : "Aktifleştir"}
-              </button>
-            </div>
-          ))}
-        </div>
+      <div className="panel panel-content">
+        <h2>Gerçek entegrasyon durumu</h2>
+        <p>Bağlı olmayan servisler etkinmiş gibi gösterilmez.</p>
+        <button type="button" onClick={() => onNavigate("settings")}>
+          Entegrasyon ayarlarını görüntüle
+        </button>
       </div>
     </div>
   );

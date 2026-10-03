@@ -16,6 +16,9 @@ CREATE TABLE IF NOT EXISTS projects (
   project_type TEXT,
   status TEXT NOT NULL,
   description TEXT,
+  area_m2 NUMERIC CHECK (area_m2 IS NULL OR area_m2 >= 0),
+  systems JSONB NOT NULL DEFAULT '[]'::jsonb,
+  notes TEXT NOT NULL DEFAULT '',
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()
 );
@@ -28,6 +31,13 @@ CREATE TABLE IF NOT EXISTS research_items (
   title TEXT NOT NULL,
   category TEXT,
   description TEXT,
+  source TEXT,
+  product TEXT,
+  manufacturer TEXT,
+  technical_info TEXT,
+  price TEXT,
+  price_verification TEXT NOT NULL DEFAULT 'Doğrulanmadı',
+  url TEXT,
   status TEXT,
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()

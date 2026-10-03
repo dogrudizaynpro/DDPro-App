@@ -199,6 +199,7 @@ export const mapOfferToViewModel = (offer = {}) => {
     createdAt,
     updatedAt,
     projectId: offer.project_id || offer.projectId || null,
+    crmContactId: offer.crm_contact_id || offer.crmContactId || null,
     notes: offer.notes || "",
     source,
     raw: offer,
@@ -240,6 +241,10 @@ const toOfferPayload = (offer) => {
       typeof offer?.projectId === "string" && offer.projectId.trim()
         ? offer.projectId.trim()
         : null,
+    crm_contact_id:
+      typeof offer?.crmContactId === "string" && offer.crmContactId.trim()
+        ? offer.crmContactId.trim()
+        : null,
   };
 };
 
@@ -254,7 +259,7 @@ export const getOffers = async () => {
     const data = await fetchAPI("/api/offers");
     return mapOffersToViewModel(data.data || []);
   } catch (error) {
-    console.error("Failed to fetch offers:", error.message);
+    console.warn("Offers API unavailable:", error.message);
     throw error;
   }
 };
@@ -279,7 +284,7 @@ export const getOfferById = async (id) => {
       return null;
     }
 
-    console.error("Failed to fetch offer:", error.message);
+    console.warn("Offer API unavailable:", error.message);
     throw error;
   }
 };
@@ -299,7 +304,7 @@ export const createOffer = async (offer) => {
 
     return data.data ? mapOfferToViewModel(data.data) : null;
   } catch (error) {
-    console.error("Failed to create offer:", error.message);
+    console.warn("Offer creation API unavailable:", error.message);
     throw error;
   }
 };
@@ -320,7 +325,7 @@ export const deleteOffer = async (id) => {
 
     return data.data ? mapOfferToViewModel(data.data) : null;
   } catch (error) {
-    console.error("Failed to delete offer:", error.message);
+    console.warn("Offer deletion API unavailable:", error.message);
     throw error;
   }
 };

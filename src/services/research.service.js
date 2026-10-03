@@ -46,11 +46,21 @@ export const mapResearchItemToViewModel = (item = {}) => {
     id: item.id,
     name,
     note,
+    source: item.source || "",
+    recordSource: "api",
+    product: item.product || "",
+    manufacturer: item.manufacturer || "",
+    technicalInfo: item.technical_info || item.technicalInfo || "",
+    price: item.price ?? "",
+    priceVerification:
+      item.price_verification || item.priceVerification || "Doğrulanmadı",
+    url: item.url || "",
     status: item.status || "",
     date: formatResearchDate(createdAt),
     createdAt,
     updatedAt,
-    source: "api",
+    projectId: item.project_id || item.projectId || null,
+    productId: item.product_id || item.productId || null,
     raw: item,
   };
 };
@@ -69,9 +79,17 @@ export const getResearchItems = async () => {
     const data = await fetchAPI("/api/research");
     return mapResearchItemsToViewModel(data.data || []);
   } catch (error) {
-    console.error("Failed to fetch research items:", error.message);
+    console.warn("Research API unavailable:", error.message);
     throw error;
   }
+};
+
+export const runResearchAgent = async (query) => {
+  const data = await fetchAPI("/api/research/agent", {
+    method: "POST",
+    body: JSON.stringify({ query }),
+  });
+  return data.data || [];
 };
 
 // ============================================================
@@ -94,7 +112,7 @@ export const getResearchItemById = async (id) => {
       console.warn(`Research item not found: ${id}`);
       return null;
     }
-    console.error("Failed to fetch research item:", error.message);
+    console.warn("Research item API unavailable:", error.message);
     throw error;
   }
 };
@@ -125,6 +143,24 @@ const toResearchPayload = (item = {}) => {
       typeof item?.status === "string" && item.status.trim()
         ? item.status.trim()
         : "Aktif",
+    source: typeof item?.source === "string" ? item.source.trim() || null : null,
+    product: typeof item?.product === "string" ? item.product.trim() || null : null,
+    manufacturer:
+      typeof item?.manufacturer === "string"
+        ? item.manufacturer.trim() || null
+        : null,
+    technical_info:
+      typeof item?.technicalInfo === "string"
+        ? item.technicalInfo.trim() || null
+        : null,
+    price: typeof item?.price === "string" ? item.price.trim() || null : null,
+    price_verification:
+      typeof item?.priceVerification === "string"
+        ? item.priceVerification.trim() || "Doğrulanmadı"
+        : "Doğrulanmadı",
+    url: typeof item?.url === "string" ? item.url.trim() || null : null,
+    project_id: typeof item?.projectId === "string" ? item.projectId.trim() || null : null,
+    product_id: typeof item?.productId === "string" ? item.productId.trim() || null : null,
   };
 };
 
@@ -139,7 +175,7 @@ export const createResearchItem = async (item) => {
 
     return data.data ? mapResearchItemToViewModel(data.data) : null;
   } catch (error) {
-    console.error("Failed to create research item:", error.message);
+    console.warn("Research creation API unavailable:", error.message);
     throw error;
   }
 };
@@ -156,7 +192,7 @@ export const deleteResearchItem = async (id) => {
 
     return data.data ? mapResearchItemToViewModel(data.data) : null;
   } catch (error) {
-    console.error("Failed to delete research item:", error.message);
+    console.warn("Research deletion API unavailable:", error.message);
     throw error;
   }
 };

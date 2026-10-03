@@ -41,5 +41,18 @@ DDPro-App; gerçek veriler, gerçek projeler ve kontrollü entegrasyonlar üzeri
 ### Backend Notları
 
 - Backend kodu `/backend` altında Node.js + Express + Supabase yapısındadır.
-- Aktif API rotaları: `/api/projects`, `/api/research`, `/api/offers`
+- API rotaları: `/api/projects`, `/api/research`, `/api/offers`, `/api/crm`, `/api/ai`, `/api/integrations`
 - Production CORS origin'i `https://dogrudizaynpro.github.io` olacak şekilde yapılandırılmalıdır.
+
+### Entegrasyon Kurulumu
+
+- `backend/.env.example` dosyasını backend `.env` dosyasına kopyalayın. Secret/token değerlerini frontend `VITE_*` değişkenlerine veya kaynak koda koymayın.
+- Supabase SQL Editor'da `backend/database/migrations/004_operations_integrations.sql` migration'ını, önceki proje/araştırma migration'larından sonra çalıştırın.
+- Google Cloud OAuth callback URI'sini backend'in `/api/integrations/google/callback` adresine ayarlayın. `GOOGLE_ALLOWED_EMAILS` yalnızca yetkili e-posta adreslerini içermelidir.
+- Google token'ları Supabase `integration_tokens` tablosunda AES-256-GCM ile şifrelenir. OAuth için `SUPABASE_SERVICE_ROLE_KEY`, 32-byte hex `INTEGRATION_TOKEN_ENCRYPTION_KEY`, `INTEGRATION_SESSION_SECRET`, Google OAuth credentials ve allowlist gereklidir. Service-role anahtarı yalnızca backend'de tutulur.
+- `backend/.env.example` içindeki `APPLE_ISSUER_ID`, `APPLE_KEY_ID` ve `APPLE_PRIVATE_KEY` App Store Connect API testinde kullanılır; `.p8` anahtarını yalnızca backend secret store/environment içine koyun. Bu altyapı uygulamayı App Store'a göndermiyor.
+- Cookie tabanlı entegrasyon oturumlarının tarayıcı kısıtlamalarına takılmaması için production frontend ve backend aynı site altında reverse proxy/custom domain ile sunulmalıdır; GitHub Pages ile farklı origin arasında third-party cookie desteği garanti edilmez.
+- WhatsApp Business webhook adresi `/webhooks/whatsapp`, web form lead endpoint'i `/webhooks/website/leads` yoludur. Her iki sağlayıcı da imza doğrulamasıyla korunur; web sitesinin bu endpoint'e HMAC `x-ddpro-signature` eklemesi gerekir.
+- Web CMS adapter'ı yalnızca `pages`, `products` ve `references` içerik yollarını ve HTTPS provider URL'sini kabul eder.
+- AI, Gmail/Google Calendar, WhatsApp, CRM, Web/CMS, Apple, Supabase ve web araştırması bağlantı durumları Ayarlar > Entegrasyon Merkezi'nde görüntülenip gerçek provider istekleriyle sınanır. Kimlik bilgileri tanımlı olması tek başına provider bağlantı testi yerine geçmez. Environment ile yönetilen servislerin bağlantısını kesmek için ilgili sunucu değişkenlerini kaldırıp backend'i yeniden başlatın; Google OAuth oturumu uygulamadan kapatılabilir.
+- Google bağlantısı Gmail salt-okunur ve Calendar etkinlik erişim kapsamlarını ister. OAuth grant'i uygulandığında gelen e-postalar CRM'e kullanıcı tarafından aktarılır; WhatsApp ve web form lead'leri imzalı webhook ile CRM'e alınır.

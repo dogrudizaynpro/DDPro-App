@@ -1,11 +1,20 @@
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
+import rateLimit from "express-rate-limit";
 import { notFound } from "./middleware/notFound.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 import projectsRouter from "./routes/projects.routes.js";
 import researchRouter from "./routes/research.routes.js";
 import offersRouter from "./routes/offers.routes.js";
+import aiRouter from "./routes/ai.routes.js";
+import integrationsRouter from "./routes/integrations.routes.js";
+import crmRouter from "./routes/crm.routes.js";
+import {
+  getWhatsAppWebhookChallenge,
+  postWebsiteLead,
+  postWhatsAppWebhook,
+} from "./controllers/integration-workspace.controller.js";
 import { getSupabaseClient, isSupabaseAvailable } from "./config/supabase.js";
 
 const app = express();
@@ -28,7 +37,12 @@ app.use(
 );
 
 // Body parser
-app.use(express.json());
+app.use(express.json({
+  limit: "1mb",
+  verify: (req, _res, buffer) => {
+    req.rawBody = Buffer.from(buffer);
+  },
+}));
 app.use(express.urlencoded({ extended: true }));
 
 // ============================================================
@@ -38,6 +52,42 @@ app.use(express.urlencoded({ extended: true }));
 app.use("/api/projects", projectsRouter);
 app.use("/api/research", researchRouter);
 app.use("/api/offers", offersRouter);
+app.use("/api/ai", aiRouter);
+app.use("/api/integrations", integrationsRouter);
+app.use("/api/crm", crmRouter);
+app.get(
+  "/webhooks/whatsapp",
+  rateLimit({
+    windowMs: 60_000,
+    limit: 120,
+    standardHeaders: "draft-8",
+    legacyHeaders: false,
+    message: { status: "error", message: "Too many webhook requests. Try again later." },
+  }),
+  getWhatsAppWebhookChallenge
+);
+app.post(
+  "/webhooks/whatsapp",
+  rateLimit({
+    windowMs: 60_000,
+    limit: 600,
+    standardHeaders: "draft-8",
+    legacyHeaders: false,
+    message: { status: "error", message: "Too many webhook requests. Try again later." },
+  }),
+  postWhatsAppWebhook
+);
+app.post(
+  "/webhooks/website/leads",
+  rateLimit({
+    windowMs: 60_000,
+    limit: 120,
+    standardHeaders: "draft-8",
+    legacyHeaders: false,
+    message: { status: "error", message: "Too many webhook requests. Try again later." },
+  }),
+  postWebsiteLead
+);
 
 // ============================================================
 // HEALTH CHECK ENDPOINT

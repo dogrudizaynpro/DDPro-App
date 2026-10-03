@@ -1,3 +1,6 @@
+import { useEffect, useState } from "react";
+import { getCrmContacts } from "../services/operations-integrations.service.js";
+
 function OffersModule({
   offersFetchState,
   offersLoading,
@@ -21,7 +24,23 @@ function OffersModule({
   offerDetailError,
   getOfferStatusTone,
   canUseLocalFallback,
+  projects = [],
 }) {
+  const [crmContacts, setCrmContacts] = useState([]);
+  useEffect(() => {
+    let active = true;
+    getCrmContacts()
+      .then((response) => {
+        if (active) setCrmContacts(response.data || []);
+      })
+      .catch(() => {
+        if (active) setCrmContacts([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
   return (
     <div className="module-page">
       <div className="module-toolbar">
@@ -82,6 +101,19 @@ function OffersModule({
             value={offerAmount}
             onChange={(event) => setOfferAmount(event.target.value)}
           />
+          <label>İlgili proje
+            <select name="projectId" defaultValue="">
+              <option value="">Proje seçin</option>
+              {projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
+            </select>
+          </label>
+          <label>İlgili CRM müşterisi
+            <select name="crmContactId" defaultValue="">
+              <option value="">Müşteri seçin</option>
+              {crmContacts.map((contact) => <option key={contact.id} value={contact.id}>{contact.name}</option>)}
+            </select>
+          </label>
+          {!crmContacts.length ? <small>CRM müşteri seçimi için Google yetkili oturumu gerekir.</small> : null}
 
           <select
             value={offerStatus}
@@ -266,8 +298,12 @@ function OffersModule({
                   <div className="offer-detail-item">
                     <span>Proje Bağlantısı</span>
                     <strong>
-                      {selectedOfferDetail.projectId || "Atanmadı"}
+                      {projects.find((project) => project.id === selectedOfferDetail.projectId)?.name || selectedOfferDetail.projectId || "Atanmadı"}
                     </strong>
+                  </div>
+                  <div className="offer-detail-item">
+                    <span>CRM Müşteri</span>
+                    <strong>{crmContacts.find((contact) => contact.id === selectedOfferDetail.crmContactId)?.name || selectedOfferDetail.crmContactId || "Atanmadı"}</strong>
                   </div>
                 </div>
 

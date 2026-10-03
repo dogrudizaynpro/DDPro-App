@@ -60,6 +60,10 @@ const getOfferPayload = (body = {}) => {
       typeof body.project_id === "string" && body.project_id.trim()
         ? body.project_id.trim()
         : null,
+    crm_contact_id:
+      typeof body.crm_contact_id === "string" && body.crm_contact_id.trim()
+        ? body.crm_contact_id.trim()
+        : null,
   };
 };
 
