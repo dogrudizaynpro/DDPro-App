@@ -14,6 +14,20 @@ const getEncryptionKey = () => {
 export const isSecureTokenStorageReady = () =>
   Boolean(getIntegrationAdmin() && getEncryptionKey());
 
+export const isTokenTableAvailable = async () => {
+  const client = getIntegrationAdmin();
+  if (!client || !getEncryptionKey()) return false;
+  try {
+    const { error } = await client
+      .from("integration_tokens")
+      .select("provider")
+      .limit(1);
+    return !error;
+  } catch {
+    return false;
+  }
+};
+
 export const encryptIntegrationToken = (value) => {
   const key = getEncryptionKey();
   if (!key) throw new Error("INTEGRATION_TOKEN_ENCRYPTION_KEY must be 32-byte hex.");

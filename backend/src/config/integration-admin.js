@@ -7,10 +7,14 @@ export const getIntegrationAdmin = () => {
   const url = process.env.SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !serviceRoleKey) return null;
-  integrationAdmin = createClient(url, serviceRoleKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
-  return integrationAdmin;
+  try {
+    integrationAdmin = createClient(url, serviceRoleKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+    return integrationAdmin;
+  } catch {
+    return null;
+  }
 };
 
 export const hasIntegrationAdmin = () => Boolean(getIntegrationAdmin());

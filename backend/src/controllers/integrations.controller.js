@@ -1,9 +1,12 @@
 import { getIntegrationAdmin, hasIntegrationAdmin } from "../config/integration-admin.js";
 import { getSupabaseClient, isSupabaseAvailable } from "../config/supabase.js";
-import { getGoogleConfigurationStatus } from "../services/google-integration.service.js";
+import {
+  getGoogleConfigurationStatus,
+  getGoogleSessionAccount,
+} from "../services/google-integration.service.js";
 import { websiteCmsConfigured } from "../services/website-cms.service.js";
 
-export const getIntegrationStatus = async (_req, res, next) => {
+export const getIntegrationStatus = async (req, res, next) => {
  try {
   const aiConfigured = Boolean(
     process.env.AI_API_URL && process.env.AI_API_KEY && process.env.AI_MODEL
@@ -32,6 +35,12 @@ export const getIntegrationStatus = async (_req, res, next) => {
     ]);
     crmStorageConnected = !crmError && !tokenError;
   }
+  const googleConfigured = google.configured && crmStorageConnected;
+  const googleOAuthAvailable =
+    googleConfigured &&
+    Boolean(process.env.INTEGRATION_SESSION_SECRET) &&
+    (process.env.GOOGLE_ALLOWED_EMAILS || "").split(",").some((email) => email.trim());
+  const googleConnected = googleConfigured && google.connected && Boolean(getGoogleSessionAccount(req));
 
   res.status(200).json({
     status: "success",
@@ -42,15 +51,16 @@ export const getIntegrationStatus = async (_req, res, next) => {
         status: aiConfigured ? "configured_not_tested" : "credentials_required",
       },
       gmail: {
-        configured: google.configured,
-        connected: google.connected,
-        oauthFlowAvailable: google.oauthFlowAvailable && Boolean(process.env.INTEGRATION_SESSION_SECRET) && Boolean(process.env.GOOGLE_ALLOWED_EMAILS),
-        status: google.connected ? "connected" : google.configured ? "not_connected" : "credentials_required",
+        configured: googleConfigured,
+        connected: googleConnected,
+        oauthFlowAvailable: googleOAuthAvailable,
+        status: googleConnected ? "connected" : googleConfigured ? "not_connected" : "credentials_required",
       },
       googleCalendar: {
-        configured: google.configured,
-        connected: google.connected,
-        status: google.connected ? "connected" : google.configured ? "not_connected" : "credentials_required",
+        configured: googleConfigured,
+        connected: googleConnected,
+        oauthFlowAvailable: googleOAuthAvailable,
+        status: googleConnected ? "connected" : googleConfigured ? "not_connected" : "credentials_required",
       },
       whatsapp: {
         configured: whatsappConfigured && whatsappWebhookConfigured,
@@ -66,10 +76,10 @@ export const getIntegrationStatus = async (_req, res, next) => {
         connected: false,
       },
       google: {
-        configured: google.configured,
-        connected: google.connected,
-        oauthFlowAvailable: google.oauthFlowAvailable && Boolean(process.env.INTEGRATION_SESSION_SECRET) && Boolean(process.env.GOOGLE_ALLOWED_EMAILS),
-        status: google.connected ? "connected" : google.configured ? "not_connected" : "credentials_required",
+        configured: googleConfigured,
+        connected: googleConnected,
+        oauthFlowAvailable: googleOAuthAvailable,
+        status: googleConnected ? "connected" : googleConfigured ? "not_connected" : "credentials_required",
       },
       supabase: {
         configured: Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY),
@@ -78,8 +88,8 @@ export const getIntegrationStatus = async (_req, res, next) => {
         integrationStorageConnected: crmStorageConnected,
       },
       crm: {
-        configured: databaseConfigured,
-        connected: crmStorageConnected && google.connected,
+        configured: crmStorageConnected,
+        connected: crmStorageConnected && googleConnected,
         status: crmStorageConnected ? "configured_not_connected" : "credentials_required",
       },
       web: {

@@ -50,6 +50,7 @@ DDPro-App; gerçek veriler, gerçek projeler ve kontrollü entegrasyonlar üzeri
 - Supabase SQL Editor'da `backend/database/migrations/004_operations_integrations.sql` migration'ını, önceki proje/araştırma migration'larından sonra çalıştırın.
 - Google Cloud OAuth callback URI'sini backend'in `/api/integrations/google/callback` adresine ayarlayın. `GOOGLE_ALLOWED_EMAILS` yalnızca yetkili e-posta adreslerini içermelidir.
 - Google token'ları Supabase `integration_tokens` tablosunda AES-256-GCM ile şifrelenir. OAuth için `SUPABASE_SERVICE_ROLE_KEY`, 32-byte hex `INTEGRATION_TOKEN_ENCRYPTION_KEY`, `INTEGRATION_SESSION_SECRET`, Google OAuth credentials ve allowlist gereklidir. Service-role anahtarı yalnızca backend'de tutulur.
+- Cookie tabanlı entegrasyon oturumlarının tarayıcı kısıtlamalarına takılmaması için production frontend ve backend aynı site altında reverse proxy/custom domain ile sunulmalıdır; GitHub Pages ile farklı origin arasında third-party cookie desteği garanti edilmez.
 - WhatsApp Business webhook adresi `/webhooks/whatsapp`, web form lead endpoint'i `/webhooks/website/leads` yoludur. Her iki sağlayıcı da imza doğrulamasıyla korunur; web sitesinin bu endpoint'e HMAC `x-ddpro-signature` eklemesi gerekir.
 - Web CMS adapter'ı yalnızca `pages`, `products` ve `references` içerik yollarını ve HTTPS provider URL'sini kabul eder.
 - AI, Gmail/Google Calendar, WhatsApp, web araştırması, CMS ve Supabase bağlantı durumları Ayarlar > Entegrasyonlar'da görüntülenir. Kimlik bilgileri tanımlı olması tek başına provider bağlantı testi yerine geçmez.

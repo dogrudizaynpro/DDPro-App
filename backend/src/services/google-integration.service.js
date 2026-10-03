@@ -6,6 +6,7 @@ import {
 import {
   hasStoredIntegrationToken,
   isSecureTokenStorageReady,
+  isTokenTableAvailable,
   removeIntegrationToken,
   readIntegrationToken,
   saveIntegrationToken,
@@ -31,16 +32,17 @@ export const getGoogleConfigurationStatus = async () => {
     config.clientId && config.clientSecret && config.redirectUri
   );
   const storageReady = isSecureTokenStorageReady();
+  const tokenTableReady = storageReady ? await isTokenTableAvailable() : false;
   const hasConnection =
-    credentialsReady && storageReady
+    credentialsReady && storageReady && tokenTableReady
       ? await hasStoredIntegrationToken("google")
       : false;
   return {
-    configured: credentialsReady && storageReady,
+    configured: credentialsReady && storageReady && tokenTableReady,
     credentialsReady,
     secureStorageReady: storageReady,
     connected: hasConnection,
-    oauthFlowAvailable: credentialsReady && storageReady,
+    oauthFlowAvailable: credentialsReady && storageReady && tokenTableReady,
   };
 };
 
@@ -85,13 +87,19 @@ const allowedGoogleEmails = () =>
       .filter(Boolean)
   );
 
-export const beginGoogleOAuth = (req, res) => {
+export const beginGoogleOAuth = async (req, res, next) => {
   const { clientId, redirectUri } = getOAuthConfig();
+  let googleStatus;
+  try {
+    googleStatus = await getGoogleConfigurationStatus();
+  } catch (error) {
+    return next(error);
+  }
   if (
     !clientId ||
     !process.env.GOOGLE_CLIENT_SECRET ||
     !redirectUri ||
-    !isSecureTokenStorageReady() ||
+    !googleStatus.oauthFlowAvailable ||
     !process.env.INTEGRATION_SESSION_SECRET ||
     allowedGoogleEmails().size === 0
   ) {
@@ -206,32 +214,57 @@ export const completeGoogleOAuth = async (req, res, next) => {
   }
 };
 
-export const requireGoogleSession = (req, res, next) => {
+export const getGoogleSessionAccount = (req) => {
   const secret = process.env.INTEGRATION_SESSION_SECRET;
   const allowedEmails = allowedGoogleEmails();
   const raw = cookieValue(req, "ddpro_integration_session");
   const separator = raw.lastIndexOf(".");
-  if (!secret || separator < 0) {
-    return res.status(401).json({ status: "error", message: "Google account connection is required." });
-  }
+  if (!secret || separator < 0) return "";
   const session = raw.slice(0, separator);
   const signature = raw.slice(separator + 1);
-  if (!safeEqual(signature, sign(session))) {
-    return res.status(401).json({ status: "error", message: "Integration session is invalid." });
-  }
+  if (!safeEqual(signature, sign(session))) return "";
   try {
     const payload = JSON.parse(Buffer.from(session, "base64url").toString("utf8"));
     if (
       payload.expiresAt < Date.now() ||
       !allowedEmails.has(String(payload.email || "").toLowerCase())
     ) {
-      return res.status(401).json({ status: "error", message: "Integration session has expired or is not authorized." });
+      return "";
     }
-    req.integrationAccount = String(payload.email).toLowerCase();
-    return next();
+    return String(payload.email).toLowerCase();
   } catch {
-    return res.status(401).json({ status: "error", message: "Integration session is invalid." });
+    return "";
   }
+};
+
+export const requireGoogleSession = (req, res, next) => {
+  if (["POST", "PUT", "PATCH", "DELETE"].includes(req.method)) {
+    const requestOrigin = req.get("origin");
+    const allowedOrigins = (process.env.ALLOWED_ORIGINS || "")
+      .split(",")
+      .map((origin) => origin.trim())
+      .filter(Boolean);
+    let frontendOrigin = "";
+    try {
+      if (process.env.FRONTEND_URL) {
+        frontendOrigin = new URL(process.env.FRONTEND_URL).origin;
+      }
+    } catch {
+      frontendOrigin = "";
+    }
+    if (
+      !requestOrigin ||
+      (!allowedOrigins.includes(requestOrigin) && requestOrigin !== frontendOrigin)
+    ) {
+      return res.status(403).json({ status: "error", message: "Request origin is not allowed." });
+    }
+  }
+  const account = getGoogleSessionAccount(req);
+  if (!account) {
+    return res.status(401).json({ status: "error", message: "Google account connection is required." });
+  }
+  req.integrationAccount = account;
+  return next();
 };
 
 export const getGoogleAccessToken = async (account) => {

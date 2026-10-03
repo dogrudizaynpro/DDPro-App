@@ -114,6 +114,16 @@ export const createCrmContact = async (body, options) => {
     .insert(payload)
     .select("*")
     .single();
+  if (error?.code === "23505" && payload.source_external_id) {
+    const { data: existing, error: lookupError } = await client
+      .from("crm_contacts")
+      .select("*")
+      .eq("source", payload.source)
+      .eq("source_external_id", payload.source_external_id)
+      .maybeSingle();
+    if (lookupError) throw lookupError;
+    if (existing) return { contact: existing, duplicate: true };
+  }
   if (error) throw error;
   return { contact: data, duplicate: false };
 };
