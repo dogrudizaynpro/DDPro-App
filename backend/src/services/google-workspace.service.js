@@ -93,6 +93,21 @@ export const getGoogleCalendarEvents = async (account, start, end) => {
   return result.items || [];
 };
 
+export const testGoogleWorkspaceConnection = async (account, provider) => {
+  if (provider === "gmail") {
+    await googleRequest(account, "/gmail/v1/users/me/profile");
+    return;
+  }
+  if (provider === "calendar") {
+    await googleRequest(account, "/calendar/v3/users/me/calendarList?maxResults=1");
+    return;
+  }
+  throw Object.assign(new Error("Unsupported Google Workspace provider."), {
+    statusCode: 400,
+    expose: true,
+  });
+};
+
 export const createGoogleCalendarEvent = async (account, body = {}) => {
   const summary = typeof body.summary === "string" ? body.summary.trim() : "";
   const start = body.start;

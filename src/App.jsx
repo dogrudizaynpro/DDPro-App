@@ -22,6 +22,7 @@ import {
 } from "./services/api.js";
 import { requestAiCompletion } from "./services/ai.service.js";
 import { getCrmContacts } from "./services/operations-integrations.service.js";
+import { getIntegrationStatus } from "./services/integrations.service.js";
 import {
   createResearchItem as createProcurementRequest,
   deleteResearchItem as deleteProcurementRequest,
@@ -196,6 +197,15 @@ const modules = [
     short: "Yapılandırma",
     description:
       "Uygulama tercihleri ve sistem ayarları yönetimi.",
+  },
+  {
+    id: "integrations",
+    path: "/entegrasyon-merkezi",
+    icon: "⌘",
+    title: "Entegrasyon Merkezi",
+    short: "Bağlantı Yönetimi",
+    description:
+      "Harici servis bağlantıları, yapılandırma gereksinimleri ve canlı bağlantı testleri.",
   },
   {
     id: "website",
@@ -425,6 +435,47 @@ const getApiFailureReason = (error) => {
 const getApiStatusCode = (error) =>
   error?.status || error?.statusCode || error?.data?.statusCode || null;
 
+const integrationStatusQuestion = (message) => {
+  const text = message.toLocaleLowerCase("tr-TR");
+  if (!/bağlı|bagli|bağlant|baglanti|hazır|hazir|durum|entegrasyon|çalışıyor mu|çalışır mı|connected|connection|status|ready/i.test(text)) {
+    return null;
+  }
+  if (/gmail|e-posta|email/.test(text)) return ["Gmail", "gmail"];
+  if (/google calendar|google takvim/.test(text)) return ["Google Calendar", "googleCalendar"];
+  if (/whatsapp/.test(text)) return ["WhatsApp Business", "whatsapp"];
+  if (/app store|apple|ios|ipad/.test(text)) return ["App Store Connect / Apple", "appStore"];
+  if (/crm|müşteri yönetimi/.test(text)) return ["CRM", "crm"];
+  if (/web sitesi|cms|ddpro web/.test(text)) return ["DDPro Web Sitesi / CMS", "web"];
+  if (/supabase|veritabanı|database/.test(text)) return ["Supabase", "supabase"];
+  if (/web araştırma|araştırma servisi|research provider/.test(text)) return ["Web araştırma servisi", "research"];
+  if (/ai provider|ai sağlayıcı|yapay zeka bağlant|ai bağlant|ai connection/.test(text)) return ["AI Provider", "ai"];
+  if (/google|takvim|calendar/.test(text)) return ["Google Calendar", "googleCalendar"];
+  if (/entegrasyon|bağlantı|bağlı/.test(text)) return ["Entegrasyonlar", null];
+  return null;
+};
+
+const describeIntegrationStatus = (label, key, status) => {
+  const stateLabel = (entry) => {
+    if (!entry) return "durumu bu yanıtta alınamadı";
+    if (entry.connected) return "BAĞLI";
+    if (!entry.configured) return "YAPILANDIRMA GEREKLİ";
+    if (entry.status === "test_failed") return `BAĞLI DEĞİL · son test başarısız: ${entry.lastTest?.error || "ayrıntı yok"}`;
+    return "BAĞLI DEĞİL · OAuth oturumu veya başarılı bağlantı testi bekliyor";
+  };
+  if (key) return `${label}: ${stateLabel(status[key])}. Durum uygulamanın entegrasyon API'sinden alındı.`;
+  return `Gerçek backend durumuna göre entegrasyonlar: ${[
+    ["Gmail", status.gmail],
+    ["Google Calendar", status.googleCalendar],
+    ["WhatsApp", status.whatsapp],
+    ["CRM", status.crm],
+    ["Web sitesi/CMS", status.web],
+    ["Apple App Store Connect", status.appStore],
+    ["Supabase", status.supabase],
+    ["AI Provider", status.ai],
+    ["Web araştırma", status.research],
+  ].map(([name, entry]) => `${name}: ${stateLabel(entry)}`).join("; ")}.`;
+};
+
 function App() {
   const dashboardMapId = useId().replace(/:/g, "");
   const [currentDate, setCurrentDate] = useState(() => new Date());
@@ -444,6 +495,7 @@ function App() {
     status: "loading",
     message: "",
   });
+  const [integrationState, setIntegrationState] = useState(null);
 
   const [projects, setProjects] = useState(() => getInitialItems(STORAGE_KEYS.projects));
 
@@ -527,6 +579,24 @@ function App() {
   useEffect(() => {
     const intervalId = window.setInterval(() => setCurrentDate(new Date()), 60_000);
     return () => window.clearInterval(intervalId);
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    const refreshIntegrationState = () =>
+      getIntegrationStatus()
+        .then((status) => {
+          if (active) setIntegrationState(status);
+        })
+        .catch(() => {
+          if (active) setIntegrationState(null);
+        });
+    refreshIntegrationState();
+    const intervalId = window.setInterval(refreshIntegrationState, 60_000);
+    return () => {
+      active = false;
+      window.clearInterval(intervalId);
+    };
   }, []);
 
   useEffect(() => {
@@ -1561,7 +1631,8 @@ function App() {
 
     const normalizedMessage = message.toLocaleLowerCase("tr-TR");
     const suggestedModuleId =
-      /teklif|offer/.test(normalizedMessage) ? "offers"
+      /entegrasyon|gmail|google calendar|whatsapp|supabase|app store|cms|bağlantı durumu/.test(normalizedMessage) ? "integrations"
+        : /teklif|offer/.test(normalizedMessage) ? "offers"
         : /tedarik|araştır|malzeme/.test(normalizedMessage) ? "procurement"
           : /takvim|toplantı|saha ziyareti/.test(normalizedMessage) ? "calendar"
             : /crm|müşteri|firma|iletişim/.test(normalizedMessage) ? "crm"
@@ -1572,6 +1643,39 @@ function App() {
                       : /sistem|system/.test(normalizedMessage) ? "systems"
                         : null;
 
+    const statusQuestion = integrationStatusQuestion(message);
+    if (statusQuestion) {
+      try {
+        const liveStatus = await getIntegrationStatus();
+        setIntegrationState(liveStatus);
+        setAiMessages((currentMessages) => [
+          ...currentMessages,
+          {
+            id: createId(),
+            role: "assistant",
+            text: describeIntegrationStatus(statusQuestion[0], statusQuestion[1], liveStatus),
+            date: formatDate(),
+            moduleSuggestion: "integrations",
+          },
+        ]);
+      } catch (error) {
+        setAiMessages((currentMessages) => [
+          ...currentMessages,
+          {
+            id: createId(),
+            role: "assistant",
+            text: `Entegrasyon durumu backend API'sinden alınamadı; bağlantı varmış gibi varsayım yapmıyorum. Hata: ${getApiFailureReason(error)}`,
+            date: formatDate(),
+            status: "unavailable",
+            moduleSuggestion: "integrations",
+          },
+        ]);
+      } finally {
+        setAiSending(false);
+      }
+      return;
+    }
+
     let crmContext = getStoredData("ddpro_crm_contacts_v1");
     try {
       const response = await getCrmContacts();
@@ -1580,7 +1684,15 @@ function App() {
       // Existing locally stored contacts remain available as context when authenticated CRM is offline.
     }
 
+    let liveIntegrationContext;
+    try {
+      liveIntegrationContext = await getIntegrationStatus();
+      setIntegrationState(liveIntegrationContext);
+    } catch (error) {
+      liveIntegrationContext = { available: false, error: getApiFailureReason(error) };
+    }
     const context = {
+      integrationStatus: liveIntegrationContext,
       projects: projects.slice(0, 30).map(({ id, name, type, status, areaM2, systems, notes }) => ({
         id,
         name,
@@ -1826,6 +1938,23 @@ function App() {
             <div className="system-status-item">
               <span>Tedarik API</span><strong>{getConnectionLabel(procurementFetchState)}</strong>
             </div>
+            <div className="system-status-item integration-summary-item">
+              <span>Entegrasyonlar</span>
+              <strong>{integrationState ? `${[
+                integrationState.gmail,
+                integrationState.googleCalendar,
+                integrationState.whatsapp,
+                integrationState.crm,
+                integrationState.web,
+                integrationState.appStore,
+                integrationState.supabase,
+                integrationState.ai,
+                integrationState.research,
+              ].filter((item) => item?.connected).length}/9 bağlı` : "Durum alınamadı"}</strong>
+            </div>
+            <button className="integration-dashboard-link" type="button" onClick={() => handleModuleNavigation("integrations")}>
+              Tüm entegrasyon durumları <span aria-hidden="true">↗</span>
+            </button>
           </div>
         </section>
         <section className="panel quick-access-panel">
@@ -2084,6 +2213,22 @@ function App() {
           message: LOCAL_ONLY_MODULE_MESSAGE,
         },
       },
+      integrations: {
+        title: "Entegrasyon Merkezi",
+        description: "Provider bağlantılarını test et, durumlarını izle ve gerekli backend environment ayarlarını görüntüle.",
+        sections: [
+          {
+            id: "integration-providers",
+            title: "Bağlantı Merkezi",
+            description: "Gmail, Google Calendar, WhatsApp, CRM, Web/CMS, Apple, Supabase, AI ve araştırma sağlayıcısı.",
+            count: 9,
+          },
+        ],
+        statusNote: {
+          tone: "info",
+          message: "API secret ve OAuth token değerleri yalnızca sunucuda kalır.",
+        },
+      },
     }),
     [moduleCounts]
   );
@@ -2091,6 +2236,10 @@ function App() {
   const renderModule = () => {
     if (activeModule === "dashboard") {
       return renderDashboard();
+    }
+
+    if (activeModule === "integrations") {
+      return <OperationsModule moduleId="integrations" onNavigate={handleModuleNavigation} />;
     }
 
     if (activeModule === "projects") {

@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { getIntegrationStatus } from "../services/integrations.service.js";
+import {
+  getIntegrationStatus,
+  testIntegrationConnection,
+} from "../services/integrations.service.js";
 import {
   beginGoogleConnection,
   createGoogleCalendarEvent,
@@ -15,6 +18,76 @@ import {
 } from "../services/operations-integrations.service.js";
 
 const WEBSITE_URL = "https://www.ddizaynpro.com/";
+
+const integrationCatalog = [
+  {
+    id: "gmail",
+    title: "Gmail",
+    description: "OAuth ile gelen e-postaları yetkili oturumdan CRM'e aktarır.",
+    variables: ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "GOOGLE_REDIRECT_URI", "GOOGLE_ALLOWED_EMAILS", "INTEGRATION_SESSION_SECRET", "INTEGRATION_TOKEN_ENCRYPTION_KEY", "SUPABASE_SERVICE_ROLE_KEY"],
+    moduleId: "crm",
+    action: "Google hesabını bağla",
+    requiresOAuth: true,
+  },
+  {
+    id: "googleCalendar",
+    title: "Google Calendar",
+    description: "OAuth üzerinden gerçek takvim etkinliklerini okur ve oluşturur.",
+    variables: ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "GOOGLE_REDIRECT_URI", "GOOGLE_ALLOWED_EMAILS", "INTEGRATION_SESSION_SECRET", "INTEGRATION_TOKEN_ENCRYPTION_KEY", "SUPABASE_SERVICE_ROLE_KEY"],
+    moduleId: "calendar",
+    requiresOAuth: true,
+  },
+  {
+    id: "whatsapp",
+    title: "WhatsApp Business / Cloud API",
+    description: "İmzalı webhook, CRM lead aktarımı ve Cloud API mesaj gönderimi.",
+    variables: ["WHATSAPP_ACCESS_TOKEN", "WHATSAPP_PHONE_NUMBER_ID", "WHATSAPP_API_VERSION", "WHATSAPP_APP_SECRET", "WHATSAPP_VERIFY_TOKEN"],
+    moduleId: "crm",
+  },
+  {
+    id: "crm",
+    title: "CRM",
+    description: "Supabase üzerinde kalıcı müşteri kayıtları ve kaynak ilişkileri.",
+    variables: ["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "INTEGRATION_TOKEN_ENCRYPTION_KEY", "Google OAuth oturumu", "004_operations_integrations.sql migration"],
+    moduleId: "crm",
+    requiresOAuth: true,
+  },
+  {
+    id: "website",
+    title: "DDPro Web Sitesi / CMS",
+    description: "ddizaynpro.com web lead ve CMS provider bağlantısı.",
+    variables: ["WEBSITE_WEBHOOK_SECRET", "WEBSITE_CMS_API_URL", "WEBSITE_CMS_API_TOKEN"],
+    moduleId: "website",
+  },
+  {
+    id: "appStore",
+    title: "App Store Connect / Apple",
+    description: "Sunucu tarafında App Store Connect API erişimi; mobil dağıtım başlatmaz.",
+    variables: ["APPLE_ISSUER_ID", "APPLE_KEY_ID", "APPLE_PRIVATE_KEY"],
+    moduleId: "settings",
+  },
+  {
+    id: "supabase",
+    title: "Supabase",
+    description: "Proje veritabanı ve güvenli entegrasyon deposu bağlantısı.",
+    variables: ["SUPABASE_URL", "SUPABASE_ANON_KEY", "SUPABASE_SERVICE_ROLE_KEY", "004_operations_integrations.sql migration"],
+    moduleId: "projects",
+  },
+  {
+    id: "ai",
+    title: "AI Provider",
+    description: "Backend üzerinden OpenAI uyumlu Chat Completions provider'ı; test kısa bir istek gönderir ve provider kullanımına sayılabilir.",
+    variables: ["AI_API_URL", "AI_API_KEY", "AI_MODEL"],
+    moduleId: "ai-assistant",
+  },
+  {
+    id: "research",
+    title: "Web araştırma servisi",
+    description: "Gerçek harici araştırma sağlayıcısı; kaynak/fiyat doğrulaması ayrıca gerekir.",
+    variables: ["RESEARCH_API_URL", "RESEARCH_API_KEY"],
+    moduleId: "procurement",
+  },
+];
 
 const field = (name, label, type = "text", required = false) => ({
   name,
@@ -98,9 +171,20 @@ const readRecords = (key) => {
 
 const timestamp = () => new Date().toISOString();
 
-function IntegrationSettings({ onNavigate }) {
+function IntegrationSettings({ onNavigate, hubMode = false }) {
   const [status, setStatus] = useState(null);
   const [error, setError] = useState("");
+  const [testing, setTesting] = useState("");
+  const [notice, setNotice] = useState("");
+
+  const refresh = async () => {
+    setError("");
+    try {
+      setStatus(await getIntegrationStatus());
+    } catch (statusError) {
+      setError(statusError.message || "Entegrasyon durumu backend'den alınamadı.");
+    }
+  };
 
   useEffect(() => {
     let active = true;
@@ -116,9 +200,10 @@ function IntegrationSettings({ onNavigate }) {
     };
   }, []);
 
-  const statusLabel = ({ connected = false, configured = false } = {}) => {
+  const statusLabel = ({ connected = false, configured = false, status: state = "" } = {}) => {
     if (connected) return "BAĞLI";
     if (!configured) return "YAPILANDIRMA GEREKLİ";
+    if (state === "test_failed") return "BAĞLANTI TESTİ BAŞARISIZ";
     return "BAĞLI DEĞİL · bağlantı testi/oturum bekleniyor";
   };
 
@@ -133,42 +218,81 @@ function IntegrationSettings({ onNavigate }) {
   const disconnectGoogleAccount = async () => {
     try {
       await disconnectGoogle();
-      const value = await getIntegrationStatus();
-      setStatus(value);
+      setNotice("Google OAuth oturumu kapatıldı; Gmail ve Calendar erişimi kesildi.");
+      await refresh();
     } catch (disconnectError) {
       setError(disconnectError.message || "Google bağlantısı kapatılamadı.");
     }
   };
 
+  const runConnectionTest = async (provider) => {
+    setTesting(provider);
+    setError("");
+    setNotice("");
+    try {
+      await testIntegrationConnection(provider);
+      setNotice(`${integrationCatalog.find((item) => item.id === provider)?.title || provider} bağlantı testi başarılı.`);
+      await refresh();
+    } catch (testError) {
+      setError(testError.message || "Bağlantı testi başarısız.");
+      await refresh();
+    } finally {
+      setTesting("");
+    }
+  };
+
+  const providerStatus = (integration) => {
+    if (integration.id === "website") return status?.web;
+    return status?.[integration.id];
+  };
+
   return (
     <div className="operations-module">
-      <p className="status-banner info">
-        API anahtarları uygulama koduna veya tarayıcıya girilmez. Gerekli bilgileri yalnızca güvenli backend ortam değişkenlerinde yapılandırın.
-      </p>
+      {hubMode ? (
+        <div className="panel-header integration-hub-heading">
+          <div><h2>ENTEGRASYON MERKEZİ</h2><p>Sunucu bağlantılarını sınayın ve gerçek durumlarını görüntüleyin.</p></div>
+          <button type="button" onClick={refresh}>Durumları yenile</button>
+        </div>
+      ) : (
+        <div className="panel-header integration-settings-link">
+          <div><h2>Entegrasyon ayarları</h2><p>Bağlantı ve provider durumlarını merkezi alanda yönetin.</p></div>
+          <button type="button" onClick={() => onNavigate("integrations")}>Entegrasyon Merkezi ↗</button>
+        </div>
+      )}
+      <p className="status-banner info">API anahtarı, OAuth secret veya token bu arayüze girilmez. Credential değerlerini yalnızca backend environment variables üzerinden yönetin. Environment ile yönetilen servislerin bağlantısını kesmek için ilgili değişkenleri kaldırıp backend'i yeniden başlatın.</p>
       {error ? <p className="status-banner warning">{error}</p> : null}
+      {notice ? <p className="status-banner success">{notice}</p> : null}
       <div className="operations-grid">
-        <article className="data-card">
-          <div><h3>AI Provider</h3><p>Sunucu tarafında OpenAI uyumlu Chat Completions API.</p><small><strong>{status ? statusLabel({ connected: status.ai?.connected, configured: status.ai?.configured }) : "DURUM KONTROL EDİLİYOR"}</strong><br />{status?.ai?.configured ? "Kimlik bilgileri tanımlı; provider yanıtı ayrıca sınanmalı." : "AI_API_URL, AI_API_KEY ve AI_MODEL bekleniyor."}<br /><button type="button" onClick={() => onNavigate("ai-assistant")}>AI Asistanı aç</button></small></div>
-        </article>
-        <article className="data-card">
-          <div><h3>Gmail</h3><p>OAuth sonrası gelen iletiler yetkili oturumla CRM'e aktarılır.</p><small><strong>{status ? statusLabel({ connected: status.gmail?.connected, configured: status.gmail?.oauthFlowAvailable }) : "DURUM KONTROL EDİLİYOR"}</strong><br />Gmail salt okunur kapsamıyla çalışır; kurulum Google OAuth, allowlist, şifreli token deposu ve Supabase service role gerektirir.<br /><button type="button" disabled={!status?.gmail?.oauthFlowAvailable} onClick={startGoogleOAuth}>Google hesabını bağla</button> {status?.gmail?.connected ? <button type="button" onClick={disconnectGoogleAccount}>Google bağlantısını kes</button> : null} <button type="button" onClick={() => onNavigate("crm")}>CRM'e git</button></small></div>
-        </article>
-        <article className="data-card">
-          <div><h3>Google Calendar</h3><p>Backend API üzerinden etkinlik okuma ve oluşturma.</p><small><strong>{status ? statusLabel({ connected: status.googleCalendar?.connected, configured: status.googleCalendar?.oauthFlowAvailable }) : "DURUM KONTROL EDİLİYOR"}</strong><br />Google hesabı aynı OAuth bağlantısını kullanır. <button type="button" onClick={() => onNavigate("calendar")}>Takvimi aç</button></small></div>
-        </article>
-        <article className="data-card">
-          <div><h3>WhatsApp Business</h3><p>İmzalı inbound webhook, CRM aktarımı ve Cloud API gönderim adapter'ı.</p><small><strong>{status ? statusLabel({ connected: false, configured: status.whatsapp?.configured }) : "DURUM KONTROL EDİLİYOR"}</strong><br />Meta App Secret, Verify Token, access token ve phone number ID beklenir.<br /><button type="button" onClick={() => onNavigate("crm")}>CRM mesaj kayıtlarını aç</button></small></div>
-        </article>
-        <article className="data-card">
-          <div><h3>Web research provider</h3><p>Sunucu tarafında araştırma adapter'ı.</p><small><strong>{status ? statusLabel({ connected: false, configured: status.research?.configured }) : "DURUM KONTROL EDİLİYOR"}</strong><br />RESEARCH_API_URL ve RESEARCH_API_KEY bekleniyor.<br /><button type="button" onClick={() => onNavigate("procurement")}>Araştırma modülünü aç</button></small></div>
-        </article>
-        <article className="data-card">
-          <div><h3>CRM</h3><p>Supabase'e kalıcı CRM CRUD, kaynak takibi ve project ilişkilendirme.</p><small><strong>{status ? statusLabel({ connected: status.crm?.connected, configured: status.crm?.configured }) : "DURUM KONTROL EDİLİYOR"}</strong><br />Şifreli OAuth depolaması için Supabase service-role key gerekir.<br /><button type="button" onClick={() => onNavigate("crm")}>CRM kayıtlarını aç</button></small></div>
-        </article>
-        <article className="data-card">
-          <div><h3>Web sitesi / CMS</h3><p>İmzalı web lead intake ve backend CMS adapter.</p><small><strong>{status ? statusLabel({ connected: false, configured: status.web?.managementConfigured }) : "DURUM KONTROL EDİLİYOR"}</strong><br />WEBSITE_WEBHOOK_SECRET ve CMS provider URL/token ayrı yapılandırılır.<br /><button type="button" onClick={() => onNavigate("website")}>Web Sitesi modülünü aç</button></small></div>
-        </article>
-        <article className="data-card"><div><h3>Supabase / API</h3><p>Projeler, teklifler, araştırma ve CRM persistence.</p><small><strong>{status ? statusLabel({ connected: status.supabase?.connected, configured: status.supabase?.configured }) : "DURUM KONTROL EDİLİYOR"}</strong><br />SUPABASE_URL, SUPABASE_ANON_KEY ve entegrasyon yazmaları için SUPABASE_SERVICE_ROLE_KEY gerekir.</small></div></article>
+        {integrationCatalog.map((integration) => {
+          const connection = providerStatus(integration);
+          const configured = integration.id === "gmail" || integration.id === "googleCalendar"
+            ? connection?.oauthFlowAvailable
+            : integration.id === "website"
+              ? connection?.managementConfigured && connection?.inboundLeadConfigured
+              : integration.id === "whatsapp"
+                ? connection?.configured
+                : connection?.configured;
+          const isGoogleConnected = status?.gmail?.connected || status?.googleCalendar?.connected;
+          return (
+            <article className="data-card integration-card" key={integration.id}>
+              <div>
+                <div className="integration-card-heading"><h3>{integration.title}</h3><span className={`integration-state${connection?.connected ? " is-connected" : connection?.status === "test_failed" ? " has-error" : ""}`}>{status ? statusLabel({ connected: connection?.connected, configured, status: connection?.status }) : "DURUM KONTROL EDİLİYOR"}</span></div>
+                <p>{integration.description}</p>
+                <small><strong>Gerekli backend yapılandırması</strong><br />{integration.variables.join(" · ")}<br />
+                  {connection?.lastTest?.testedAt ? `Son test: ${new Date(connection.lastTest.testedAt).toLocaleString("tr-TR")}` : "Henüz bağlantı testi çalıştırılmadı."}
+                  {connection?.lastTest?.error ? <span className="integration-error">{connection.lastTest.error}</span> : null}
+                  <div className="module-toolbar integration-actions">
+                    {integration.requiresOAuth && !isGoogleConnected ? <button type="button" disabled={!status?.gmail?.oauthFlowAvailable} onClick={startGoogleOAuth}>Google hesabını bağla</button> : null}
+                    <button type="button" disabled={!configured || testing === integration.id || (integration.requiresOAuth && !isGoogleConnected)} onClick={() => runConnectionTest(integration.id)}>{testing === integration.id ? "Test ediliyor…" : "Bağlantıyı test et"}</button>
+                    {integration.id === "gmail" && isGoogleConnected ? <button type="button" onClick={disconnectGoogleAccount}>Google bağlantısını kes</button> : null}
+                    <button type="button" onClick={() => onNavigate(integration.moduleId)}>{integration.moduleId === "ai-assistant" ? "AI TRADE'i aç" : "Modülü aç"}</button>
+                  </div>
+                  <span className="integration-secret-note">Credential alanları yalnızca sunucu environment variables üzerinden tanımlanır; secret değeri uygulamada gösterilmez.</span>
+                </small>
+              </div>
+            </article>
+          );
+        })}
       </div>
     </div>
   );
@@ -639,6 +763,7 @@ export default function OperationsModule({
   }, [definition, moduleId, records]);
 
   if (moduleId === "settings") return <IntegrationSettings onNavigate={onNavigate} />;
+  if (moduleId === "integrations") return <IntegrationSettings onNavigate={onNavigate} hubMode />;
   if (moduleId === "website") return <WebsiteWorkspace onNavigate={onNavigate} setAiInput={setAiInput} />;
   if (moduleId === "crm") return <CrmWorkspace onNavigate={onNavigate} setAiInput={setAiInput} />;
   if (moduleId === "calendar") return <CalendarWorkspace />;

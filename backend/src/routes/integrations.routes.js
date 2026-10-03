@@ -1,5 +1,9 @@
 import express from "express";
-import { getIntegrationStatus } from "../controllers/integrations.controller.js";
+import rateLimit from "express-rate-limit";
+import {
+  getIntegrationStatus,
+  postIntegrationTest,
+} from "../controllers/integrations.controller.js";
 import {
   completeGoogleOAuth,
   beginGoogleOAuth,
@@ -19,6 +23,20 @@ import {
 const router = express.Router();
 
 router.get("/status", getIntegrationStatus);
+router.post(
+  "/test/:provider",
+  rateLimit({
+    windowMs: 60_000,
+    limit: 12,
+    standardHeaders: "draft-8",
+    legacyHeaders: false,
+  }),
+  (req, res, next) =>
+    ["gmail", "googleCalendar", "crm"].includes(req.params.provider)
+      ? requireGoogleSession(req, res, next)
+      : next(),
+  postIntegrationTest
+);
 router.get("/google/start", beginGoogleOAuth);
 router.get("/google/callback", completeGoogleOAuth);
 router.post("/google/logout", requireGoogleSession, revokeGoogleSession);
