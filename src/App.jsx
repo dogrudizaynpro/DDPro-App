@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useId, useMemo, useRef, useState } from "react";
-import ddproMasterLogo from "../DDPRO_LOGO_MASTER_V1_EXACT.png";
-import dashboardDesignReference from "../DDPro-Dashboard-Referans.png";
+import ddproMasterLogo from "./assets/DDPRO_LOGO_MASTER_V1_EXACT.png";
+import dashboardDesignReference from "./assets/DDPro-Dashboard-Referans.png";
 import {
   createProject as createProjectRequest,
   deleteProject as deleteProjectRequest,
@@ -2137,9 +2137,9 @@ function App() {
               alt="DOĞRU DİZAYN PRO'nun grafit, metalik ve zümrüt operasyon merkezi Dashboard tasarımı"
             />
             <nav className="dashboard-reference-primary-nav" aria-label="Ana modüller">
-              {dashboardReferenceNavigation.map((item, index) => (
+              {dashboardReferenceNavigation.map((item) => (
                 <button
-                  className={`dashboard-reference-hotspot dashboard-reference-nav-${index}`}
+                  className={`dashboard-reference-hotspot dashboard-reference-nav-${item.moduleId}`}
                   key={`${item.label}-${item.moduleId}`}
                   type="button"
                   aria-label={item.label}
@@ -2148,9 +2148,9 @@ function App() {
               ))}
             </nav>
             <div className="dashboard-reference-kpis" aria-label="Dashboard KPI modülleri">
-              {dashboardStats.map((stat, index) => (
+              {dashboardStats.map((stat) => (
                 <button
-                  className={`dashboard-reference-hotspot dashboard-reference-kpi-${index}`}
+                  className={`dashboard-reference-hotspot dashboard-reference-kpi-${stat.moduleId}`}
                   key={stat.label}
                   type="button"
                   aria-label={`${stat.label}: ${stat.value}. Modülü aç`}
@@ -2181,6 +2181,12 @@ function App() {
               type="button"
               aria-label="Sistem durumlarını aç"
               onClick={() => handleModuleNavigation("systems")}
+            />
+            <button
+              className="dashboard-reference-hotspot dashboard-reference-live"
+              type="button"
+              aria-label="Tasarım görselinden canlı Dashboard modüllerine geç"
+              onClick={() => setShowDashboardReference(false)}
             />
             <details className="dashboard-reference-module-menu">
               <summary aria-label="Tüm uygulama modüllerini aç">

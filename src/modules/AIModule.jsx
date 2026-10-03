@@ -1,4 +1,4 @@
-import aiTradeDesignReference from "../../DDPro-AI-Trade-Referans.png";
+import aiTradeDesignReference from "../assets/DDPro-AI-Trade-Referans.png";
 import aiCharacterFront from "../assets/ddpro-ai-character-front.png";
 import aiCharacterBack from "../assets/ddpro-ai-character-back.png";
 
@@ -71,7 +71,6 @@ function AIModule({
   };
 
   const selectCapability = (capability) => {
-    setAiInput(capability.prompt);
     if (capability.moduleId === "ai-assistant") {
       activateRole(capability.prompt);
       return;

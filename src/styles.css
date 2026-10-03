@@ -3992,34 +3992,35 @@ textarea::placeholder {
   box-shadow: 0 0 18px rgba(165, 214, 75, 0.28);
 }
 
-.dashboard-reference-nav-0 { left: 1%; top: 36.5%; width: 17.5%; height: 6.2%; }
-.dashboard-reference-nav-1 { left: 1%; top: 43.1%; width: 17.5%; height: 4.8%; }
-.dashboard-reference-nav-2 { left: 1%; top: 48.3%; width: 17.5%; height: 5.2%; }
-.dashboard-reference-nav-3 { left: 1%; top: 53.8%; width: 17.5%; height: 5.2%; }
-.dashboard-reference-nav-4 { left: 1%; top: 59.3%; width: 17.5%; height: 5.2%; }
-.dashboard-reference-nav-5 { left: 1%; top: 64.7%; width: 17.5%; height: 5%; }
-.dashboard-reference-nav-6 { left: 1%; top: 69.8%; width: 17.5%; height: 5.2%; }
-.dashboard-reference-nav-7 { left: 1%; top: 75.2%; width: 17.5%; height: 4.5%; }
+.dashboard-reference-nav-dashboard { left: 1%; top: 36.5%; width: 17.5%; height: 6.2%; }
+.dashboard-reference-nav-projects { left: 1%; top: 43.1%; width: 17.5%; height: 4.8%; }
+.dashboard-reference-nav-procurement { left: 1%; top: 48.3%; width: 17.5%; height: 5.2%; }
+.dashboard-reference-nav-ai-assistant { left: 1%; top: 53.8%; width: 17.5%; height: 5.2%; }
+.dashboard-reference-nav-calendar { left: 1%; top: 59.3%; width: 17.5%; height: 5.2%; }
+.dashboard-reference-nav-messages { left: 1%; top: 64.7%; width: 17.5%; height: 5%; }
+.dashboard-reference-nav-reports { left: 1%; top: 69.8%; width: 17.5%; height: 5.2%; }
+.dashboard-reference-nav-settings { left: 1%; top: 75.2%; width: 17.5%; height: 4.5%; }
 
-.dashboard-reference-kpi-0 { left: 23.8%; top: 32.5%; width: 21.8%; height: 18.3%; }
-.dashboard-reference-kpi-1 { left: 46.5%; top: 32.5%; width: 16.4%; height: 18.3%; }
-.dashboard-reference-kpi-2 { left: 63.8%; top: 32.5%; width: 16.2%; height: 18.3%; }
-.dashboard-reference-kpi-3 { left: 81%; top: 32.5%; width: 16.1%; height: 18.3%; }
+.dashboard-reference-kpi-projects { left: 23.8%; top: 32.5%; width: 21.8%; height: 18.3%; }
+.dashboard-reference-kpi-offers { left: 46.5%; top: 32.5%; width: 16.4%; height: 18.3%; }
+.dashboard-reference-kpi-procurement { left: 63.8%; top: 32.5%; width: 16.2%; height: 18.3%; }
+.dashboard-reference-kpi-ai-assistant { left: 81%; top: 32.5%; width: 16.1%; height: 18.3%; }
 .dashboard-reference-projects { left: 48.8%; top: 52.4%; width: 25.5%; height: 39%; }
 .dashboard-reference-map { left: 21%; top: 52.4%; width: 26.8%; height: 39%; }
 .dashboard-reference-calendar { left: 75.5%; top: 52.4%; width: 23.5%; height: 39%; }
 .dashboard-reference-systems { left: 89%; top: 92.3%; width: 9.5%; height: 5.2%; }
+.dashboard-reference-live { left: 43.8%; top: 53.7%; width: 1.7%; height: 2.7%; }
 
 .dashboard-reference-module-menu {
   position: absolute;
   z-index: 3;
   top: 53.6%;
-  left: 45%;
+  left: 45.9%;
 }
 
 .dashboard-reference-module-menu summary {
-  width: clamp(28px, 3vw, 44px);
-  height: clamp(28px, 3vw, 44px);
+  width: clamp(28px, 2vw, 34px);
+  height: clamp(28px, 2.7vw, 34px);
   border-radius: 5px;
   cursor: pointer;
   list-style: none;
@@ -4180,12 +4181,6 @@ textarea::placeholder {
 }
 
 @media (max-width: 1100px) {
-  .dashboard-reference-active > .app-header,
-  .dashboard-reference-active > .app-layout,
-  .dashboard-reference-active > .app-footer {
-    display: none;
-  }
-
   .dashboard-reference-screen {
     justify-content: flex-start;
     gap: 12px;
