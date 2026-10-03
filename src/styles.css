@@ -4078,6 +4078,16 @@ textarea::placeholder {
   display: none;
 }
 
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  clip-path: inset(50%);
+}
+
 .dashboard-reference-return {
   padding: 9px 12px;
   border: 1px solid rgba(202, 166, 111, 0.55);
