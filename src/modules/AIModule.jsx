@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import aiTradeDesignReference from "../assets/DDPro-AI-Trade-Referans.png";
 import aiCharacterFront from "../assets/ddpro-ai-character-front.png";
 import aiCharacterBack from "../assets/ddpro-ai-character-back.png";
@@ -61,10 +62,12 @@ function AIModule({
   onNavigate,
   messagesOnly = false,
 }) {
+  const promptFieldRef = useRef(null);
+
   const activateRole = (prompt) => {
     setAiInput(prompt);
     window.requestAnimationFrame(() => {
-      const promptField = document.getElementById("ai-trade-prompt");
+      const promptField = promptFieldRef.current;
       promptField?.scrollIntoView({ behavior: "smooth", block: "center" });
       promptField?.focus({ preventScroll: true });
     });
@@ -160,7 +163,7 @@ function AIModule({
           </div>
           <form className="ai-form" onSubmit={sendAiMessage}>
             <textarea
-              id="ai-trade-prompt"
+              ref={promptFieldRef}
               aria-label="DDPro AI mesajı"
               placeholder="DDPro AI için mesajını yaz..."
               value={aiInput}

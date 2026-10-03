@@ -413,6 +413,8 @@ function App() {
     resolveModuleFromHash(window.location.hash)
   );
   const [showDashboardReference, setShowDashboardReference] = useState(true);
+  const dashboardReferenceLiveRef = useRef(null);
+  const dashboardReferenceReturnRef = useRef(null);
 
   const [apiHealthState, setApiHealthState] = useState({
     status: "loading",
@@ -533,6 +535,27 @@ function App() {
       window.removeEventListener("hashchange", syncModuleFromHash);
     };
   }, []);
+
+  useEffect(() => {
+    if (activeModule !== "dashboard") return;
+    const focusTarget = showDashboardReference
+      ? dashboardReferenceLiveRef.current
+      : dashboardReferenceReturnRef.current;
+    focusTarget?.focus({ preventScroll: true });
+  }, [activeModule, showDashboardReference]);
+
+  useEffect(() => {
+    if (activeModule !== "dashboard" || !showDashboardReference) return;
+
+    const closeReferenceOnEscape = (event) => {
+      if (event.key === "Escape") {
+        setShowDashboardReference(false);
+      }
+    };
+
+    window.addEventListener("keydown", closeReferenceOnEscape);
+    return () => window.removeEventListener("keydown", closeReferenceOnEscape);
+  }, [activeModule, showDashboardReference]);
 
   useEffect(() => {
     if (!moduleIds.has(activeModule)) {
@@ -1635,15 +1658,6 @@ function App() {
           <p className="activity-empty">Yeni işlem kayıtları burada görüntülenecek.</p>
         )}
       </section>
-      <details className="design-reference">
-        <summary>ANA DASHBOARD TASARIM REFERANSI</summary>
-        <img
-          src={dashboardDesignReference}
-          alt="DOĞRU DİZAYN PRO ana Dashboard tasarım referansı"
-          loading="lazy"
-          decoding="async"
-        />
-      </details>
     </div>
   );
 
@@ -1976,8 +1990,8 @@ function App() {
         <div className="calendar-route">
           <DashboardCalendar now={currentDate} title="TAKVİM" />
           <p className="calendar-route-status">
-            Etkinlik verileri şu anda bağlı değil; bu görünüm yalnızca tarih
-            navigasyonunu gösterir.
+            Bu görünüm yalnızca mevcut ayı gösterir. Etkinlik verileri şu anda
+            bağlı değil.
           </p>
         </div>
       );
@@ -2086,6 +2100,8 @@ function App() {
               <button
                 className="dashboard-reference-return"
                 type="button"
+                ref={dashboardReferenceReturnRef}
+                aria-expanded={showDashboardReference}
                 onClick={() => setShowDashboardReference(true)}
               >
                 ANA TASARIM GÖRÜNÜMÜ
@@ -2129,7 +2145,13 @@ function App() {
       </footer>
 
       {activeModule === "dashboard" && showDashboardReference ? (
-        <section className="dashboard-reference-screen" aria-label="Ana Dashboard referans görünümü">
+        <section
+          id="dashboard-reference-screen"
+          className="dashboard-reference-screen"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Ana Dashboard referans görünümü"
+        >
           <div className="dashboard-reference-canvas">
             <img
               className="dashboard-reference-image"
@@ -2185,7 +2207,9 @@ function App() {
             <button
               className="dashboard-reference-hotspot dashboard-reference-live"
               type="button"
+              ref={dashboardReferenceLiveRef}
               aria-label="Tasarım görselinden canlı Dashboard modüllerine geç"
+              title="Canlı Dashboard'u aç"
               onClick={() => setShowDashboardReference(false)}
             />
             <details className="dashboard-reference-module-menu">

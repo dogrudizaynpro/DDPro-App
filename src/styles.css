@@ -2231,6 +2231,10 @@ select:focus-visible {
   display: none;
 }
 
+.dashboard-shell:not(.dashboard-reference-active) .dashboard-main .content-header {
+  display: flex;
+}
+
 .content-header h1 {
   color: #efeee8;
   font-size: clamp(24px, 2vw, 32px);
@@ -4011,6 +4015,25 @@ textarea::placeholder {
 .dashboard-reference-systems { left: 89%; top: 92.3%; width: 9.5%; height: 5.2%; }
 .dashboard-reference-live { left: 43.8%; top: 53.7%; width: 1.7%; height: 2.7%; }
 
+.dashboard-reference-live:hover::after,
+.dashboard-reference-live:focus-visible::after {
+  position: absolute;
+  top: 50%;
+  left: calc(100% + 8px);
+  z-index: 4;
+  padding: 6px 9px;
+  transform: translateY(-50%);
+  border: 1px solid rgba(202, 166, 111, 0.55);
+  border-radius: 4px;
+  background: rgba(12, 14, 13, 0.96);
+  color: #e0d4b8;
+  content: "Canlı Dashboard";
+  font-size: 11px;
+  font-weight: 650;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
 .dashboard-reference-module-menu {
   position: absolute;
   z-index: 3;
@@ -4099,32 +4122,6 @@ textarea::placeholder {
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.08em;
-}
-
-.design-reference {
-  overflow: hidden;
-  border: 1px solid rgba(199, 194, 176, 0.34);
-  border-radius: 10px;
-  background: linear-gradient(145deg, #252725, #111313);
-  box-shadow:
-    0 12px 26px rgba(0, 0, 0, 0.38),
-    inset 0 1px rgba(255, 255, 255, 0.09);
-}
-
-.design-reference summary {
-  padding: 14px 17px;
-  color: #d1c49f;
-  cursor: pointer;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-}
-
-.design-reference img {
-  display: block;
-  width: 100%;
-  height: auto;
-  border-top: 1px solid rgba(199, 194, 176, 0.2);
 }
 
 @media (max-width: 900px) {
