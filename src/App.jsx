@@ -297,8 +297,7 @@ const formatDate = () =>
     timeStyle: "short",
   });
 
-function DashboardCalendar() {
-  const now = new Date();
+function DashboardCalendar({ now }) {
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
   const leadingDays = (monthStart.getDay() + 6) % 7;
@@ -333,7 +332,7 @@ function DashboardCalendar() {
           })}
         </div>
         <div className="calendar-empty">
-          <span className="status-dot" />
+          <span className="status-dot" aria-hidden="true" />
           <p>Etkinlik verileri bağlandığında burada listelenecek.</p>
         </div>
       </div>
@@ -373,6 +372,7 @@ const getApiStatusCode = (error) =>
 
 function App() {
   const dashboardMapId = useId().replace(/:/g, "");
+  const [currentDate, setCurrentDate] = useState(() => new Date());
   const [activeModule, setActiveModule] = useState(() =>
     resolveModuleFromHash(window.location.hash)
   );
@@ -475,6 +475,11 @@ function App() {
       date: formatDate(),
     },
   ]);
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => setCurrentDate(new Date()), 60_000);
+    return () => window.clearInterval(intervalId);
+  }, []);
 
   useEffect(() => {
     const syncModuleFromHash = () => {
@@ -1470,7 +1475,7 @@ function App() {
               </g>
               <rect width="600" height="320" fill={`url(#${dashboardMapId}-dots)`} />
             </svg>
-            <div className="map-legend"><span /> Proje ağı görünümü</div>
+            <div className="map-legend"><span aria-hidden="true" /> Proje ağı görünümü</div>
           </div>
         </section>
 
@@ -1515,7 +1520,7 @@ function App() {
           </div>
         </section>
 
-        <DashboardCalendar />
+        <DashboardCalendar now={currentDate} />
       </div>
 
       <div className="dashboard-footer-grid">
@@ -1523,7 +1528,7 @@ function App() {
           <div className="panel-header">
             <h2>SİSTEM DURUMLARI</h2>
             <span className={`system-overall ${headerStatusTone}`}>
-              <span className={`status-dot ${headerStatusTone}`} />
+            <span className={`status-dot ${headerStatusTone}`} aria-hidden="true" />
               API: {getConnectionLabel(apiHealthState.status)}
             </span>
           </div>
@@ -1929,7 +1934,7 @@ function App() {
             alt="DOĞRU DİZAYN PRO"
           />
           <div className="brand-content">
-            <span>CREATIVE SOLUTIONS <i /> AI TRADE</span>
+            <span>CREATIVE SOLUTIONS <i aria-hidden="true" /> AI TRADE</span>
           </div>
         </div>
 
@@ -1939,7 +1944,7 @@ function App() {
         </div>
 
         <div className={`header-status ${headerStatusTone}`}>
-          <span className={`status-dot ${headerStatusTone}`}></span>
+          <span className={`status-dot ${headerStatusTone}`} aria-hidden="true"></span>
           {headerStatusLabel}
         </div>
       </header>
@@ -1984,7 +1989,7 @@ function App() {
 
           <div className="sidebar-footer">
             <div className="sidebar-system">
-              <span className="status-dot"></span>
+              <span className="status-dot" aria-hidden="true"></span>
               DDPro Core v1.1
             </div>
           </div>
@@ -2019,16 +2024,16 @@ function App() {
       <footer className="app-footer">
         <div className="footer-slogan">
           <span>DOĞRU <strong>ÇİZGİ</strong></span>
-          <i />
+          <i aria-hidden="true" />
           <span>DOĞRU <strong>ÇÖZÜM</strong></span>
-          <i />
+          <i aria-hidden="true" />
           <span>DOĞRU <strong>SİSTEM</strong></span>
         </div>
         <div className="footer-status">
           <span className="footer-clock" aria-hidden="true">◷</span>
-          <span>{footerDateFormatter.format(new Date())}</span>
-          <i />
-          <span className="status-dot" />
+          <span>{footerDateFormatter.format(currentDate)}</span>
+          <i aria-hidden="true" />
+          <span className="status-dot" aria-hidden="true" />
           <span>Arayüz Aktif</span>
         </div>
       </footer>

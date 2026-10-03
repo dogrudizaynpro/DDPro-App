@@ -2565,6 +2565,10 @@ select:focus-visible {
   opacity: 0.45;
 }
 
+.project-preview-mark.mark-0 {
+  background: linear-gradient(145deg, #485044, #222720 55%, #171818);
+}
+
 .project-preview-mark.mark-1 {
   background: linear-gradient(145deg, #555042, #272821 55%, #171818);
 }
@@ -3050,7 +3054,6 @@ textarea::placeholder {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  align-self: flex-start;
   justify-self: end;
   align-self: start;
   padding: 9px 11px;

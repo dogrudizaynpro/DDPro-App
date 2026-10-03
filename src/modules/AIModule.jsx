@@ -41,12 +41,12 @@ function AIModule({ aiMessages, sendAiMessage, aiInput, setAiInput }) {
             partneriniz.
           </p>
           <div className="ai-role-tags">
-            <span><i>01</i> AI ASİSTAN</span>
-            <span><i>02</i> AI PARTNER</span>
-            <span><i>03</i> AI YÖNETİCİ</span>
+            <span><i aria-hidden="true">01</i> AI ASİSTAN</span>
+            <span><i aria-hidden="true">02</i> AI PARTNER</span>
+            <span><i aria-hidden="true">03</i> AI YÖNETİCİ</span>
           </div>
         </div>
-        <div className="ai-online-indicator"><span className="status-dot" /> YEREL ALAN HAZIR</div>
+        <div className="ai-online-indicator"><span className="status-dot" aria-hidden="true" /> YEREL ALAN HAZIR</div>
       </section>
 
       <div className="ai-workspace">
@@ -73,7 +73,7 @@ function AIModule({ aiMessages, sendAiMessage, aiInput, setAiInput }) {
           </div>
           <div className="ai-specification">
             <span>ÇALIŞMA DURUMU</span>
-            <strong><i /> Yerel oturum aktif</strong>
+            <strong><i aria-hidden="true" /> Yerel oturum aktif</strong>
             <p>Mesajlar bu çalışma alanında saklanır. Gelişmiş AI bağlantısı yapılandırıldığında etkinleşir.</p>
           </div>
         </aside>
@@ -84,7 +84,7 @@ function AIModule({ aiMessages, sendAiMessage, aiInput, setAiInput }) {
               <span className="ai-eyebrow">AKILLI ÇALIŞMA ALANI</span>
               <h3>AI Asistan / Partner</h3>
             </div>
-            <span className="ai-session-badge"><i /> YEREL OTURUM</span>
+            <span className="ai-session-badge"><i aria-hidden="true" /> YEREL OTURUM</span>
           </div>
           <div className="ai-chat" aria-live="polite">
             {aiMessages.map((message) => (
