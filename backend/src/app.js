@@ -1,9 +1,9 @@
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
+import rateLimit from "express-rate-limit";
 import { notFound } from "./middleware/notFound.js";
 import { errorHandler } from "./middleware/errorHandler.js";
-import { createRateLimiter } from "./middleware/rateLimit.js";
 import projectsRouter from "./routes/projects.routes.js";
 import researchRouter from "./routes/research.routes.js";
 import offersRouter from "./routes/offers.routes.js";
@@ -57,17 +57,35 @@ app.use("/api/integrations", integrationsRouter);
 app.use("/api/crm", crmRouter);
 app.get(
   "/webhooks/whatsapp",
-  createRateLimiter({ limit: 120 }),
+  rateLimit({
+    windowMs: 60_000,
+    limit: 120,
+    standardHeaders: "draft-8",
+    legacyHeaders: false,
+    message: { status: "error", message: "Too many webhook requests. Try again later." },
+  }),
   getWhatsAppWebhookChallenge
 );
 app.post(
   "/webhooks/whatsapp",
-  createRateLimiter({ limit: 600 }),
+  rateLimit({
+    windowMs: 60_000,
+    limit: 600,
+    standardHeaders: "draft-8",
+    legacyHeaders: false,
+    message: { status: "error", message: "Too many webhook requests. Try again later." },
+  }),
   postWhatsAppWebhook
 );
 app.post(
   "/webhooks/website/leads",
-  createRateLimiter({ limit: 120 }),
+  rateLimit({
+    windowMs: 60_000,
+    limit: 120,
+    standardHeaders: "draft-8",
+    legacyHeaders: false,
+    message: { status: "error", message: "Too many webhook requests. Try again later." },
+  }),
   postWebsiteLead
 );
 
