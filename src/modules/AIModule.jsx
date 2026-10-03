@@ -30,7 +30,34 @@ const capabilities = [
   },
 ];
 
+const aiTradeRoles = [
+  {
+    className: "ai-role-hotspot-assistant",
+    label: "AI Asistan çalışma alanını aç",
+    prompt: "Bir DDPro AI Asistan olarak bana proje ve operasyonlarımda yardımcı ol.",
+  },
+  {
+    className: "ai-role-hotspot-partner",
+    label: "AI Partner çalışma alanını aç",
+    prompt: "Bir DDPro AI Partner olarak aktif proje ve süreçlerimde benimle birlikte çalış.",
+  },
+  {
+    className: "ai-role-hotspot-manager",
+    label: "AI Yönetici karar desteğini aç",
+    prompt: "Bir DDPro AI Yönetici olarak mevcut işlerimi önceliklendir ve karar desteği sun.",
+  },
+];
+
 function AIModule({ aiMessages, sendAiMessage, aiInput, setAiInput }) {
+  const activateRole = (prompt) => {
+    setAiInput(prompt);
+    window.requestAnimationFrame(() => {
+      const promptField = document.getElementById("ai-trade-prompt");
+      promptField?.scrollIntoView({ behavior: "smooth", block: "center" });
+      promptField?.focus({ preventScroll: true });
+    });
+  };
+
   return (
     <div className="module-page ai-module">
       <section className="ai-trade-master-reference" aria-label="DDPro AI TRADE ana tasarım referansı">
@@ -41,6 +68,17 @@ function AIModule({ aiMessages, sendAiMessage, aiInput, setAiInput }) {
         />
         <img className="ai-character-crop ai-character-front" src={aiCharacterFront} alt="" aria-hidden="true" />
         <img className="ai-character-crop ai-character-back" src={aiCharacterBack} alt="" aria-hidden="true" />
+        <div className="ai-trade-role-hotspots" aria-label="AI TRADE rollerini başlat">
+          {aiTradeRoles.map((role) => (
+            <button
+              className={`ai-trade-role-hotspot ${role.className}`}
+              key={role.className}
+              type="button"
+              aria-label={role.label}
+              onClick={() => activateRole(role.prompt)}
+            />
+          ))}
+        </div>
       </section>
 
       <div className="ai-workspace">
@@ -98,6 +136,7 @@ function AIModule({ aiMessages, sendAiMessage, aiInput, setAiInput }) {
           </div>
           <form className="ai-form" onSubmit={sendAiMessage}>
             <textarea
+              id="ai-trade-prompt"
               aria-label="DDPro AI mesajı"
               placeholder="DDPro AI için mesajını yaz..."
               value={aiInput}

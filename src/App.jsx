@@ -2086,11 +2086,6 @@ function App() {
               src={dashboardDesignReference}
               alt="DOĞRU DİZAYN PRO'nun grafit, metalik ve zümrüt operasyon merkezi Dashboard tasarımı"
             />
-            <img
-              className="dashboard-reference-master-logo"
-              src={ddproMasterLogo}
-              alt="DOĞRU DİZAYN PRO gerçek master logosu"
-            />
             <nav className="dashboard-reference-primary-nav" aria-label="Ana modüller">
               {dashboardReferenceNavigation.map((item, index) => (
                 <button
@@ -2120,6 +2115,12 @@ function App() {
               onClick={() => handleModuleNavigation("projects")}
             />
             <button
+              className="dashboard-reference-hotspot dashboard-reference-map"
+              type="button"
+              aria-label="Proje haritasından projeleri aç"
+              onClick={() => handleModuleNavigation("projects")}
+            />
+            <button
               className="dashboard-reference-hotspot dashboard-reference-calendar"
               type="button"
               aria-label="Proje takvimini aç"
@@ -2131,24 +2132,18 @@ function App() {
               aria-label="Sistem durumlarını aç"
               onClick={() => handleModuleNavigation("systems")}
             />
-            <details className="dashboard-reference-all-modules">
-              <summary>TÜM MODÜLLER</summary>
-              <nav aria-label="Tüm uygulama modülleri">
-                <button type="button" onClick={() => setShowDashboardReference(false)}>
-                  Canlı Dashboard verilerini aç
-                </button>
-                {modules.map((module) => (
-                  <button
-                    key={module.id}
-                    type="button"
-                    onClick={() => handleModuleNavigation(module.id)}
-                  >
-                    {module.title}
-                  </button>
-                ))}
-              </nav>
-            </details>
           </div>
+          <nav className="dashboard-reference-mobile-nav" aria-label="Dashboard modülleri">
+            {dashboardReferenceNavigation.map((item) => (
+              <button
+                key={`${item.label}-${item.moduleId}`}
+                type="button"
+                onClick={() => handleModuleNavigation(item.moduleId)}
+              >
+                {item.label}
+              </button>
+            ))}
+          </nav>
         </section>
       ) : null}
     </div>
