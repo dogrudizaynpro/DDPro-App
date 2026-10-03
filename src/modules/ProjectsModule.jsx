@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { getCrmContacts } from "../services/operations-integrations.service.js";
 
 function ProjectsModule({
   showProjectForm,
@@ -24,14 +25,35 @@ function ProjectsModule({
   const [notes, setNotes] = useState("");
   const [status, setStatus] = useState("");
   const [detailsStatus, setDetailsStatus] = useState("");
+  const [crmContacts, setCrmContacts] = useState([]);
+  const [crmContactsError, setCrmContactsError] = useState("");
+  const [crmContactId, setCrmContactId] = useState("");
 
   useEffect(() => {
     setAreaM2(selectedProject?.areaM2 ?? "");
     setSystems((selectedProject?.systems || []).join(", "));
     setNotes(selectedProject?.notes || "");
     setStatus(selectedProject?.status || "Aktif");
+    setCrmContactId(selectedProject?.crmContactId || "");
     setDetailsStatus("");
   }, [selectedProject?.id]);
+
+  useEffect(() => {
+    let active = true;
+    getCrmContacts()
+      .then((response) => {
+        if (active) {
+          setCrmContacts(response.data || []);
+          setCrmContactsError("");
+        }
+      })
+      .catch((error) => {
+        if (active) setCrmContactsError(error.message);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const saveProjectDetails = async (event) => {
     event.preventDefault();
@@ -40,6 +62,7 @@ function ProjectsModule({
       systems: systems.split(",").map((item) => item.trim()).filter(Boolean),
       notes,
       status,
+      crmContactId,
     });
     setDetailsStatus(
       saved
@@ -71,6 +94,13 @@ function ProjectsModule({
               <label>m²<input type="number" min="0" step="any" value={areaM2} onChange={(event) => setAreaM2(event.target.value)} /></label>
               <label>Sistemler (virgülle ayırın)<input value={systems} onChange={(event) => setSystems(event.target.value)} /></label>
               <label>Proje notları<textarea rows={4} value={notes} onChange={(event) => setNotes(event.target.value)} /></label>
+              <label>Bağlı CRM müşterisi
+                <select value={crmContactId} onChange={(event) => setCrmContactId(event.target.value)}>
+                  <option value="">Müşteri bağlama</option>
+                  {crmContacts.map((contact) => <option key={contact.id} value={contact.id}>{contact.name}</option>)}
+                </select>
+              </label>
+              {crmContactsError ? <small>CRM bağlantısı için Google yetkili oturumu gerekir.</small> : null}
               <button type="submit">Proje ayrıntılarını kaydet</button>
             </form>
             {detailsStatus ? <p role="status">{detailsStatus}</p> : null}

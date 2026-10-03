@@ -14,11 +14,13 @@ function ProcurementModule({
   procurementItems,
   deleteProcurement,
   saveResearchResult,
+  projects = [],
 }) {
   const [researchQuery, setResearchQuery] = useState("");
   const [researchResults, setResearchResults] = useState([]);
   const [researchError, setResearchError] = useState("");
   const [researchLoading, setResearchLoading] = useState(false);
+  const [researchProjectId, setResearchProjectId] = useState("");
 
   const searchResearch = async (event) => {
     event.preventDefault();
@@ -48,6 +50,7 @@ function ProcurementModule({
           maxLength={500}
           required
         />
+        <label>İlgili proje<select value={researchProjectId} onChange={(event) => setResearchProjectId(event.target.value)}><option value="">Proje bağla (isteğe bağlı)</option>{projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label>
         <button type="submit" disabled={researchLoading}>
           {researchLoading ? "Araştırılıyor…" : "Gerçek sağlayıcıda ara"}
         </button>
@@ -63,7 +66,7 @@ function ProcurementModule({
             {/^https?:\/\//i.test(result.url || "") ? <p><a href={result.url} target="_blank" rel="noopener noreferrer">Kaynağı aç ↗</a></p> : null}
             <small>{result.date} · {result.status}</small>
           </div>
-          <button type="button" onClick={() => saveResearchResult(result)}>Araştırma kaydına ekle</button>
+          <button type="button" onClick={() => saveResearchResult({ ...result, projectId: researchProjectId })}>Araştırma kaydına ekle</button>
         </article>
       ))}
 
@@ -103,6 +106,8 @@ function ProcurementModule({
             <option>Kullanıcı kaynağı kontrol etti</option>
           </select>
           <input name="url" type="url" placeholder="Kaynak bağlantısı (https://...)" />
+          <label>İlgili proje<select name="projectId" defaultValue=""><option value="">Proje seçin</option>{projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label>
+          <input name="productId" type="text" placeholder="Ürün UUID (varsa)" />
           <select name="status" defaultValue="Taslak">
             <option>Taslak</option>
             <option>Araştırılıyor</option>

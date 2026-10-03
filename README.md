@@ -41,5 +41,16 @@ DDPro-App; gerçek veriler, gerçek projeler ve kontrollü entegrasyonlar üzeri
 ### Backend Notları
 
 - Backend kodu `/backend` altında Node.js + Express + Supabase yapısındadır.
-- Aktif API rotaları: `/api/projects`, `/api/research`, `/api/offers`
+- API rotaları: `/api/projects`, `/api/research`, `/api/offers`, `/api/crm`, `/api/ai`, `/api/integrations`
 - Production CORS origin'i `https://dogrudizaynpro.github.io` olacak şekilde yapılandırılmalıdır.
+
+### Entegrasyon Kurulumu
+
+- `backend/.env.example` dosyasını backend `.env` dosyasına kopyalayın. Secret/token değerlerini frontend `VITE_*` değişkenlerine veya kaynak koda koymayın.
+- Supabase SQL Editor'da `backend/database/migrations/004_operations_integrations.sql` migration'ını, önceki proje/araştırma migration'larından sonra çalıştırın.
+- Google Cloud OAuth callback URI'sini backend'in `/api/integrations/google/callback` adresine ayarlayın. `GOOGLE_ALLOWED_EMAILS` yalnızca yetkili e-posta adreslerini içermelidir.
+- Google token'ları Supabase `integration_tokens` tablosunda AES-256-GCM ile şifrelenir. OAuth için `SUPABASE_SERVICE_ROLE_KEY`, 32-byte hex `INTEGRATION_TOKEN_ENCRYPTION_KEY`, `INTEGRATION_SESSION_SECRET`, Google OAuth credentials ve allowlist gereklidir. Service-role anahtarı yalnızca backend'de tutulur.
+- WhatsApp Business webhook adresi `/webhooks/whatsapp`, web form lead endpoint'i `/webhooks/website/leads` yoludur. Her iki sağlayıcı da imza doğrulamasıyla korunur; web sitesinin bu endpoint'e HMAC `x-ddpro-signature` eklemesi gerekir.
+- Web CMS adapter'ı yalnızca `pages`, `products` ve `references` içerik yollarını ve HTTPS provider URL'sini kabul eder.
+- AI, Gmail/Google Calendar, WhatsApp, web araştırması, CMS ve Supabase bağlantı durumları Ayarlar > Entegrasyonlar'da görüntülenir. Kimlik bilgileri tanımlı olması tek başına provider bağlantı testi yerine geçmez.
+- Google bağlantısı Gmail salt-okunur ve Calendar etkinlik erişim kapsamlarını ister. OAuth grant'i uygulandığında gelen e-postalar CRM'e kullanıcı tarafından aktarılır; WhatsApp ve web form lead'leri imzalı webhook ile CRM'e alınır.

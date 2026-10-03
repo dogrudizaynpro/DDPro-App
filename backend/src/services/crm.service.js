@@ -2,6 +2,7 @@ import { getIntegrationAdmin } from "../config/integration-admin.js";
 
 const CRM_FIELDS = [
   "name",
+  "contact_date",
   "company",
   "phone",
   "email",
@@ -22,11 +23,9 @@ export const normalizeCrmContact = (body = {}, { inbound = false } = {}) => {
   const name = cleanText(body.name, 250);
   const email = cleanText(body.email, 320).toLowerCase();
   const phone = cleanText(body.phone, 80);
-  const source = inbound
+  const source = inbound && ["website", "whatsapp", "gmail"].includes(body.source)
     ? body.source
-    : ["website", "whatsapp", "gmail"].includes(body.source)
-      ? body.source
-      : "manual";
+    : "manual";
   const area = body.area_m2 ?? body.area;
   const areaM2 = area === "" || area === null || area === undefined ? null : Number(area);
 
@@ -51,6 +50,9 @@ export const normalizeCrmContact = (body = {}, { inbound = false } = {}) => {
 
   const result = {
     name: name || email || phone,
+    contact_date:
+      cleanText(body.contact_date || body.date, 10) ||
+      new Date().toISOString().slice(0, 10),
     company: cleanText(body.company, 500) || null,
     phone: phone || null,
     email: email || null,
@@ -61,7 +63,8 @@ export const normalizeCrmContact = (body = {}, { inbound = false } = {}) => {
     status: cleanText(body.status, 100) || "Yeni",
     notes: cleanText(body.notes, 20_000) || null,
     source,
-    source_external_id: cleanText(body.source_external_id || body.externalId, 500) || null,
+    source_external_id:
+      inbound ? cleanText(body.source_external_id || body.externalId, 500) || null : null,
   };
   return Object.fromEntries(
     Object.entries(result).filter(([key, value]) =>
@@ -131,6 +134,8 @@ export const updateCrmContact = async (id, body) => {
   if (lookupError) throw lookupError;
   if (!current) return null;
   const payload = normalizeCrmContact({ ...current, ...body });
+  payload.source = current.source;
+  payload.source_external_id = current.source_external_id;
   const { data, error } = await client
     .from("crm_contacts")
     .update({ ...payload, updated_at: new Date().toISOString() })

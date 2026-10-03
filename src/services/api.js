@@ -77,6 +77,7 @@ export const fetchAPI = async (endpoint, options = {}) => {
         "Content-Type": "application/json",
         ...options.headers,
       },
+      credentials: "include",
       ...options,
     });
 

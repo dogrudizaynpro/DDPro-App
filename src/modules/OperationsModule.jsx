@@ -1,5 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
 import { getIntegrationStatus } from "../services/integrations.service.js";
+import {
+  beginGoogleConnection,
+  createGoogleCalendarEvent,
+  createCrmContact,
+  deleteCrmContact,
+  disconnectGoogle,
+  getCrmContacts,
+  getGoogleCalendarEvents,
+  importGoogleCalendarToLocal,
+  importGmailToCrm,
+  sendWhatsAppText,
+  updateCrmContact,
+} from "../services/operations-integrations.service.js";
 
 const WEBSITE_URL = "https://www.ddizaynpro.com/";
 
@@ -103,8 +116,29 @@ function IntegrationSettings({ onNavigate }) {
     };
   }, []);
 
-  const readiness = (ready, configuredText, missingText) =>
-    ready ? configuredText : missingText;
+  const statusLabel = ({ connected = false, configured = false } = {}) => {
+    if (connected) return "BAĞLI";
+    if (!configured) return "YAPILANDIRMA GEREKLİ";
+    return "BAĞLI DEĞİL · bağlantı testi/oturum bekleniyor";
+  };
+
+  const startGoogleOAuth = () => {
+    try {
+      beginGoogleConnection();
+    } catch (connectionError) {
+      setError(connectionError.message);
+    }
+  };
+
+  const disconnectGoogleAccount = async () => {
+    try {
+      await disconnectGoogle();
+      const value = await getIntegrationStatus();
+      setStatus(value);
+    } catch (disconnectError) {
+      setError(disconnectError.message || "Google bağlantısı kapatılamadı.");
+    }
+  };
 
   return (
     <div className="operations-module">
@@ -114,26 +148,27 @@ function IntegrationSettings({ onNavigate }) {
       {error ? <p className="status-banner warning">{error}</p> : null}
       <div className="operations-grid">
         <article className="data-card">
-          <div><h3>AI Provider</h3><p>Sunucu tarafında OpenAI uyumlu Chat Completions API.</p><small>{status ? readiness(status.ai?.configured, "Kimlik bilgileri var; provider yanıtı ayrıca doğrulanmalı.", "AI_API_URL, AI_API_KEY ve AI_MODEL bekleniyor.") : "Backend durumu kontrol ediliyor."}<br /><button type="button" onClick={() => onNavigate("ai-assistant")}>AI Asistanı aç</button></small></div>
+          <div><h3>AI Provider</h3><p>Sunucu tarafında OpenAI uyumlu Chat Completions API.</p><small><strong>{status ? statusLabel({ connected: status.ai?.connected, configured: status.ai?.configured }) : "DURUM KONTROL EDİLİYOR"}</strong><br />{status?.ai?.configured ? "Kimlik bilgileri tanımlı; provider yanıtı ayrıca sınanmalı." : "AI_API_URL, AI_API_KEY ve AI_MODEL bekleniyor."}<br /><button type="button" onClick={() => onNavigate("ai-assistant")}>AI Asistanı aç</button></small></div>
         </article>
         <article className="data-card">
-          <div><h3>Gmail / Google</h3><p>OAuth akışı henüz uygulanmadı; e-posta okunmaz veya gönderilmez.</p><small>{status ? readiness(status.gmail?.configured, "OAuth bilgileri tanımlı; OAuth akışı uygulanmalı.", "GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET ve GOOGLE_REDIRECT_URI bekleniyor.") : "Backend durumu kontrol ediliyor."}<br /><button type="button" onClick={() => onNavigate("messages")}>Mesaj merkezini aç</button></small></div>
+          <div><h3>Gmail</h3><p>OAuth sonrası gelen iletiler yetkili oturumla CRM'e aktarılır.</p><small><strong>{status ? statusLabel({ connected: status.gmail?.connected, configured: status.gmail?.oauthFlowAvailable }) : "DURUM KONTROL EDİLİYOR"}</strong><br />Gmail salt okunur kapsamıyla çalışır; kurulum Google OAuth, allowlist, şifreli token deposu ve Supabase service role gerektirir.<br /><button type="button" disabled={!status?.gmail?.oauthFlowAvailable} onClick={startGoogleOAuth}>Google hesabını bağla</button> {status?.gmail?.connected ? <button type="button" onClick={disconnectGoogleAccount}>Google bağlantısını kes</button> : null} <button type="button" onClick={() => onNavigate("crm")}>CRM'e git</button></small></div>
         </article>
         <article className="data-card">
-          <div><h3>Web araştırma sağlayıcısı</h3><p>Gerçek sağlayıcıya bağlı sunucu tarafı araştırma adapter’ı.</p><small>{status ? readiness(status.research?.configured, "API bilgileri tanımlı; sağlayıcı sözleşmesi ve yanıtı ayrıca doğrulanmalı.", "RESEARCH_API_URL ve RESEARCH_API_KEY bekleniyor.") : "Backend durumu kontrol ediliyor."}<br /><button type="button" onClick={() => onNavigate("procurement")}>Tedarik &amp; Araştırma modülünü aç</button></small></div>
+          <div><h3>Google Calendar</h3><p>Backend API üzerinden etkinlik okuma ve oluşturma.</p><small><strong>{status ? statusLabel({ connected: status.googleCalendar?.connected, configured: status.googleCalendar?.oauthFlowAvailable }) : "DURUM KONTROL EDİLİYOR"}</strong><br />Google hesabı aynı OAuth bağlantısını kullanır. <button type="button" onClick={() => onNavigate("calendar")}>Takvimi aç</button></small></div>
         </article>
         <article className="data-card">
-          <div><h3>CRM</h3><p>İletişim kayıtları bu tarayıcıda saklanıyor; backend CRM servisi bağlı değil.</p><small>Merkezi CRM endpoint ve erişim kontrolü gerekli.<br /><button type="button" onClick={() => onNavigate("crm")}>CRM kayıtlarını aç</button></small></div>
+          <div><h3>WhatsApp Business</h3><p>İmzalı inbound webhook, CRM aktarımı ve Cloud API gönderim adapter'ı.</p><small><strong>{status ? statusLabel({ connected: false, configured: status.whatsapp?.configured }) : "DURUM KONTROL EDİLİYOR"}</strong><br />Meta App Secret, Verify Token, access token ve phone number ID beklenir.<br /><button type="button" onClick={() => onNavigate("crm")}>CRM mesaj kayıtlarını aç</button></small></div>
         </article>
         <article className="data-card">
-          <div><h3>Web sitesi</h3><p>Resmi DDPro sitesi ayrı sekmede açılır. İçerik yönetimi bağlantısı yoktur.</p><small>Yönetim için yetkili CMS erişimi/API bilgisi gerekir.<br /><button type="button" onClick={() => onNavigate("website")}>Web modülünü aç</button></small></div>
+          <div><h3>Web research provider</h3><p>Sunucu tarafında araştırma adapter'ı.</p><small><strong>{status ? statusLabel({ connected: false, configured: status.research?.configured }) : "DURUM KONTROL EDİLİYOR"}</strong><br />RESEARCH_API_URL ve RESEARCH_API_KEY bekleniyor.<br /><button type="button" onClick={() => onNavigate("procurement")}>Araştırma modülünü aç</button></small></div>
         </article>
         <article className="data-card">
-          <div><h3>Supabase / API</h3><p>Mevcut proje, araştırma ve teklif API bağlantısı.</p><small>{status ? readiness(status.supabase?.configured, "Supabase ortam bilgileri tanımlı.", "SUPABASE_URL ve SUPABASE_ANON_KEY bekleniyor.") : "Backend durumu kontrol ediliyor."}</small></div>
+          <div><h3>CRM</h3><p>Supabase'e kalıcı CRM CRUD, kaynak takibi ve project ilişkilendirme.</p><small><strong>{status ? statusLabel({ connected: status.crm?.connected, configured: status.crm?.configured }) : "DURUM KONTROL EDİLİYOR"}</strong><br />Şifreli OAuth depolaması için Supabase service-role key gerekir.<br /><button type="button" onClick={() => onNavigate("crm")}>CRM kayıtlarını aç</button></small></div>
         </article>
         <article className="data-card">
-          <div><h3>Bildirimler / erişim</h3><p>Bildirim gönderimi ve kullanıcı rolleri henüz yapılandırılmadı.</p><small>Kimlik doğrulama ve bildirim sağlayıcısı entegrasyonu gerekli.</small></div>
+          <div><h3>Web sitesi / CMS</h3><p>İmzalı web lead intake ve backend CMS adapter.</p><small><strong>{status ? statusLabel({ connected: false, configured: status.web?.managementConfigured }) : "DURUM KONTROL EDİLİYOR"}</strong><br />WEBSITE_WEBHOOK_SECRET ve CMS provider URL/token ayrı yapılandırılır.<br /><button type="button" onClick={() => onNavigate("website")}>Web Sitesi modülünü aç</button></small></div>
         </article>
+        <article className="data-card"><div><h3>Supabase / API</h3><p>Projeler, teklifler, araştırma ve CRM persistence.</p><small><strong>{status ? statusLabel({ connected: status.supabase?.connected, configured: status.supabase?.configured }) : "DURUM KONTROL EDİLİYOR"}</strong><br />SUPABASE_URL, SUPABASE_ANON_KEY ve entegrasyon yazmaları için SUPABASE_SERVICE_ROLE_KEY gerekir.</small></div></article>
       </div>
     </div>
   );
@@ -158,10 +193,353 @@ function WebsiteWorkspace({ onNavigate, setAiInput }) {
   );
 }
 
+function CalendarWorkspace() {
+  const [events, setEvents] = useState(() => readRecords("ddpro_calendar_events_v1"));
+  const [remote, setRemote] = useState(false);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const loadEvents = async () => {
+    const response = await getGoogleCalendarEvents();
+    setEvents(response.data || []);
+    setRemote(true);
+  };
+
+  useEffect(() => {
+    let active = true;
+    getGoogleCalendarEvents()
+      .then((response) => {
+        if (active) {
+          setEvents(response.data || []);
+          setRemote(true);
+        }
+      })
+      .catch((loadError) => {
+        if (active) {
+          setRemote(false);
+          setError(loadError.message || "Google Calendar oturumu bağlı değil.");
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const createEvent = async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const values = Object.fromEntries(new FormData(form).entries());
+    setBusy(true);
+    setError("");
+    try {
+      const start = new Date(values.start);
+      const end = new Date(values.end);
+      if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) {
+        throw new Error("Etkinlik başlangıç/bitiş zamanı geçersiz.");
+      }
+      if (remote) {
+        await createGoogleCalendarEvent({
+          summary: values.summary,
+          description: values.description,
+          start: start.toISOString(),
+          end: end.toISOString(),
+        });
+        await loadEvents();
+        setNotice("Google Calendar etkinliği kaydedildi.");
+      } else {
+        const next = [
+          {
+            id: globalThis.crypto?.randomUUID?.() || `${Date.now()}`,
+            title: values.summary,
+            type: "Yerel görev",
+            date: start.toISOString(),
+            end: end.toISOString(),
+            notes: values.description,
+            source: "local",
+          },
+          ...readRecords("ddpro_calendar_events_v1"),
+        ];
+        localStorage.setItem("ddpro_calendar_events_v1", JSON.stringify(next));
+        setEvents(next);
+        setNotice("Etkinlik yalnızca bu tarayıcıda saklandı; Google Calendar'a gönderilmedi.");
+      }
+      form.reset();
+    } catch (createError) {
+      setError(createError.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const importLocalEvents = async () => {
+    try {
+      const imported = await importGoogleCalendarToLocal();
+      const next = [...imported, ...readRecords("ddpro_calendar_events_v1")];
+      localStorage.setItem("ddpro_calendar_events_v1", JSON.stringify(next));
+      setNotice(`${imported.length} etkinlik yerel takvim görünümüne aktarıldı; Google kayıtları değişmedi.`);
+    } catch (importError) {
+      setError(importError.message);
+    }
+  };
+
+  return (
+    <div className="operations-module">
+      <p className={`status-banner ${remote ? "success" : "info"}`}>
+        {remote ? "Google Calendar API oturumu bağlı; etkinlik listesi canlı provider'dan." : "Google Calendar bağlı değil; burada sahte etkinlik gösterilmez. Yerel takvim kayıtları CRM/rapor ekranlarında kalır."}
+      </p>
+      {error ? <p className="status-banner warning">{error}</p> : null}
+      {notice ? <p className="status-banner info">{notice}</p> : null}
+      {!remote ? <button type="button" onClick={() => { try { beginGoogleConnection(); } catch (e) { setError(e.message); } }}>Google hesabını bağla</button> : (
+        <div className="module-toolbar">
+          <button type="button" onClick={loadEvents}>Google Calendar'ı yenile</button>
+          <button type="button" onClick={importLocalEvents}>Yerel görünüme kopyala</button>
+        </div>
+      )}
+      <form className="data-form" onSubmit={createEvent}>
+        <h2>{remote ? "Google Calendar etkinliği oluştur" : "Yerel etkinlik taslağı"}</h2>
+        <label>Başlık<input name="summary" required maxLength={500} /></label>
+        <label>Başlangıç<input name="start" type="datetime-local" required /></label>
+        <label>Bitiş<input name="end" type="datetime-local" required /></label>
+        <label>Açıklama<textarea name="description" rows={3} maxLength={5000} /></label>
+        <button type="submit" disabled={busy}>{busy ? "Kaydediliyor…" : remote ? "Google Calendar'a kaydet" : "Yerel taslak kaydet"}</button>
+      </form>
+      <div className="data-list">
+        {events.length ? events.map((event) => (
+          <article className="data-card" key={event.id || `${event.title}-${event.date}`}>
+            <div><h3>{event.summary || event.title || "Takvim etkinliği"}</h3><p>{event.start?.dateTime || event.start?.date || event.date}</p><small>{event.status || event.type || "Google Calendar"}</small></div>
+          </article>
+        )) : <p className="empty-state">Google Calendar bağlantısı kurulduğunda gerçek etkinlikler burada görünür.</p>}
+      </div>
+    </div>
+  );
+}
+
+function CrmWorkspace({ onNavigate, setAiInput }) {
+  const [contacts, setContacts] = useState(() => readRecords("ddpro_crm_contacts_v1"));
+  const [remoteMode, setRemoteMode] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const reloadRemoteContacts = async () => {
+    const response = await getCrmContacts();
+    setContacts(response.data || []);
+    setRemoteMode(true);
+  };
+
+  useEffect(() => {
+    let active = true;
+    getCrmContacts()
+      .then((response) => {
+        if (active) {
+          setContacts(response.data || []);
+          setRemoteMode(true);
+          setError("");
+        }
+      })
+      .catch((loadError) => {
+        if (active) {
+          setRemoteMode(false);
+          setError(loadError.message || "CRM backend bağlantısı kullanılamıyor.");
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const saveContact = async (event) => {
+    event.preventDefault();
+    const values = Object.fromEntries(new FormData(event.currentTarget).entries());
+    const contact = {
+      ...values,
+      area_m2: values.area_m2 ? Number(values.area_m2) : null,
+      source: values.source || "manual",
+      project_id: values.project_id || null,
+    };
+    setBusy(true);
+    setError("");
+    setNotice("");
+    try {
+      if (remoteMode) {
+        const response = editing
+          ? await updateCrmContact(editing.id, contact)
+          : await createCrmContact(contact);
+        await reloadRemoteContacts();
+        setNotice(response.duplicate ? "Kaynak kaydı zaten CRM'e aktarılmış." : "CRM kaydı sunucuya kaydedildi.");
+      } else if (editing) {
+        const next = contacts.map((item) =>
+          item.id === editing.id ? { ...item, ...contact } : item
+        );
+        localStorage.setItem("ddpro_crm_contacts_v1", JSON.stringify(next));
+        setContacts(next);
+        setNotice("Kayıt bu tarayıcıya yerel olarak kaydedildi; CRM backend bağlı değil.");
+      } else {
+        const next = [
+          { ...contact, id: globalThis.crypto?.randomUUID?.() || `${Date.now()}`, createdAt: timestamp() },
+          ...contacts,
+        ];
+        localStorage.setItem("ddpro_crm_contacts_v1", JSON.stringify(next));
+        setContacts(next);
+        setNotice("Kayıt bu tarayıcıya yerel olarak kaydedildi; CRM backend bağlı değil.");
+      }
+      setEditing(null);
+      event.currentTarget.reset();
+    } catch (saveError) {
+      setError(saveError.message || "CRM kaydı kaydedilemedi.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const removeContact = async (contact) => {
+    setError("");
+    try {
+      if (remoteMode) {
+        await deleteCrmContact(contact.id);
+        await reloadRemoteContacts();
+      } else {
+        const next = contacts.filter((item) => item.id !== contact.id);
+        localStorage.setItem("ddpro_crm_contacts_v1", JSON.stringify(next));
+        setContacts(next);
+      }
+    } catch (removeError) {
+      setError(removeError.message || "CRM kaydı silinemedi.");
+    }
+  };
+
+  const connectGoogle = () => {
+    try {
+      beginGoogleConnection();
+    } catch (connectionError) {
+      setError(connectionError.message);
+    }
+  };
+
+  const importGmail = async () => {
+    setBusy(true);
+    setError("");
+    try {
+      const response = await importGmailToCrm();
+      await reloadRemoteContacts();
+      setNotice(`${response.data.imported} Gmail iletisi CRM'e aktarıldı.`);
+    } catch (importError) {
+      setError(importError.message || "Gmail aktarımı başarısız.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const sendWhatsApp = async (contact) => {
+    const message = window.prompt(`${contact.phone} numarasına gönderilecek mesajı yazın:`);
+    if (!message?.trim()) return;
+    try {
+      const result = await sendWhatsAppText(contact.phone, message.trim());
+      setNotice(`WhatsApp provider mesajı kabul etti (${result.data.id || "message id yok"}).`);
+    } catch (sendError) {
+      setError(sendError.message || "WhatsApp mesajı gönderilemedi.");
+    }
+  };
+
+  const field = (name, label, type = "text") => (
+    <label key={name}>
+      {label}
+      <input
+        name={name}
+        type={type}
+        required={name === "name"}
+        min={type === "number" ? "0" : undefined}
+        step={type === "number" ? "any" : undefined}
+        defaultValue={editing?.[name] ?? (name === "contact_date" ? editing?.date : "") ?? ""}
+      />
+    </label>
+  );
+
+  return (
+    <div className="operations-module">
+      <p className={`status-banner ${remoteMode ? "success" : "info"}`}>
+        {remoteMode
+          ? "CRM bağlı: kayıtlar Supabase backend üzerinden okunup yazılıyor."
+          : "CRM backend oturumu bağlı değil. Yerel kayıtlar yalnızca bu tarayıcıda saklanır."}
+      </p>
+      {!remoteMode ? (
+        <button type="button" onClick={connectGoogle}>Google hesabıyla güvenli CRM oturumu aç</button>
+      ) : (
+        <div className="module-toolbar">
+          <button type="button" disabled={busy} onClick={importGmail}>Gmail taleplerini CRM'e aktar</button>
+          <button type="button" onClick={() => getCrmContacts().then(reloadRemoteContacts).catch((e) => setError(e.message))}>CRM'i yenile</button>
+        </div>
+      )}
+      {error ? <p className="status-banner warning">{error}</p> : null}
+      {notice ? <p className="status-banner info">{notice}</p> : null}
+      <form key={editing?.id || "new-crm-contact"} className="data-form operations-crm-form" onSubmit={saveContact}>
+        <h2>{editing ? "CRM kaydını düzenle" : "CRM kaydı oluştur"}</h2>
+        {field("contact_date", "Tarih", "date")}
+        {field("name", "Ad Soyad")}
+        {field("company", "Firma")}
+        {field("phone", "Telefon", "tel")}
+        {field("email", "E-posta", "email")}
+        <label>Talep<textarea name="request" rows={3} defaultValue={editing?.request || ""} /></label>
+        {field("project_id", "Proje UUID")}
+        {field("system", "Sistem")}
+        {field("area_m2", "m²", "number")}
+        <label>Durum<input name="status" defaultValue={editing?.status || "Yeni"} /></label>
+        <p>Kaynak: {editing?.source || "manual"} (yalnızca doğrulanmış entegrasyonlar kaynak atayabilir)</p>
+        <label>Notlar<textarea name="notes" rows={3} defaultValue={editing?.notes || ""} /></label>
+        <div className="module-toolbar">
+          <button type="submit" disabled={busy}>{busy ? "Kaydediliyor…" : remoteMode ? "CRM'e kaydet" : "Yerel taslak kaydet"}</button>
+          {editing ? <button type="button" onClick={() => setEditing(null)}>Düzenlemeyi iptal et</button> : null}
+        </div>
+      </form>
+      <div className="data-list">
+        {contacts.length ? contacts.map((contact) => (
+          <article className="data-card" key={contact.id}>
+            <div>
+              <h3>{contact.name}</h3>
+              <p>{contact.company} · {contact.email} · {contact.phone}</p>
+              <p>{contact.request}</p>
+              <small>Kaynak: {contact.source || "manual"} · {contact.status} · {contact.contact_date || contact.date || contact.created_at}</small>
+              <div className="module-toolbar">
+                <button type="button" onClick={() => setEditing(contact)}>Düzenle</button>
+                <button type="button" onClick={() => {
+                  setAiInput(`CRM kaydındaki gelen talebi değerlendir ve müşterinin ihtiyacını, belirsiz noktaları ve önerilen sonraki adımları çıkar. Otomatik CRM değişikliği yapma; önerilen alanları kullanıcı onayına sun.\n\nKaynak: ${contact.source || "manual"}\nFirma: ${contact.company || "Belirtilmedi"}\nTalep: ${contact.request || "Talep metni yok"}\nProje: ${contact.project_id || "Belirtilmedi"}\nSistem: ${contact.system || "Belirtilmedi"}`);
+                  onNavigate("ai-assistant");
+                }}>Talebi AI ile analiz et</button>
+                {contact.phone ? <button type="button" onClick={() => sendWhatsApp(contact)}>WhatsApp yanıtı gönder</button> : null}
+                <button type="button" onClick={() => removeContact(contact)}>Sil</button>
+              </div>
+            </div>
+          </article>
+        )) : <p className="empty-state">CRM kayıtları henüz yok.</p>}
+      </div>
+    </div>
+  );
+}
+
 function ReportsWorkspace({ records, projects, offers, research, aiMessages }) {
   const [reportType, setReportType] = useState("Proje raporu");
   const [reports, setReports] = useState(() => readRecords("ddpro_generated_reports_v1"));
   const [error, setError] = useState("");
+  const [crmRecords, setCrmRecords] = useState(records.crm);
+  const [googleEvents, setGoogleEvents] = useState([]);
+  useEffect(() => {
+    let active = true;
+    getCrmContacts()
+      .then((response) => {
+        if (active) setCrmRecords(response.data || []);
+      })
+      .catch(() => {});
+    getGoogleCalendarEvents()
+      .then((response) => {
+        if (active) setGoogleEvents(response.data || []);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, []);
   const reportSnapshot = useMemo(
     () => ({
       generatedAt: timestamp(),
@@ -170,15 +548,28 @@ function ReportsWorkspace({ records, projects, offers, research, aiMessages }) {
         projects: projects.map(({ id, name, type, status }) => ({ id, name, type, status })),
         offers: offers.map(({ id, title, amountDisplay, status, source }) => ({ id, title, amountDisplay, status, source })),
         research: research.map(({ id, name, note, status }) => ({ id, name, note, status })),
-        crm: records.crm.length,
+        crm: crmRecords.map(({ id, name, company, status, source, project_id }) => ({
+          id,
+          name,
+          company,
+          status,
+          source,
+          projectId: project_id,
+        })),
         calendarEvents: records.calendar.length,
+        googleCalendarEvents: googleEvents.map(({ id, summary, start, status }) => ({
+          id,
+          summary,
+          start: start?.dateTime || start?.date || "",
+          status,
+        })),
       },
       aiResponses: aiMessages
         .filter((message) => message.role === "assistant" && !message.status)
         .slice(-10)
         .map(({ text, date }) => ({ text, date })),
     }),
-    [reportType, projects, offers, research, records.crm.length, records.calendar.length]
+    [reportType, projects, offers, research, crmRecords, records.calendar.length, googleEvents]
   );
 
   const saveReport = (event) => {
@@ -210,7 +601,7 @@ function ReportsWorkspace({ records, projects, offers, research, aiMessages }) {
       <div className="data-list">
         {reports.length ? reports.map((report) => (
           <article className="data-card" key={report.id}>
-            <div><h3>{report.type}</h3><p>{new Date(report.createdAt).toLocaleString("tr-TR")}</p><small>{report.snapshot.sources.projects.length} proje · {report.snapshot.sources.offers.length} teklif · {report.snapshot.sources.research.length} araştırma</small><pre>{JSON.stringify(report.snapshot, null, 2)}</pre></div>
+            <div><h3>{report.type}</h3><p>{new Date(report.createdAt).toLocaleString("tr-TR")}</p><small>{report.snapshot.sources.projects.length} proje · {report.snapshot.sources.offers.length} teklif · {report.snapshot.sources.research.length} araştırma · {(report.snapshot.sources.crm || []).length} CRM kişi</small><pre>{JSON.stringify(report.snapshot, null, 2)}</pre></div>
           </article>
         )) : <p className="empty-state">Henüz rapor kaydı yok.</p>}
       </div>
@@ -249,6 +640,8 @@ export default function OperationsModule({
 
   if (moduleId === "settings") return <IntegrationSettings onNavigate={onNavigate} />;
   if (moduleId === "website") return <WebsiteWorkspace onNavigate={onNavigate} setAiInput={setAiInput} />;
+  if (moduleId === "crm") return <CrmWorkspace onNavigate={onNavigate} setAiInput={setAiInput} />;
+  if (moduleId === "calendar") return <CalendarWorkspace />;
   if (moduleId === "reports") {
     return (
       <ReportsWorkspace

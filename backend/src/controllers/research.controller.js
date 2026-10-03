@@ -102,6 +102,14 @@ const getResearchPayload = (body = {}) => {
         ? body.price_verification.trim() || "Doğrulanmadı"
         : "Doğrulanmadı",
     url,
+    project_id:
+      typeof body.project_id === "string" && body.project_id.trim()
+        ? body.project_id.trim()
+        : null,
+    product_id:
+      typeof body.product_id === "string" && body.product_id.trim()
+        ? body.product_id.trim()
+        : null,
   };
 };
 

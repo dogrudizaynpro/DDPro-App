@@ -47,6 +47,7 @@ export const mapResearchItemToViewModel = (item = {}) => {
     name,
     note,
     source: item.source || "",
+    recordSource: "api",
     product: item.product || "",
     manufacturer: item.manufacturer || "",
     technicalInfo: item.technical_info || item.technicalInfo || "",
@@ -58,7 +59,8 @@ export const mapResearchItemToViewModel = (item = {}) => {
     date: formatResearchDate(createdAt),
     createdAt,
     updatedAt,
-    source: "api",
+    projectId: item.project_id || item.projectId || null,
+    productId: item.product_id || item.productId || null,
     raw: item,
   };
 };
@@ -157,6 +159,8 @@ const toResearchPayload = (item = {}) => {
         ? item.priceVerification.trim() || "Doğrulanmadı"
         : "Doğrulanmadı",
     url: typeof item?.url === "string" ? item.url.trim() || null : null,
+    project_id: typeof item?.projectId === "string" ? item.projectId.trim() || null : null,
+    product_id: typeof item?.productId === "string" ? item.productId.trim() || null : null,
   };
 };
 

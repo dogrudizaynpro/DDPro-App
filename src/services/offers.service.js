@@ -199,6 +199,7 @@ export const mapOfferToViewModel = (offer = {}) => {
     createdAt,
     updatedAt,
     projectId: offer.project_id || offer.projectId || null,
+    crmContactId: offer.crm_contact_id || offer.crmContactId || null,
     notes: offer.notes || "",
     source,
     raw: offer,
@@ -239,6 +240,10 @@ const toOfferPayload = (offer) => {
     project_id:
       typeof offer?.projectId === "string" && offer.projectId.trim()
         ? offer.projectId.trim()
+        : null,
+    crm_contact_id:
+      typeof offer?.crmContactId === "string" && offer.crmContactId.trim()
+        ? offer.crmContactId.trim()
         : null,
   };
 };

@@ -6,6 +6,7 @@ import {
 import {
   hasStoredIntegrationToken,
   isSecureTokenStorageReady,
+  removeIntegrationToken,
   readIntegrationToken,
   saveIntegrationToken,
 } from "./integration-vault.service.js";
@@ -18,8 +19,6 @@ const GOOGLE_SCOPES = [
   "https://www.googleapis.com/auth/gmail.readonly",
   "https://www.googleapis.com/auth/calendar.events",
 ];
-const pendingOAuthStates = new Map();
-
 const getOAuthConfig = () => ({
   clientId: process.env.GOOGLE_CLIENT_ID,
   clientSecret: process.env.GOOGLE_CLIENT_SECRET,
@@ -51,7 +50,12 @@ const cookieValue = (req, name) => {
     .split(";")
     .map((item) => item.trim())
     .find((item) => item.startsWith(`${name}=`));
-  return entry ? decodeURIComponent(entry.slice(name.length + 1)) : "";
+  if (!entry) return "";
+  try {
+    return decodeURIComponent(entry.slice(name.length + 1));
+  } catch {
+    return "";
+  }
 };
 
 const setCookie = (res, name, value, maxAge, path = "/api") => {
@@ -100,13 +104,10 @@ export const beginGoogleOAuth = (req, res) => {
 
   const state = randomBytes(32).toString("base64url");
   const browserNonce = randomBytes(32).toString("base64url");
-  for (const [key, value] of pendingOAuthStates) {
-    if (value.expiresAt < Date.now()) pendingOAuthStates.delete(key);
-  }
-  pendingOAuthStates.set(state, {
-    browserNonce,
-    expiresAt: Date.now() + 10 * 60 * 1000,
-  });
+  const statePayload = Buffer.from(
+    JSON.stringify({ state, browserNonce, expiresAt: Date.now() + 10 * 60 * 1000 })
+  ).toString("base64url");
+  const signedState = `${statePayload}.${sign(`oauth:${statePayload}`)}`;
   setCookie(res, "ddpro_oauth_state", browserNonce, 600, "/api/integrations/google/callback");
 
   const url = new URL(GOOGLE_AUTH_URL);
@@ -115,7 +116,7 @@ export const beginGoogleOAuth = (req, res) => {
     redirect_uri: redirectUri,
     response_type: "code",
     scope: GOOGLE_SCOPES.join(" "),
-    state,
+    state: signedState,
     access_type: "offline",
     prompt: "consent",
     include_granted_scopes: "true",
@@ -124,20 +125,31 @@ export const beginGoogleOAuth = (req, res) => {
 };
 
 export const completeGoogleOAuth = async (req, res, next) => {
+  if (!process.env.INTEGRATION_SESSION_SECRET) {
+    return res.status(503).json({ status: "error", message: "Integration OAuth is not configured." });
+  }
   const { clientId, clientSecret, redirectUri } = getOAuthConfig();
   const state = typeof req.query.state === "string" ? req.query.state : "";
   const code = typeof req.query.code === "string" ? req.query.code : "";
-  const pending = pendingOAuthStates.get(state);
-  pendingOAuthStates.delete(state);
   const cookieNonce = cookieValue(req, "ddpro_oauth_state");
   res.append(
     "Set-Cookie",
     `ddpro_oauth_state=; HttpOnly; Path=/api/integrations/google/callback; Max-Age=0; SameSite=${process.env.NODE_ENV === "production" ? "None; Secure" : "Lax"}`
   );
+  const separator = state.lastIndexOf(".");
+  const statePayload = separator > 0 ? state.slice(0, separator) : "";
+  const signature = separator > 0 ? state.slice(separator + 1) : "";
+  let stateDetails;
+  try {
+    stateDetails = JSON.parse(Buffer.from(statePayload, "base64url").toString("utf8"));
+  } catch {
+    stateDetails = null;
+  }
   if (
-    !pending ||
-    pending.expiresAt < Date.now() ||
-    !safeEqual(cookieNonce, pending.browserNonce)
+    !stateDetails ||
+    !safeEqual(signature, sign(`oauth:${statePayload}`)) ||
+    stateDetails.expiresAt < Date.now() ||
+    !safeEqual(cookieNonce, stateDetails.browserNonce)
   ) {
     return res.status(400).json({ status: "error", message: "OAuth state validation failed." });
   }
@@ -252,7 +264,27 @@ export const getGoogleAccessToken = async (account) => {
   return updated.accessToken;
 };
 
-export const revokeGoogleSession = (req, res) => {
+export const revokeGoogleSession = async (req, res, next) => {
+  try {
+    const stored = await readIntegrationToken({
+      provider: "google",
+      account: req.integrationAccount,
+    });
+    if (stored?.refreshToken || stored?.accessToken) {
+      await fetch("https://oauth2.googleapis.com/revoke", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ token: stored.refreshToken || stored.accessToken }),
+        signal: AbortSignal.timeout(10_000),
+      });
+    }
+    await removeIntegrationToken({
+      provider: "google",
+      account: req.integrationAccount,
+    });
+  } catch (error) {
+    return next(error);
+  }
   res.append(
     "Set-Cookie",
     `ddpro_integration_session=; HttpOnly; Path=/api; Max-Age=0; SameSite=${process.env.NODE_ENV === "production" ? "None; Secure" : "Lax"}`

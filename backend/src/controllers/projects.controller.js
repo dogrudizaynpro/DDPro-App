@@ -181,7 +181,13 @@ export const updateProject = async (req, res, next) => {
     }
 
     const updates = {};
-    const { status, area_m2: areaM2, systems, notes } = req.body || {};
+    const {
+      status,
+      area_m2: areaM2,
+      systems,
+      notes,
+      crm_contact_id: crmContactId,
+    } = req.body || {};
 
     if (status !== undefined) {
       if (typeof status !== "string" || !status.trim()) {
@@ -210,6 +216,13 @@ export const updateProject = async (req, res, next) => {
         return res.status(400).json({ status: "error", message: "Project notes are invalid." });
       }
       updates.notes = notes.trim();
+    }
+
+    if (crmContactId !== undefined) {
+      if (crmContactId !== null && crmContactId !== "" && !/^[\da-f-]{36}$/i.test(crmContactId)) {
+        return res.status(400).json({ status: "error", message: "CRM contact id is invalid." });
+      }
+      updates.crm_contact_id = crmContactId || null;
     }
 
     if (Object.keys(updates).length === 0) {

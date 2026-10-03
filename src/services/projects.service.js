@@ -72,6 +72,7 @@ export const mapProjectToViewModel = (project = {}) => {
     areaM2: project.area_m2 ?? project.areaM2 ?? "",
     systems: Array.isArray(project.systems) ? project.systems : [],
     notes: project.notes || "",
+    crmContactId: project.crm_contact_id || project.crmContactId || "",
     date: formatProjectDate(createdAt),
     createdAt,
     updatedAt,
@@ -174,6 +175,7 @@ export const updateProject = async (id, project) => {
     area_m2: project.areaM2 === "" ? null : Number(project.areaM2),
     systems: Array.isArray(project.systems) ? project.systems : [],
     notes: typeof project.notes === "string" ? project.notes.trim() : "",
+    crm_contact_id: project.crmContactId || null,
   };
   if (payload.area_m2 !== null && (!Number.isFinite(payload.area_m2) || payload.area_m2 < 0)) {
     throw new Error("Project area must be a non-negative number");

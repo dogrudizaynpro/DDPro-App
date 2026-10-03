@@ -21,6 +21,7 @@ import {
   getApiHealth,
 } from "./services/api.js";
 import { requestAiCompletion } from "./services/ai.service.js";
+import { getCrmContacts } from "./services/operations-integrations.service.js";
 import {
   createResearchItem as createProcurementRequest,
   deleteResearchItem as deleteProcurementRequest,
@@ -1299,6 +1300,8 @@ function App() {
       price: formValues.price.trim(),
       priceVerification: formValues.priceVerification || "Doğrulanmadı",
       url: formValues.url.trim(),
+      projectId: formValues.projectId || "",
+      productId: formValues.productId.trim(),
       status: formValues.status || "Taslak",
     });
   };
@@ -1321,6 +1324,8 @@ function App() {
       price: result.price || "",
       priceVerification: "Doğrulanmadı",
       url: result.url || "",
+      projectId: result.projectId || "",
+      productId: result.productId || "",
       status: "Harici sonuç · doğrulama bekliyor",
     });
   };
@@ -1388,6 +1393,8 @@ function App() {
       status: offerStatus,
       statusRaw: offerStatus,
       date: formatDate(),
+      projectId: new FormData(event.currentTarget).get("projectId") || null,
+      crmContactId: new FormData(event.currentTarget).get("crmContactId") || null,
       source: "local",
     });
 
@@ -1561,7 +1568,17 @@ function App() {
               : /rapor/.test(normalizedMessage) ? "reports"
                 : /proje/.test(normalizedMessage) ? "projects"
                   : /fiyat|maliyet/.test(normalizedMessage) ? "price-analysis"
-                    : null;
+                    : /ürün|product/.test(normalizedMessage) ? "products"
+                      : /sistem|system/.test(normalizedMessage) ? "systems"
+                        : null;
+
+    let crmContext = getStoredData("ddpro_crm_contacts_v1");
+    try {
+      const response = await getCrmContacts();
+      crmContext = response.data || [];
+    } catch {
+      // Existing locally stored contacts remain available as context when authenticated CRM is offline.
+    }
 
     const context = {
       projects: projects.slice(0, 30).map(({ id, name, type, status, areaM2, systems, notes }) => ({
@@ -1579,6 +1596,17 @@ function App() {
         amount: amountDisplay,
         status,
         source,
+      })),
+      products: getStoredData("ddpro_products_v1").slice(0, 30).map(({ id, name, detail }) => ({
+        id,
+        name,
+        detail,
+      })),
+      systems: getStoredData("ddpro_system_inventory_v1").slice(0, 30).map(({ id, name, status, detail }) => ({
+        id,
+        name,
+        status,
+        detail,
       })),
       research: procurementItems.slice(0, 30).map(({
         id,
@@ -1605,15 +1633,17 @@ function App() {
         priceVerification,
         url,
       })),
-      crm: getStoredData("ddpro_crm_contacts_v1")
+      crm: crmContext
         .slice(0, 20)
-        .map(({ name, company, request, project, system, status }) => ({
+        .map(({ id, name, company, request, project, project_id, system, status, source }) => ({
+          id,
           name,
           company,
           request,
-          project,
+          project: project || project_id,
           system,
           status,
+          source,
         })),
       calendar: getStoredData("ddpro_calendar_events_v1")
         .slice(0, 20)
@@ -1623,6 +1653,11 @@ function App() {
           date,
           project,
           notes,
+        })),
+        reports: getStoredData("ddpro_generated_reports_v1").slice(0, 5).map(({ id, type, createdAt }) => ({
+          id,
+          type,
+          createdAt,
         })),
     };
 
@@ -2128,6 +2163,7 @@ function App() {
           offerDetailError={offerDetailError}
           getOfferStatusTone={getOfferStatusTone}
           canUseLocalFallback={CAN_USE_LOCAL_FALLBACK}
+          projects={projects}
         />
       );
     }
@@ -2147,6 +2183,7 @@ function App() {
           procurementItems={procurementItems}
           deleteProcurement={deleteProcurement}
           saveResearchResult={saveResearchResult}
+          projects={projects}
         />
       );
     }

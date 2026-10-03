@@ -1,14 +1,10 @@
-import { hasIntegrationAdmin } from "../config/integration-admin.js";
+import { getIntegrationAdmin, hasIntegrationAdmin } from "../config/integration-admin.js";
+import { getSupabaseClient, isSupabaseAvailable } from "../config/supabase.js";
 import { getGoogleConfigurationStatus } from "../services/google-integration.service.js";
 import { websiteCmsConfigured } from "../services/website-cms.service.js";
 
 export const getIntegrationStatus = async (_req, res, next) => {
  try {
-  const googleOAuthConfigured = Boolean(
-    process.env.GOOGLE_CLIENT_ID &&
-      process.env.GOOGLE_CLIENT_SECRET &&
-      process.env.GOOGLE_REDIRECT_URI
-  );
   const aiConfigured = Boolean(
     process.env.AI_API_URL && process.env.AI_API_KEY && process.env.AI_MODEL
   );
@@ -22,13 +18,28 @@ export const getIntegrationStatus = async (_req, res, next) => {
   );
   const websiteWebhookConfigured = Boolean(process.env.WEBSITE_WEBHOOK_SECRET);
   const cmsConfigured = websiteCmsConfigured();
+  let supabaseConnected = false;
+  let crmStorageConnected = false;
+  if (isSupabaseAvailable()) {
+    const { error } = await getSupabaseClient().from("projects").select("id").limit(1);
+    supabaseConnected = !error;
+  }
+  if (databaseConfigured) {
+    const admin = getIntegrationAdmin();
+    const [{ error: crmError }, { error: tokenError }] = await Promise.all([
+      admin.from("crm_contacts").select("id").limit(1),
+      admin.from("integration_tokens").select("provider").limit(1),
+    ]);
+    crmStorageConnected = !crmError && !tokenError;
+  }
 
   res.status(200).json({
     status: "success",
     data: {
       ai: {
         configured: aiConfigured,
-        status: aiConfigured ? "configured" : "credentials_required",
+        connected: false,
+        status: aiConfigured ? "configured_not_tested" : "credentials_required",
       },
       gmail: {
         configured: google.configured,
@@ -45,12 +56,14 @@ export const getIntegrationStatus = async (_req, res, next) => {
         configured: whatsappConfigured && whatsappWebhookConfigured,
         sendConfigured: whatsappConfigured,
         webhookConfigured: whatsappWebhookConfigured,
-        status: whatsappConfigured && whatsappWebhookConfigured ? "configured" : "credentials_required",
+        connected: false,
+        status: whatsappConfigured && whatsappWebhookConfigured ? "configured_not_tested" : "credentials_required",
       },
       research: {
         configured: Boolean(
           process.env.RESEARCH_API_URL && process.env.RESEARCH_API_KEY
         ),
+        connected: false,
       },
       google: {
         configured: google.configured,
@@ -60,16 +73,20 @@ export const getIntegrationStatus = async (_req, res, next) => {
       },
       supabase: {
         configured: Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY),
+        connected: supabaseConnected,
         integrationStorageConfigured: databaseConfigured,
+        integrationStorageConnected: crmStorageConnected,
       },
       crm: {
         configured: databaseConfigured,
-        status: databaseConfigured ? "configured" : "credentials_required",
+        connected: crmStorageConnected && google.connected,
+        status: crmStorageConnected ? "configured_not_connected" : "credentials_required",
       },
       web: {
         url: "https://www.ddizaynpro.com/",
         managementConfigured: cmsConfigured,
         inboundLeadConfigured: websiteWebhookConfigured && databaseConfigured,
+        connected: false,
         status: cmsConfigured ? "configured" : "credentials_required",
       },
     },

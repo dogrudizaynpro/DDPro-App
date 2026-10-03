@@ -51,6 +51,7 @@ export const importGmailMessages = async (account, requestedLimit) => {
     const sender = readHeader("from");
     const match = sender.match(/^(.*?)\s*<([^>]+)>$/);
     const subject = readHeader("subject");
+    const dateHeader = readHeader("date");
     const body =
       decodeMessagePart(details.payload) ||
       (details.snippet || "").slice(0, 2_000);
@@ -59,6 +60,11 @@ export const importGmailMessages = async (account, requestedLimit) => {
         name: match?.[1]?.replace(/^"|"$/g, "").trim() || match?.[2] || sender,
         email: match?.[2] || sender,
         request: [subject, body].filter(Boolean).join("\n\n").slice(0, 20_000),
+        contact_date: Number(details.internalDate)
+          ? new Date(Number(details.internalDate)).toISOString().slice(0, 10)
+          : Number.isNaN(Date.parse(dateHeader))
+            ? new Date().toISOString().slice(0, 10)
+            : new Date(dateHeader).toISOString().slice(0, 10),
         source: "gmail",
         source_external_id: message.id,
         status: "Yeni",

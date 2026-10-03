@@ -12,6 +12,7 @@ REVOKE ALL ON integration_tokens FROM anon, authenticated;
 CREATE TABLE IF NOT EXISTS crm_contacts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
+  contact_date DATE NOT NULL DEFAULT CURRENT_DATE,
   company TEXT,
   phone TEXT,
   email TEXT,
@@ -33,6 +34,9 @@ ALTER TABLE crm_contacts ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON crm_contacts FROM anon, authenticated;
 
 ALTER TABLE offers
+  ADD COLUMN IF NOT EXISTS crm_contact_id UUID REFERENCES crm_contacts(id) ON DELETE SET NULL;
+
+ALTER TABLE projects
   ADD COLUMN IF NOT EXISTS crm_contact_id UUID REFERENCES crm_contacts(id) ON DELETE SET NULL;
 
 ALTER TABLE research_items
