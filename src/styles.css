@@ -3662,3 +3662,413 @@ textarea::placeholder {
     width: 100%;
   }
 }
+
+.dashboard-shell .app-header {
+  min-height: 154px;
+  padding: 12px clamp(20px, 3.5vw, 56px);
+  background:
+    radial-gradient(ellipse at 23% 0%, rgba(165, 214, 75, 0.08), transparent 35%),
+    linear-gradient(125deg, #272927, #141515 58%, #101111);
+  box-shadow:
+    0 9px 32px rgba(0, 0, 0, 0.48),
+    inset 0 1px rgba(255, 255, 255, 0.1),
+    inset 0 -1px rgba(165, 214, 75, 0.1);
+}
+
+.dashboard-shell .brand-logo {
+  width: 128px;
+  height: 128px;
+  min-width: 128px;
+  filter: drop-shadow(0 8px 15px rgba(0, 0, 0, 0.58));
+}
+
+.dashboard-shell .brand-content > span {
+  color: #d1d0c6;
+  font-size: 11px;
+  letter-spacing: 0.3em;
+}
+
+.dashboard-shell .sidebar {
+  top: 154px;
+  width: 286px;
+  min-width: 286px;
+  height: calc(100vh - 154px);
+  background:
+    linear-gradient(90deg, rgba(196, 189, 170, 0.08), transparent 8px),
+    linear-gradient(180deg, #1a1b1a, #0d0e0e 76%, #191a19);
+}
+
+.dashboard-shell .app-layout {
+  min-height: calc(100vh - 216px);
+}
+
+.dashboard-shell .main-content {
+  padding: clamp(22px, 2.35vw, 38px);
+}
+
+.dashboard-shell .sidebar-master-card {
+  min-height: 224px;
+  margin-bottom: 17px;
+  padding: 12px;
+  border-color: rgba(206, 199, 178, 0.5);
+  border-radius: 10px;
+  background:
+    radial-gradient(ellipse at 50% 0%, rgba(165, 214, 75, 0.12), transparent 57%),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.075), transparent 52%),
+    linear-gradient(145deg, #242624, #0e1010 72%);
+  box-shadow:
+    inset 0 1px rgba(255, 255, 255, 0.17),
+    inset 0 -1px rgba(0, 0, 0, 0.9),
+    0 12px 25px rgba(0, 0, 0, 0.42);
+}
+
+.sidebar-master-logo {
+  width: min(100%, 224px);
+  max-height: 224px;
+  filter: drop-shadow(0 7px 13px rgba(0, 0, 0, 0.62));
+}
+
+.dashboard-shell .stat-card {
+  min-height: 164px;
+  border-color: rgba(206, 199, 178, 0.36);
+  border-radius: 13px;
+  background:
+    radial-gradient(ellipse at 50% 0%, rgba(255, 255, 255, 0.105), transparent 62%),
+    radial-gradient(circle at 9% 45%, rgba(165, 214, 75, 0.13), transparent 38%),
+    linear-gradient(145deg, #363834 0%, #202220 48%, #111313 100%);
+  box-shadow:
+    0 14px 27px rgba(0, 0, 0, 0.46),
+    inset 0 1px 0 rgba(255, 255, 255, 0.19),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.76);
+}
+
+.dashboard-shell .stat-card::after {
+  position: absolute;
+  right: 15px;
+  bottom: 13px;
+  left: 15px;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(165, 214, 75, 0.6), rgba(165, 214, 75, 0.04) 75%, transparent);
+  content: "";
+  opacity: 0.65;
+  pointer-events: none;
+}
+
+.dashboard-shell .stat-card:nth-child(2) {
+  background:
+    radial-gradient(ellipse at 50% 0%, rgba(255, 255, 255, 0.1), transparent 62%),
+    radial-gradient(circle at 9% 45%, rgba(180, 138, 81, 0.16), transparent 38%),
+    linear-gradient(145deg, #363633 0%, #202120 48%, #111313 100%);
+}
+
+.dashboard-shell .stat-card:nth-child(4) {
+  background:
+    radial-gradient(ellipse at 50% 0%, rgba(255, 255, 255, 0.1), transparent 62%),
+    radial-gradient(circle at 9% 45%, rgba(180, 138, 81, 0.1), transparent 38%),
+    linear-gradient(145deg, #333432 0%, #1f2020 48%, #101212 100%);
+}
+
+.dashboard-shell .panel {
+  border-color: rgba(201, 194, 171, 0.38);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.055), transparent 35%),
+    linear-gradient(150deg, #292a28, #171818 52%, #101111);
+  box-shadow:
+    0 15px 30px rgba(0, 0, 0, 0.44),
+    inset 0 1px 0 rgba(255, 255, 255, 0.13),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.9);
+}
+
+.dashboard-shell .project-map-canvas {
+  min-height: 285px;
+  border-color: rgba(200, 194, 174, 0.35);
+  background:
+    radial-gradient(ellipse at 50% 48%, rgba(151, 181, 96, 0.2), transparent 59%),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.045), transparent 42%),
+    #0a0c0c;
+  box-shadow:
+    inset 0 0 38px rgba(0, 0, 0, 0.8),
+    0 0 0 3px rgba(0, 0, 0, 0.24);
+}
+
+.dashboard-shell .map-network circle {
+  stroke: rgba(220, 241, 179, 0.88);
+  stroke-width: 1.6;
+  filter: drop-shadow(0 0 6px rgba(165, 214, 75, 0.95));
+}
+
+.dashboard-shell .map-network path {
+  stroke: rgba(165, 214, 75, 0.52);
+  stroke-width: 1.5;
+  filter: drop-shadow(0 0 5px rgba(165, 214, 75, 0.65));
+}
+
+.dashboard-shell .project-preview {
+  min-height: 70px;
+}
+
+.activity-empty {
+  margin: 0;
+  padding: 17px 2px 3px;
+  color: #a2a399;
+  font-size: 11px;
+}
+
+.ai-trade-hero {
+  min-height: 300px;
+  display: grid;
+  grid-template-columns: minmax(80px, 1fr) minmax(0, 2.4fr) minmax(120px, 1fr);
+  align-items: center;
+  gap: 22px;
+  padding: clamp(30px, 4vw, 54px);
+  border-color: rgba(198, 167, 111, 0.48);
+  background:
+    radial-gradient(ellipse at 50% 103%, rgba(165, 214, 75, 0.14), transparent 49%),
+    radial-gradient(ellipse at 87% 7%, rgba(180, 138, 81, 0.25), transparent 41%),
+    radial-gradient(ellipse at 0% 50%, rgba(255, 255, 255, 0.045), transparent 32%),
+    linear-gradient(125deg, #30312e, #1b1d1c 48%, #0d0f0f);
+  box-shadow:
+    0 20px 42px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.19),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.88);
+}
+
+.ai-trade-copy > .ai-eyebrow {
+  color: #c6a873;
+}
+
+.ai-orbital-mark {
+  width: clamp(118px, 14vw, 184px);
+  height: clamp(118px, 14vw, 184px);
+  min-width: 0;
+  justify-self: center;
+  border-color: rgba(221, 207, 168, 0.72);
+  background:
+    radial-gradient(circle at 35% 25%, rgba(255, 255, 255, 0.16), transparent 24%),
+    radial-gradient(circle, #444938 0%, #1d211b 46%, #111313 75%);
+  box-shadow:
+    0 0 0 8px rgba(165, 214, 75, 0.055),
+    0 0 48px rgba(165, 214, 75, 0.22),
+    0 0 82px rgba(180, 138, 81, 0.12),
+    inset 0 0 30px rgba(165, 214, 75, 0.2),
+    inset 0 1px 4px rgba(255, 255, 255, 0.28);
+}
+
+.ai-orbital-mark::before {
+  inset: -13px 16px;
+  border-color: rgba(195, 229, 124, 0.62);
+  box-shadow: 0 0 14px rgba(165, 214, 75, 0.25);
+}
+
+.ai-orbital-mark::after {
+  inset: 16px -13px;
+  border-color: rgba(202, 166, 111, 0.64);
+  box-shadow: 0 0 14px rgba(180, 138, 81, 0.2);
+}
+
+.ai-orbital-core {
+  width: 40px;
+  height: 40px;
+  background:
+    radial-gradient(circle at 35% 28%, rgba(255, 255, 255, 0.9), transparent 19%),
+    radial-gradient(circle at 48% 44%, #d0ae72 0%, #91a953 43%, #222820 77%);
+  box-shadow:
+    0 0 17px rgba(198, 168, 115, 0.58),
+    0 0 37px rgba(165, 214, 75, 0.42),
+    inset 0 1px 4px rgba(255, 255, 255, 0.62);
+}
+
+.ai-trade-copy {
+  max-width: 700px;
+}
+
+.ai-trade-copy h2 {
+  font-size: clamp(29px, 3.8vw, 48px);
+  letter-spacing: 0.085em;
+  text-shadow: 0 3px 15px rgba(0, 0, 0, 0.6);
+}
+
+.ai-trade-copy h2 strong {
+  color: #bddb80;
+  text-shadow: 0 0 24px rgba(165, 214, 75, 0.18);
+}
+
+.ai-role-tags {
+  gap: 9px;
+  margin-top: 21px;
+}
+
+.ai-role-tags span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 10px;
+  border-color: rgba(198, 168, 115, 0.32);
+  border-radius: 5px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.055), rgba(0, 0, 0, 0.22));
+  color: #e0d4b8;
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.075);
+}
+
+.ai-role-tags span i {
+  color: #a5d64b;
+  font-size: 7px;
+  font-style: normal;
+}
+
+.ai-online-indicator {
+  justify-self: end;
+  align-self: start;
+  border-color: rgba(165, 214, 75, 0.28);
+  background: rgba(8, 10, 9, 0.4);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.075);
+}
+
+.ai-workspace {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+}
+
+.ai-capabilities,
+.ai-conversation-panel {
+  border-color: rgba(199, 190, 164, 0.35);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.05), transparent 38%),
+    linear-gradient(145deg, #272927, #121414 68%);
+  box-shadow:
+    0 15px 32px rgba(0, 0, 0, 0.43),
+    inset 0 1px rgba(255, 255, 255, 0.13),
+    inset 0 -1px rgba(0, 0, 0, 0.86);
+}
+
+.ai-capability-list {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.ai-capability {
+  min-height: 73px;
+  border-color: rgba(198, 168, 115, 0.21);
+  background:
+    radial-gradient(ellipse at 0 0, rgba(165, 214, 75, 0.08), transparent 67%),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.05), rgba(0, 0, 0, 0.24));
+  box-shadow:
+    inset 0 1px rgba(255, 255, 255, 0.1),
+    0 6px 14px rgba(0, 0, 0, 0.21);
+}
+
+.ai-capability strong {
+  line-height: 1.4;
+}
+
+.ai-capability-icon {
+  border-color: rgba(198, 168, 115, 0.45);
+  background: radial-gradient(circle at 35% 25%, rgba(255, 255, 255, 0.13), transparent 50%);
+  color: #c6a873;
+}
+
+@media (max-width: 900px) {
+  .dashboard-shell .app-header {
+    min-height: 108px;
+  }
+
+  .dashboard-shell .brand-logo {
+    width: 84px;
+    height: 84px;
+    min-width: 84px;
+  }
+
+  .dashboard-shell .sidebar {
+    top: auto;
+    width: 100%;
+    min-width: 0;
+    height: auto;
+  }
+
+  .dashboard-shell .sidebar-master-card {
+    display: none;
+  }
+
+  .dashboard-shell .app-layout {
+    min-height: calc(100vh - 162px);
+  }
+
+  .ai-trade-hero {
+    grid-template-columns: 115px minmax(0, 1fr);
+    min-height: 260px;
+  }
+
+  .ai-online-indicator {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+  }
+
+  .ai-capability-list {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .dashboard-shell .app-header {
+    min-height: 72px;
+  }
+
+  .dashboard-shell .brand-logo {
+    width: 50px;
+    height: 50px;
+    min-width: 50px;
+  }
+
+  .dashboard-shell .sidebar {
+    height: auto;
+  }
+
+  .dashboard-shell .project-map-canvas {
+    min-height: 220px;
+  }
+
+  .dashboard-shell .stat-card {
+    min-height: 116px;
+  }
+
+  .ai-trade-hero {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+    gap: 16px;
+    padding: 31px 17px 22px;
+  }
+
+  .ai-orbital-mark {
+    width: 84px;
+    height: 84px;
+  }
+
+  .ai-orbital-core {
+    width: 22px;
+    height: 22px;
+  }
+
+  .ai-trade-copy {
+    text-align: center;
+  }
+
+  .ai-trade-copy h2 {
+    font-size: 21px;
+  }
+
+  .ai-role-tags {
+    justify-content: center;
+  }
+
+  .ai-online-indicator {
+    top: 10px;
+    right: 10px;
+    padding: 5px 7px;
+  }
+
+  .ai-capability-list {
+    grid-template-columns: 1fr;
+  }
+}

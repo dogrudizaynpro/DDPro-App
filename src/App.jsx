@@ -1560,11 +1560,12 @@ function App() {
         </section>
       </div>
 
-      {systemLogs.length > 0 ? (
-        <section className="panel recent-activity-panel">
-          <div className="panel-header">
-            <h2>SON İŞLEMLER</h2>
-          </div>
+      <section className="panel recent-activity-panel">
+        <div className="panel-header">
+          <h2>SON İŞLEMLER</h2>
+          <span className="panel-kicker">{systemLogs.length ? "SON KAYITLAR" : "HAREKET BEKLENİYOR"}</span>
+        </div>
+        {systemLogs.length > 0 ? (
           <div className="log-list">
             {systemLogs.slice(0, 4).map((log) => (
               <div className="log-item" key={log.id}>
@@ -1573,8 +1574,10 @@ function App() {
               </div>
             ))}
           </div>
-        </section>
-      ) : null}
+        ) : (
+          <p className="activity-empty">Yeni işlem kayıtları burada görüntülenecek.</p>
+        )}
+      </section>
     </div>
   );
 
@@ -1937,6 +1940,16 @@ function App() {
 
       <div className="app-layout">
         <aside className="sidebar">
+          {activeModule === "dashboard" ? (
+            <div className="sidebar-master-card">
+              <img
+                className="sidebar-master-logo"
+                src={ddproMasterLogo}
+                alt="DOĞRU DİZAYN PRO"
+              />
+            </div>
+          ) : null}
+
           <div className="sidebar-title">
             ANA MODÜLLER
           </div>
@@ -1964,15 +1977,6 @@ function App() {
           </nav>
 
           <div className="sidebar-footer">
-            {activeModule === "dashboard" ? (
-              <div className="sidebar-master-card">
-                <img
-                  className="sidebar-master-logo"
-                  src={ddproMasterLogo}
-                  alt="DOĞRU DİZAYN PRO"
-                />
-              </div>
-            ) : null}
             <div className="sidebar-system">
               <span className="status-dot"></span>
               DDPro Core v1.1

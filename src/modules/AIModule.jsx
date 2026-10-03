@@ -2,18 +2,28 @@ function AIModule({ aiMessages, sendAiMessage, aiInput, setAiInput }) {
   const capabilities = [
     {
       icon: "▣",
-      title: "Proje analizi",
-      prompt: "Aktif projelerimi özetle ve öncelikli adımları öner.",
+      title: "Proje & süreç",
+      prompt: "Aktif projelerimi ve süreçlerimi gözden geçir, öncelikli adımları öner.",
     },
     {
       icon: "◈",
-      title: "Teklif desteği",
-      prompt: "Tekliflerimi gözden geçirmek için bir kontrol listesi hazırla.",
+      title: "Analiz & raporlama",
+      prompt: "Operasyonel durumumu analiz et ve yönetim raporu taslağı hazırla.",
     },
     {
       icon: "⌕",
       title: "Tedarik araştırması",
       prompt: "Bir tedarik araştırması için değerlendirme kriterleri öner.",
+    },
+    {
+      icon: "▤",
+      title: "Teklif yönetimi",
+      prompt: "Tekliflerimi karşılaştırmak için bir değerlendirme ve kontrol listesi hazırla.",
+    },
+    {
+      icon: "✦",
+      title: "Karar desteği",
+      prompt: "Mevcut seçenekleri risk, etki ve öncelik açısından değerlendirmek için bir karar çerçevesi oluştur.",
     },
   ];
 
@@ -31,9 +41,9 @@ function AIModule({ aiMessages, sendAiMessage, aiInput, setAiInput }) {
             partneriniz.
           </p>
           <div className="ai-role-tags">
-            <span>AI ASİSTAN</span>
-            <span>AI PARTNER</span>
-            <span>AI YÖNETİCİ</span>
+            <span><i>01</i> AI ASİSTAN</span>
+            <span><i>02</i> AI PARTNER</span>
+            <span><i>03</i> AI YÖNETİCİ</span>
           </div>
         </div>
         <div className="ai-online-indicator"><span className="status-dot" /> ÇALIŞMAYA HAZIR</div>
