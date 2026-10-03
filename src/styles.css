@@ -2930,7 +2930,7 @@ textarea::placeholder {
 .ai-trade-hero {
   isolation: isolate;
   position: relative;
-  min-height: 300px;
+  min-height: 340px;
   display: grid;
   grid-template-columns: minmax(145px, 0.9fr) minmax(0, 2.4fr) minmax(120px, 1fr);
   align-items: center;
@@ -2972,11 +2972,11 @@ textarea::placeholder {
     inset 0 1px 4px rgba(255, 255, 255, 0.28);
 }
 
-.ai-reference-artwork {
-  width: min(100%, 220px);
+.ai-character-pair {
+  width: min(100%, 240px);
   margin: 0;
   justify-self: center;
-  padding: 7px;
+  padding: 8px 7px 6px;
   border: 1px solid rgba(202, 166, 111, 0.62);
   border-radius: 9px;
   background: linear-gradient(145deg, rgba(255, 255, 255, 0.1), rgba(0, 0, 0, 0.56));
@@ -2986,15 +2986,24 @@ textarea::placeholder {
     inset 0 1px rgba(255, 255, 255, 0.16);
 }
 
-.ai-reference-artwork img {
+.ai-character-views {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: end;
+  gap: 3px;
+}
+
+.ai-character-views img {
   display: block;
   width: 100%;
-  height: auto;
+  height: clamp(210px, 23vw, 290px);
+  object-fit: contain;
+  object-position: center bottom;
   border-radius: 4px;
 }
 
-.ai-reference-artwork figcaption {
-  padding: 6px 2px 1px;
+.ai-character-pair figcaption {
+  padding: 6px 2px 0;
   color: #c9bd9e;
   font-size: 10px;
   font-weight: 700;
@@ -3422,8 +3431,12 @@ textarea::placeholder {
     min-height: 260px;
   }
 
-  .ai-reference-artwork {
+  .ai-character-pair {
     width: min(100%, 150px);
+  }
+
+  .ai-character-views img {
+    height: 210px;
   }
 
   .ai-online-indicator {
@@ -3563,8 +3576,12 @@ textarea::placeholder {
     padding: 31px 17px 22px;
   }
 
-  .ai-reference-artwork {
-    width: min(100%, 180px);
+  .ai-character-pair {
+    width: min(100%, 220px);
+  }
+
+  .ai-character-views img {
+    height: 255px;
   }
 
   .ai-orbital-mark {
