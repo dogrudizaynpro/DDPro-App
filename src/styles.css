@@ -4013,7 +4013,15 @@ textarea::placeholder {
 .dashboard-reference-map { left: 21%; top: 52.4%; width: 26.8%; height: 39%; }
 .dashboard-reference-calendar { left: 75.5%; top: 52.4%; width: 23.5%; height: 39%; }
 .dashboard-reference-systems { left: 89%; top: 92.3%; width: 9.5%; height: 5.2%; }
-.dashboard-reference-live { left: 43.8%; top: 53.7%; width: 1.7%; height: 2.7%; }
+.dashboard-reference-live {
+  z-index: 5;
+  left: 43.8%;
+  top: 53.7%;
+  width: 1.7%;
+  height: 2.7%;
+  min-width: 44px;
+  min-height: 44px;
+}
 
 .dashboard-reference-live:hover::after,
 .dashboard-reference-live:focus-visible::after {
@@ -4036,14 +4044,14 @@ textarea::placeholder {
 
 .dashboard-reference-module-menu {
   position: absolute;
-  z-index: 3;
+  z-index: 6;
   top: 53.6%;
   left: 45.9%;
 }
 
 .dashboard-reference-module-menu summary {
-  width: clamp(28px, 2vw, 34px);
-  height: clamp(28px, 2.7vw, 34px);
+  width: max(44px, clamp(28px, 2vw, 34px));
+  height: max(44px, clamp(28px, 2.7vw, 34px));
   border-radius: 5px;
   cursor: pointer;
   list-style: none;
@@ -4190,6 +4198,16 @@ textarea::placeholder {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
     padding-bottom: 12px;
+  }
+
+  .dashboard-reference-mobile-nav .dashboard-reference-mobile-live {
+    grid-column: 1 / -1;
+    min-height: 48px;
+    border-color: rgba(165, 214, 75, 0.68);
+    background: linear-gradient(145deg, #3d4a2d, #171d13);
+    color: #e8efda;
+    font-weight: 700;
+    text-align: center;
   }
 
   .dashboard-reference-module-menu {

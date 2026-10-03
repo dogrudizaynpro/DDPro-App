@@ -413,6 +413,7 @@ function App() {
     resolveModuleFromHash(window.location.hash)
   );
   const [showDashboardReference, setShowDashboardReference] = useState(true);
+  const dashboardReferenceDialogRef = useRef(null);
   const dashboardReferenceLiveRef = useRef(null);
   const dashboardReferenceReturnRef = useRef(null);
 
@@ -547,14 +548,43 @@ function App() {
   useEffect(() => {
     if (activeModule !== "dashboard" || !showDashboardReference) return;
 
-    const closeReferenceOnEscape = (event) => {
+    const handleReferenceDialogKeydown = (event) => {
       if (event.key === "Escape") {
         setShowDashboardReference(false);
+        return;
+      }
+
+      if (event.key !== "Tab") return;
+
+      const focusableElements = [
+        ...(dashboardReferenceDialogRef.current?.querySelectorAll(
+          'a[href], button:not([disabled]), summary, [tabindex]:not([tabindex="-1"])'
+        ) ?? []),
+      ].filter((element) => element.checkVisibility());
+      if (focusableElements.length === 0) {
+        event.preventDefault();
+        return;
+      }
+
+      const firstElement = focusableElements[0];
+      const lastElement = focusableElements[focusableElements.length - 1];
+      const focusIsOutsideDialog =
+        !dashboardReferenceDialogRef.current?.contains(document.activeElement);
+
+      if (event.shiftKey && (document.activeElement === firstElement || focusIsOutsideDialog)) {
+        event.preventDefault();
+        lastElement.focus({ preventScroll: true });
+      } else if (
+        !event.shiftKey &&
+        (document.activeElement === lastElement || focusIsOutsideDialog)
+      ) {
+        event.preventDefault();
+        firstElement.focus({ preventScroll: true });
       }
     };
 
-    window.addEventListener("keydown", closeReferenceOnEscape);
-    return () => window.removeEventListener("keydown", closeReferenceOnEscape);
+    window.addEventListener("keydown", handleReferenceDialogKeydown);
+    return () => window.removeEventListener("keydown", handleReferenceDialogKeydown);
   }, [activeModule, showDashboardReference]);
 
   useEffect(() => {
@@ -2148,6 +2178,7 @@ function App() {
         <section
           id="dashboard-reference-screen"
           className="dashboard-reference-screen"
+          ref={dashboardReferenceDialogRef}
           role="dialog"
           aria-modal="true"
           aria-label="Ana Dashboard referans görünümü"
@@ -2231,6 +2262,13 @@ function App() {
             </details>
           </div>
           <nav className="dashboard-reference-mobile-nav" aria-label="Dashboard modülleri">
+            <button
+              className="dashboard-reference-mobile-live"
+              type="button"
+              onClick={() => setShowDashboardReference(false)}
+            >
+              Canlı Dashboard
+            </button>
             {modules.map((module) => (
               <button
                 key={module.id}

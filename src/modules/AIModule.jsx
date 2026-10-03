@@ -92,7 +92,7 @@ function AIModule({
         />
         <img className="ai-character-crop ai-character-front" src={aiCharacterFront} alt="" aria-hidden="true" />
         <img className="ai-character-crop ai-character-back" src={aiCharacterBack} alt="" aria-hidden="true" />
-        <div className="ai-trade-role-hotspots" aria-label="AI TRADE rollerini başlat">
+        <div className="ai-trade-role-hotspots" role="group" aria-label="AI TRADE rollerini başlat">
           {aiTradeRoles.map((role) => (
             <button
               className={`ai-trade-role-hotspot ${role.className}`}
