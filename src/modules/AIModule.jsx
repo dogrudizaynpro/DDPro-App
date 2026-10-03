@@ -85,55 +85,55 @@ function AIModule({
     <div className={`module-page ai-module${messagesOnly ? " ai-messages-module" : ""}`}>
       {!messagesOnly ? (
         <section className="ai-trade-master-reference" aria-label="DDPro AI TRADE ana tasarım referansı">
-        <img
-          className="ai-trade-master-image"
-          src={aiTradeDesignReference}
-          alt="DDPro AI TRADE'in kadın karakteri, marka dili ve merkezi teknik kompozisyonunu içeren ana referans"
-        />
-        <img className="ai-character-crop ai-character-front" src={aiCharacterFront} alt="" aria-hidden="true" />
-        <img className="ai-character-crop ai-character-back" src={aiCharacterBack} alt="" aria-hidden="true" />
-        <div className="ai-trade-role-hotspots" role="group" aria-label="AI TRADE rollerini başlat">
-          {aiTradeRoles.map((role) => (
-            <button
-              className={`ai-trade-role-hotspot ${role.className}`}
-              key={role.className}
-              type="button"
-              aria-label={role.label}
-              onClick={() => activateRole(role.prompt)}
-            />
-          ))}
-        </div>
+          <img
+            className="ai-trade-master-image"
+            src={aiTradeDesignReference}
+            alt="DDPro AI TRADE'in kadın karakteri, marka dili ve merkezi teknik kompozisyonunu içeren ana referans"
+          />
+          <img className="ai-character-crop ai-character-front" src={aiCharacterFront} alt="" aria-hidden="true" />
+          <img className="ai-character-crop ai-character-back" src={aiCharacterBack} alt="" aria-hidden="true" />
+          <div className="ai-trade-role-hotspots" role="group" aria-label="AI TRADE rollerini başlat">
+            {aiTradeRoles.map((role) => (
+              <button
+                className={`ai-trade-role-hotspot ${role.className}`}
+                key={role.className}
+                type="button"
+                aria-label={role.label}
+                onClick={() => activateRole(role.prompt)}
+              />
+            ))}
+          </div>
         </section>
       ) : null}
 
       <div className={`ai-workspace${messagesOnly ? " ai-messages-workspace" : ""}`}>
         {!messagesOnly ? (
           <aside className="ai-capabilities">
-          <div className="ai-section-heading">
-            <span>DDPRO AI TRADE</span>
-            <h3>Yetenekler</h3>
-          </div>
-          <div className="ai-capability-list">
-            {capabilities.map((capability) => (
-              <button
-                className="ai-capability"
-                key={capability.title}
-                type="button"
-                onClick={() => selectCapability(capability)}
-              >
-                <span className="ai-capability-icon" aria-hidden="true">{capability.icon}</span>
-                <span>
-                  <strong>{capability.title}</strong>
-                  <small>Çalışma başlat <span aria-hidden="true">↗</span></small>
-                </span>
-              </button>
-            ))}
-          </div>
-          <div className="ai-specification">
-            <span>ÇALIŞMA DURUMU</span>
-            <strong><i aria-hidden="true" /> Yerel oturum aktif</strong>
-            <p>Mesajlar bu çalışma alanında saklanır. Gelişmiş AI bağlantısı yapılandırıldığında etkinleşir.</p>
-          </div>
+            <div className="ai-section-heading">
+              <span>DDPRO AI TRADE</span>
+              <h3>Yetenekler</h3>
+            </div>
+            <div className="ai-capability-list">
+              {capabilities.map((capability) => (
+                <button
+                  className="ai-capability"
+                  key={capability.title}
+                  type="button"
+                  onClick={() => selectCapability(capability)}
+                >
+                  <span className="ai-capability-icon" aria-hidden="true">{capability.icon}</span>
+                  <span>
+                    <strong>{capability.title}</strong>
+                    <small>Çalışma başlat <span aria-hidden="true">↗</span></small>
+                  </span>
+                </button>
+              ))}
+            </div>
+            <div className="ai-specification">
+              <span>ÇALIŞMA DURUMU</span>
+              <strong><i aria-hidden="true" /> Yerel oturum aktif</strong>
+              <p>Mesajlar bu çalışma alanında saklanır. Gelişmiş AI bağlantısı yapılandırıldığında etkinleşir.</p>
+            </div>
           </aside>
         ) : null}
 

@@ -560,7 +560,14 @@ function App() {
         ...(dashboardReferenceDialogRef.current?.querySelectorAll(
           'a[href], button:not([disabled]), summary, [tabindex]:not([tabindex="-1"])'
         ) ?? []),
-      ].filter((element) => element.checkVisibility());
+      ].filter((element) => {
+        const isVisible =
+          typeof element.checkVisibility === "function"
+            ? element.checkVisibility()
+            : element.getClientRects().length > 0;
+        const isInsideClosedDetails = element.closest("details:not([open])");
+        return isVisible && (!isInsideClosedDetails || element.matches("summary"));
+      });
       if (focusableElements.length === 0) {
         event.preventDefault();
         return;
@@ -2200,7 +2207,11 @@ function App() {
                 />
               ))}
             </nav>
-            <div className="dashboard-reference-kpis" aria-label="Dashboard KPI modülleri">
+            <div
+              className="dashboard-reference-kpis"
+              role="group"
+              aria-label="Dashboard KPI modülleri"
+            >
               {dashboardStats.map((stat) => (
                 <button
                   className={`dashboard-reference-hotspot dashboard-reference-kpi-${stat.moduleId}`}
@@ -2241,6 +2252,7 @@ function App() {
               ref={dashboardReferenceLiveRef}
               aria-label="Tasarım görselinden canlı Dashboard modüllerine geç"
               title="Canlı Dashboard'u aç"
+              data-tooltip="Canlı Dashboard"
               onClick={() => setShowDashboardReference(false)}
             />
             <details className="dashboard-reference-module-menu">
