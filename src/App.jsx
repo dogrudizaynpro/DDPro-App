@@ -1389,8 +1389,8 @@ function App() {
             <span className="panel-kicker">DDPRO GLOBAL AĞI</span>
           </div>
 
-          <div className="project-map-canvas" aria-label={`${activeProjects.length} aktif proje`}>
-            <svg className="world-map" viewBox="0 0 600 320" role="img" aria-label="Dekoratif dünya haritası">
+          <div className="project-map-canvas">
+            <svg className="world-map" viewBox="0 0 600 320" aria-hidden="true">
               <defs>
                 <pattern id="map-grid" width="28" height="28" patternUnits="userSpaceOnUse">
                   <path d="M 28 0 L 0 0 0 28" fill="none" stroke="currentColor" strokeWidth="0.7" />
@@ -1945,7 +1945,7 @@ function App() {
               <img
                 className="sidebar-master-logo"
                 src={ddproMasterLogo}
-                alt="DOĞRU DİZAYN PRO"
+                alt=""
               />
             </div>
           ) : null}
@@ -1984,7 +1984,7 @@ function App() {
           </div>
         </aside>
 
-        <main className={`main-content ${activeModule === "dashboard" ? "dashboard-main" : ""}`}>
+        <main className={`main-content${activeModule === "dashboard" ? " dashboard-main" : ""}`}>
           <section className="content-header">
             <div>
               <h1>{currentModule.title}</h1>
