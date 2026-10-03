@@ -1,3 +1,5 @@
+import aiTradeDesignReference from "../../DDPro-AI-Trade-Referans.png";
+
 const capabilities = [
   {
     icon: "▣",
@@ -30,9 +32,13 @@ function AIModule({ aiMessages, sendAiMessage, aiInput, setAiInput }) {
   return (
     <div className="module-page ai-module">
       <section className="ai-trade-hero">
-        <div className="ai-orbital-mark" aria-hidden="true">
-          <span className="ai-orbital-core" />
-        </div>
+        <figure className="ai-reference-artwork">
+          <img
+            src={aiTradeDesignReference}
+            alt="DDPro AI TRADE'in sağlanan orijinal tasarım referansı ve karakter görseli"
+          />
+          <figcaption>ANA AI TRADE REFERANSI</figcaption>
+        </figure>
         <div className="ai-trade-copy">
           <span className="ai-eyebrow">DDPRO INTELLIGENCE SYSTEM</span>
           <h2>DDPRO <strong>AI TRADE</strong></h2>

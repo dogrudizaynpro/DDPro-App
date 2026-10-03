@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useId, useMemo, useRef, useState } from "react";
 import ddproMasterLogo from "../DDPRO_LOGO_MASTER_V1_EXACT.png";
+import dashboardDesignReference from "../DDPro-Dashboard-Referans.png";
 import {
   createProject as createProjectRequest,
   deleteProject as deleteProjectRequest,
@@ -1594,6 +1595,15 @@ function App() {
           <p className="activity-empty">Yeni işlem kayıtları burada görüntülenecek.</p>
         )}
       </section>
+      <details className="design-reference">
+        <summary>ANA DASHBOARD TASARIM REFERANSI</summary>
+        <img
+          src={dashboardDesignReference}
+          alt="DOĞRU DİZAYN PRO ana Dashboard tasarım referansı"
+          loading="lazy"
+          decoding="async"
+        />
+      </details>
     </div>
   );
 
