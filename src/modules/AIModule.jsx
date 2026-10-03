@@ -21,7 +21,7 @@ function AIModule({ aiMessages, sendAiMessage, aiInput, setAiInput }) {
     <div className="module-page ai-module">
       <section className="ai-trade-hero">
         <div className="ai-orbital-mark" aria-hidden="true">
-          <span>AI</span>
+          <span className="ai-orbital-core" />
         </div>
         <div className="ai-trade-copy">
           <span className="ai-eyebrow">DDPRO INTELLIGENCE SYSTEM</span>

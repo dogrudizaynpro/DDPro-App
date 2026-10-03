@@ -1418,11 +1418,6 @@ function App() {
               </g>
               <rect width="600" height="320" fill="url(#map-dots)" />
             </svg>
-            <div className="map-center-stat">
-              <span>AKTİF PROJE</span>
-              <strong>{activeProjects.length}</strong>
-              <small>DDPro ağı</small>
-            </div>
             <div className="map-legend"><span /> Proje ağı görünümü</div>
           </div>
         </section>
@@ -1916,7 +1911,7 @@ function App() {
     modules[0];
 
   return (
-    <div className="ddpro-app">
+    <div className={`ddpro-app${activeModule === "dashboard" ? " dashboard-shell" : ""}`}>
       <header className="app-header">
         <div className="brand-area">
           <img
@@ -1969,6 +1964,15 @@ function App() {
           </nav>
 
           <div className="sidebar-footer">
+            {activeModule === "dashboard" ? (
+              <div className="sidebar-master-card">
+                <img
+                  className="sidebar-master-logo"
+                  src={ddproMasterLogo}
+                  alt="DOĞRU DİZAYN PRO"
+                />
+              </div>
+            ) : null}
             <div className="sidebar-system">
               <span className="status-dot"></span>
               DDPro Core v1.1

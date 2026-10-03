@@ -3589,6 +3589,70 @@ textarea::placeholder {
   .ai-chat {
     min-height: 340px;
   }
+}
+
+.dashboard-shell .sidebar-master-card {
+  display: grid;
+  place-items: center;
+  min-height: 150px;
+  margin-bottom: 12px;
+  padding: 8px;
+  overflow: hidden;
+  border: 1px solid rgba(194, 189, 170, 0.36);
+  border-radius: 8px;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.06), transparent 52%),
+    linear-gradient(145deg, #202221, #0e1010);
+  box-shadow:
+    inset 0 1px rgba(255, 255, 255, 0.1),
+    0 8px 18px rgba(0, 0, 0, 0.28);
+}
+
+.sidebar-master-logo {
+  display: block;
+  width: min(100%, 170px);
+  max-height: 150px;
+  object-fit: contain;
+}
+
+.ai-trade-hero {
+  border-color: rgba(198, 167, 111, 0.42);
+  background:
+    radial-gradient(ellipse at 13% 50%, rgba(165, 214, 75, 0.18), transparent 30%),
+    radial-gradient(ellipse at 81% 0%, rgba(180, 138, 81, 0.23), transparent 38%),
+    linear-gradient(112deg, #2c2d2a, #191b1a 47%, #0d0f0f);
+}
+
+.ai-trade-copy > .ai-eyebrow {
+  color: #c6a873;
+}
+
+.ai-orbital-core {
+  width: 28px;
+  height: 28px;
+  display: block;
+  border: 1px solid rgba(222, 197, 145, 0.75);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 35% 28%, rgba(255, 255, 255, 0.82), transparent 19%),
+    radial-gradient(circle at 48% 44%, #c6a873 0%, #80984f 40%, #222820 76%);
+  box-shadow:
+    0 0 13px rgba(198, 168, 115, 0.48),
+    0 0 25px rgba(165, 214, 75, 0.32),
+    inset 0 1px 3px rgba(255, 255, 255, 0.55);
+}
+
+@media (max-width: 900px) {
+  .dashboard-shell .sidebar-master-card {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .ai-orbital-core {
+    width: 18px;
+    height: 18px;
+  }
 
   .ai-form {
     align-items: stretch;
