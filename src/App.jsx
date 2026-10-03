@@ -906,6 +906,11 @@ function App() {
     [offers]
   );
 
+  const aiUserMessageCount = useMemo(
+    () => aiMessages.filter((message) => message.role === "user").length,
+    [aiMessages]
+  );
+
   const dashboardStats = useMemo(
     () => [
       {
@@ -931,7 +936,7 @@ function App() {
       },
       {
         label: "AI ETKİLEŞİMİ",
-        value: aiMessages.filter((message) => message.role === "user").length,
+        value: aiUserMessageCount,
         detail: "Asistan sohbet isteği",
         icon: "AI",
         moduleId: "ai-assistant",
@@ -939,7 +944,7 @@ function App() {
     ],
     [
       activeProjects.length,
-      aiMessages,
+      aiUserMessageCount,
       offers.length,
       pendingOffers.length,
       procurementItems.length,
@@ -1528,7 +1533,7 @@ function App() {
           <div className="panel-header">
             <h2>SİSTEM DURUMLARI</h2>
             <span className={`system-overall ${headerStatusTone}`}>
-            <span className={`status-dot ${headerStatusTone}`} aria-hidden="true" />
+              <span className={`status-dot ${headerStatusTone}`} aria-hidden="true" />
               API: {getConnectionLabel(apiHealthState.status)}
             </span>
           </div>
