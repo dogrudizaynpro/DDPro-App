@@ -2932,7 +2932,7 @@ textarea::placeholder {
   position: relative;
   min-height: 300px;
   display: grid;
-  grid-template-columns: minmax(80px, 1fr) minmax(0, 2.4fr) minmax(120px, 1fr);
+  grid-template-columns: minmax(145px, 0.9fr) minmax(0, 2.4fr) minmax(120px, 1fr);
   align-items: center;
   gap: 22px;
   padding: clamp(30px, 4vw, 54px);
@@ -2970,6 +2970,36 @@ textarea::placeholder {
     0 0 82px rgba(180, 138, 81, 0.12),
     inset 0 0 30px rgba(165, 214, 75, 0.2),
     inset 0 1px 4px rgba(255, 255, 255, 0.28);
+}
+
+.ai-reference-artwork {
+  width: min(100%, 220px);
+  margin: 0;
+  justify-self: center;
+  padding: 7px;
+  border: 1px solid rgba(202, 166, 111, 0.62);
+  border-radius: 9px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.1), rgba(0, 0, 0, 0.56));
+  box-shadow:
+    0 10px 25px rgba(0, 0, 0, 0.45),
+    0 0 22px rgba(165, 214, 75, 0.13),
+    inset 0 1px rgba(255, 255, 255, 0.16);
+}
+
+.ai-reference-artwork img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 4px;
+}
+
+.ai-reference-artwork figcaption {
+  padding: 6px 2px 1px;
+  color: #c9bd9e;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-align: center;
 }
 
 .ai-orbital-mark::before,
@@ -3392,6 +3422,10 @@ textarea::placeholder {
     min-height: 260px;
   }
 
+  .ai-reference-artwork {
+    width: min(100%, 150px);
+  }
+
   .ai-online-indicator {
     position: absolute;
     top: 15px;
@@ -3527,6 +3561,10 @@ textarea::placeholder {
     justify-items: center;
     gap: 16px;
     padding: 31px 17px 22px;
+  }
+
+  .ai-reference-artwork {
+    width: min(100%, 180px);
   }
 
   .ai-orbital-mark {
@@ -3778,6 +3816,32 @@ textarea::placeholder {
   padding: 17px 2px 3px;
   color: #a2a399;
   font-size: 11px;
+}
+
+.design-reference {
+  overflow: hidden;
+  border: 1px solid rgba(199, 194, 176, 0.34);
+  border-radius: 10px;
+  background: linear-gradient(145deg, #252725, #111313);
+  box-shadow:
+    0 12px 26px rgba(0, 0, 0, 0.38),
+    inset 0 1px rgba(255, 255, 255, 0.09);
+}
+
+.design-reference summary {
+  padding: 14px 17px;
+  color: #d1c49f;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+
+.design-reference img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-top: 1px solid rgba(199, 194, 176, 0.2);
 }
 
 @media (max-width: 900px) {
