@@ -4088,7 +4088,7 @@ textarea::placeholder {
   }
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1100px) {
   .dashboard-reference-active > .app-header,
   .dashboard-reference-active > .app-layout,
   .dashboard-reference-active > .app-footer {
