@@ -304,12 +304,13 @@ export const getGoogleAccessToken = async (account) => {
 };
 
 export const revokeGoogleSession = async (req, res, next) => {
+  let revoked = false;
   try {
     const stored = await readIntegrationToken({
       provider: "google",
       account: req.integrationAccount,
     });
-    let revoked = !stored?.refreshToken && !stored?.accessToken;
+    revoked = !stored?.refreshToken && !stored?.accessToken;
     if (stored?.refreshToken || stored?.accessToken) {
       const revoke = async (token) => fetch("https://oauth2.googleapis.com/revoke", {
         method: "POST",
