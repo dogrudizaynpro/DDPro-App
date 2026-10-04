@@ -26,23 +26,55 @@ const getOAuthConfig = () => ({
   redirectUri: process.env.GOOGLE_REDIRECT_URI,
 });
 
+const validOAuthUrl = (value, callback = false) => {
+  try {
+    const url = new URL(value);
+    return (
+      (process.env.NODE_ENV !== "production" || url.protocol === "https:") &&
+      ["https:", "http:"].includes(url.protocol) &&
+      (!callback || url.pathname === "/api/integrations/google/callback") &&
+      !url.search &&
+      !url.hash
+    );
+  } catch {
+    return false;
+  }
+};
+
 export const getGoogleConfigurationStatus = async (account = "") => {
   const config = getOAuthConfig();
   const credentialsReady = Boolean(
-    config.clientId && config.clientSecret && config.redirectUri
+    config.clientId?.trim() &&
+    config.clientSecret?.trim() &&
+    validOAuthUrl(config.redirectUri, true)
   );
   const storageReady = isSecureTokenStorageReady();
   const tokenTableReady = storageReady ? await isTokenTableAvailable() : false;
+  const missingRequirements = [
+    !config.clientId?.trim() && "GOOGLE_CLIENT_ID",
+    !config.clientSecret?.trim() && "GOOGLE_CLIENT_SECRET",
+    !validOAuthUrl(config.redirectUri, true) && "GOOGLE_REDIRECT_URI",
+    !validOAuthUrl(process.env.FRONTEND_URL ||
+      (process.env.NODE_ENV === "production" ? "" : "http://localhost:5173")) && "FRONTEND_URL",
+    !process.env.INTEGRATION_SESSION_SECRET?.trim() && "INTEGRATION_SESSION_SECRET",
+    !process.env.SUPABASE_URL?.trim() && "SUPABASE_URL",
+    !process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() && "SUPABASE_SERVICE_ROLE_KEY",
+    !/^[\da-f]{64}$/i.test(process.env.INTEGRATION_TOKEN_ENCRYPTION_KEY || "") && "INTEGRATION_TOKEN_ENCRYPTION_KEY",
+    storageReady && !tokenTableReady && "integration_tokens",
+    allowedGoogleEmails().size === 0 && "GOOGLE_ALLOWED_EMAILS",
+  ].filter(Boolean);
+  const oauthFlowAvailable = missingRequirements.length === 0;
   const hasConnection =
-    credentialsReady && storageReady && tokenTableReady
+    oauthFlowAvailable
       ? await hasStoredIntegrationToken("google", account)
       : false;
   return {
-    configured: credentialsReady && storageReady && tokenTableReady,
+    configured: oauthFlowAvailable,
     credentialsReady,
     secureStorageReady: storageReady,
     connected: hasConnection,
-    oauthFlowAvailable: credentialsReady && storageReady && tokenTableReady,
+    oauthFlowAvailable,
+    missingRequirements,
   };
 };
 
@@ -95,15 +127,8 @@ export const beginGoogleOAuth = async (req, res, next) => {
   } catch (error) {
     return next(error);
   }
-  if (
-    !clientId ||
-    !process.env.GOOGLE_CLIENT_SECRET ||
-    !redirectUri ||
-    !googleStatus.oauthFlowAvailable ||
-    !process.env.INTEGRATION_SESSION_SECRET ||
-    (process.env.NODE_ENV === "production" && !process.env.FRONTEND_URL) ||
-    allowedGoogleEmails().size === 0
-  ) {
+  if (!googleStatus.oauthFlowAvailable) {
+    console.warn("Google OAuth start unavailable; check backend configuration:", googleStatus.missingRequirements);
     return res.status(503).json({
       status: "error",
       message:
