@@ -101,12 +101,13 @@ export const beginGoogleOAuth = async (req, res, next) => {
     !redirectUri ||
     !googleStatus.oauthFlowAvailable ||
     !process.env.INTEGRATION_SESSION_SECRET ||
+    (process.env.NODE_ENV === "production" && !process.env.FRONTEND_URL) ||
     allowedGoogleEmails().size === 0
   ) {
     return res.status(503).json({
       status: "error",
       message:
-        "Google OAuth requires Google credentials, a 32-byte token encryption key, Supabase service-role access, an integration session secret, and an allowlisted Google account.",
+        "Google OAuth requires provider credentials, FRONTEND_URL, secure token storage, an integration session secret, and an allowlisted account.",
     });
   }
 
@@ -142,9 +143,18 @@ export const completeGoogleOAuth = async (req, res, next) => {
     `ddpro_oauth_state=; HttpOnly; Path=/api/integrations/google/callback; Max-Age=0; Secure; SameSite=${process.env.NODE_ENV === "production" ? "None" : "Lax"}`
   );
   const redirectOAuthResult = (integration, reason) => {
-    const frontendUrl = new URL(
-      process.env.FRONTEND_URL || "http://localhost:5173"
-    );
+    let frontendUrl;
+    try {
+      frontendUrl = new URL(
+        process.env.FRONTEND_URL ||
+          (process.env.NODE_ENV === "production" ? "" : "http://localhost:5173")
+      );
+    } catch {
+      return res.status(503).json({
+        status: "error",
+        message: "FRONTEND_URL must be configured for the production OAuth redirect.",
+      });
+    }
     frontendUrl.hash = `/ayarlar?${new URLSearchParams({ integration, reason })}`;
     return res.redirect(frontendUrl.toString());
   };
