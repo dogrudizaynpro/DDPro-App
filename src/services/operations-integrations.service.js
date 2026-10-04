@@ -1,12 +1,45 @@
-import { API_BASE_URL, fetchAPI } from "./api.js";
+import { API_BASE_URL, clearBrowserSession, fetchAPI, setBrowserSession } from "./api.js";
 
-export const beginGoogleConnection = () => {
+export const beginGoogleConnection = async () => {
   if (!API_BASE_URL) throw new Error("Backend API address is not configured.");
-  window.location.assign(`${API_BASE_URL}/api/integrations/google/start`);
+  const verifier = Array.from(crypto.getRandomValues(new Uint8Array(32)),
+    (byte) => String.fromCharCode(byte)).join("");
+  const encoded = btoa(verifier).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
+  const challengeBytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(encoded));
+  const challenge = btoa(String.fromCharCode(...new Uint8Array(challengeBytes)))
+    .replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
+  sessionStorage.setItem("ddpro_oauth_verifier", encoded);
+  window.location.assign(`${API_BASE_URL}/api/integrations/google/start?challenge=${challenge}`);
 };
 
-export const disconnectGoogle = () =>
-  fetchAPI("/api/integrations/google/logout", { method: "POST" });
+let pendingGoogleConnection;
+export const completeGoogleConnection = (code) => {
+  if (!code) return pendingGoogleConnection || Promise.resolve();
+  const pending = exchangeGoogleConnection(code);
+  pendingGoogleConnection = pending;
+  pending.then(
+    () => { if (pendingGoogleConnection === pending) pendingGoogleConnection = null; },
+    () => { if (pendingGoogleConnection === pending) pendingGoogleConnection = null; }
+  );
+  return pending;
+};
+
+const exchangeGoogleConnection = async (code) => {
+  const verifier = sessionStorage.getItem("ddpro_oauth_verifier");
+  sessionStorage.removeItem("ddpro_oauth_verifier");
+  if (!verifier) throw new Error("OAuth başlatılan tarayıcı sekmesi bulunamadı; tekrar bağlanın.");
+  const response = await fetchAPI("/api/integrations/google/exchange", {
+    method: "POST",
+    body: JSON.stringify({ code, verifier }),
+  });
+  setBrowserSession(response.data.session);
+};
+
+export const disconnectGoogle = async () => {
+  const response = await fetchAPI("/api/integrations/google/logout", { method: "POST" });
+  clearBrowserSession();
+  return response;
+};
 
 export const importGmailToCrm = () =>
   fetchAPI("/api/integrations/gmail/import", {

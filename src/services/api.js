@@ -37,6 +37,9 @@ const resolveApiBaseUrl = () => {
 };
 
 const API_BASE_URL = resolveApiBaseUrl();
+const SESSION_KEY = "ddpro_browser_session";
+export const clearBrowserSession = () => sessionStorage.removeItem(SESSION_KEY);
+export const setBrowserSession = (session) => sessionStorage.setItem(SESSION_KEY, session);
 
 const API_CONFIGURATION_ERROR = (() => {
   if (!API_BASE_URL) {
@@ -73,12 +76,15 @@ export const fetchAPI = async (endpoint, options = {}) => {
     const url = `${API_BASE_URL}${normalizedEndpoint}`;
 
     const response = await fetch(url, {
+      ...options,
       headers: {
         "Content-Type": "application/json",
+        ...(sessionStorage.getItem(SESSION_KEY)
+          ? { Authorization: ["Bearer", sessionStorage.getItem(SESSION_KEY)].join(" ") }
+          : {}),
         ...options.headers,
       },
       credentials: "include",
-      ...options,
     });
 
     // Handle non-JSON responses

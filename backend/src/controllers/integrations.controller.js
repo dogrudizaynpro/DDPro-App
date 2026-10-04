@@ -56,6 +56,9 @@ export const getIntegrationStatus = async (req, res, next) => {
     if (result && !result.connected && testIsFresh) {
       return { connected: false, status: "test_failed", lastTest: result, checkedAt };
     }
+    if (sessionReady && ["gmail", "googleCalendar", "google"].includes(provider)) {
+      return { connected: true, status: "connected", lastTest: result, checkedAt };
+    }
     const requiresGoogleSession = ["gmail", "googleCalendar", "crm"].includes(provider);
     if (result?.connected && testIsFresh && (!requiresGoogleSession || sessionReady)) {
       return { connected: true, status: "connected", lastTest: result, checkedAt };
@@ -111,7 +114,7 @@ export const getIntegrationStatus = async (req, res, next) => {
       google: {
         configured: googleConfigured,
         oauthFlowAvailable: googleOAuthAvailable,
-        ...statusAfterTest("google", googleConfigured, googleConnected && last("google")?.connected),
+        ...statusAfterTest("google", googleConfigured, googleConnected),
       },
       supabase: {
         configured: supabaseConfigured,

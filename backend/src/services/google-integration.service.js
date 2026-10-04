@@ -1,5 +1,6 @@
 import {
   createHmac,
+  createHash,
   randomBytes,
   timingSafeEqual,
 } from "node:crypto";
@@ -10,7 +11,10 @@ import {
   removeIntegrationToken,
   readIntegrationToken,
   saveIntegrationToken,
+  encryptIntegrationToken,
+  decryptIntegrationToken,
 } from "./integration-vault.service.js";
+import { getIntegrationAdmin } from "../config/integration-admin.js";
 
 const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
@@ -110,6 +114,16 @@ const safeEqual = (left, right) => {
   const b = Buffer.from(right || "");
   return a.length === b.length && timingSafeEqual(a, b);
 };
+const digest = (value) => createHash("sha256").update(value).digest("base64url");
+const exchangeProvider = "google_session_exchange";
+const allowedFrontendOrigin = (req) => {
+  try {
+    return req.get("origin") === new URL(process.env.FRONTEND_URL ||
+      (process.env.NODE_ENV === "production" ? "" : "http://localhost:5173")).origin;
+  } catch {
+    return false;
+  }
+};
 
 const allowedGoogleEmails = () =>
   new Set(
@@ -135,11 +149,15 @@ export const beginGoogleOAuth = async (req, res, next) => {
         "Google OAuth requires provider credentials, FRONTEND_URL, secure token storage, an integration session secret, and an allowlisted account.",
     });
   }
+  const challenge = typeof req.query.challenge === "string" ? req.query.challenge : "";
+  if (process.env.NODE_ENV === "production" && !/^[A-Za-z0-9_-]{43}$/.test(challenge)) {
+    return res.status(400).json({ status: "error", message: "Browser authorization challenge is required." });
+  }
 
   const state = randomBytes(32).toString("base64url");
   const browserNonce = randomBytes(32).toString("base64url");
   const statePayload = Buffer.from(
-    JSON.stringify({ state, browserNonce, expiresAt: Date.now() + 10 * 60 * 1000 })
+    JSON.stringify({ state, browserNonce, challenge, expiresAt: Date.now() + 10 * 60 * 1000 })
   ).toString("base64url");
   const signedState = `${statePayload}.${sign(`oauth:${statePayload}`)}`;
   setCookie(res, "ddpro_oauth_state", browserNonce, 600, "/api/integrations/google/callback");
@@ -167,7 +185,7 @@ export const completeGoogleOAuth = async (req, res, next) => {
     "Set-Cookie",
     `ddpro_oauth_state=; HttpOnly; Path=/api/integrations/google/callback; Max-Age=0; Secure; SameSite=${process.env.NODE_ENV === "production" ? "None" : "Lax"}`
   );
-  const redirectOAuthResult = (integration, reason) => {
+  const redirectOAuthResult = (integration, reason, exchangeCode = "") => {
     let frontendUrl;
     try {
       frontendUrl = new URL(
@@ -180,7 +198,9 @@ export const completeGoogleOAuth = async (req, res, next) => {
         message: "FRONTEND_URL must be configured for the production OAuth redirect.",
       });
     }
-    frontendUrl.hash = `/ayarlar?${new URLSearchParams({ integration, reason })}`;
+    frontendUrl.hash = `/ayarlar?${new URLSearchParams({ integration, reason, ...(exchangeCode ? { exchange_code: exchangeCode } : {}) })}`;
+    res.set("Cache-Control", "no-store");
+    res.set("Referrer-Policy", "no-referrer");
     return res.redirect(frontendUrl.toString());
   };
   if (!process.env.INTEGRATION_SESSION_SECRET) {
@@ -249,21 +269,68 @@ export const completeGoogleOAuth = async (req, res, next) => {
       JSON.stringify({ email, expiresAt: Date.now() + 8 * 60 * 60 * 1000 })
     ).toString("base64url");
     setCookie(res, "ddpro_integration_session", `${session}.${sign(session)}`, 8 * 60 * 60    );
+    if (stateDetails.challenge) {
+      const exchangeCode = randomBytes(32).toString("base64url");
+      const { error } = await getIntegrationAdmin().from("integration_tokens").insert({
+        provider: exchangeProvider,
+        account: digest(exchangeCode),
+        encrypted_token: encryptIntegrationToken({
+          session,
+          challenge: stateDetails.challenge,
+          expiresAt: Date.now() + 2 * 60 * 1000,
+        }),
+      });
+      if (error) throw error;
+      return redirectOAuthResult("google_connected", "", exchangeCode);
+    }
     return redirectOAuthResult("google_connected", "");
   } catch {
     return redirectOAuthResult("google_error", "provider_unavailable");
   }
 };
 
+export const exchangeGoogleSession = async (req, res, next) => {
+  if (!allowedFrontendOrigin(req)) {
+    return res.status(403).json({ status: "error", message: "Request origin is not allowed." });
+  }
+  const { code, verifier } = req.body || {};
+  if (typeof code !== "string" || !/^[A-Za-z0-9_-]{43}$/.test(code) ||
+      typeof verifier !== "string" || !/^[A-Za-z0-9_-]{43}$/.test(verifier)) {
+    return res.status(400).json({ status: "error", message: "Invalid authorization exchange." });
+  }
+  try {
+    const { data, error } = await getIntegrationAdmin().from("integration_tokens")
+      .delete().eq("provider", exchangeProvider).eq("account", digest(code))
+      .select("encrypted_token").maybeSingle();
+    if (error) throw error;
+    if (!data) return res.status(401).json({ status: "error", message: "Authorization expired or already used." });
+    const grant = decryptIntegrationToken(data.encrypted_token);
+    if (grant.expiresAt < Date.now() || !safeEqual(grant.challenge, digest(verifier))) {
+      return res.status(401).json({ status: "error", message: "Authorization expired or invalid." });
+    }
+    res.set("Cache-Control", "no-store");
+    return res.json({
+      status: "success",
+      data: { session: `${grant.session}.${sign(`browser:${grant.session}`)}` },
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
 export const getGoogleSessionAccount = (req) => {
   const secret = process.env.INTEGRATION_SESSION_SECRET;
   const allowedEmails = allowedGoogleEmails();
-  const raw = cookieValue(req, "ddpro_integration_session");
+  const authorization = req.get("authorization");
+  if (authorization && !allowedFrontendOrigin(req)) return "";
+  const bearer = authorization?.startsWith("Bearer ") ? authorization.slice(7) : "";
+  if (authorization && !bearer) return "";
+  const raw = bearer || cookieValue(req, "ddpro_integration_session");
   const separator = raw.lastIndexOf(".");
   if (!secret || separator < 0) return "";
   const session = raw.slice(0, separator);
   const signature = raw.slice(separator + 1);
-  if (!safeEqual(signature, sign(session))) return "";
+  if (!safeEqual(signature, sign(bearer ? `browser:${session}` : session))) return "";
   try {
     const payload = JSON.parse(Buffer.from(session, "base64url").toString("utf8"));
     if (
@@ -278,8 +345,11 @@ export const getGoogleSessionAccount = (req) => {
   }
 };
 
-export const requireGoogleSession = (req, res, next) => {
-  if (["POST", "PUT", "PATCH", "DELETE"].includes(req.method)) {
+export const requireGoogleSession = async (req, res, next) => {
+  if (req.get("authorization") && !allowedFrontendOrigin(req)) {
+    return res.status(403).json({ status: "error", message: "Request origin is not allowed." });
+  }
+  if (["POST", "PUT", "PATCH", "DELETE"].includes(req.method) && !req.get("authorization")) {
     const requestOrigin = req.get("origin");
     const allowedOrigins = (process.env.ALLOWED_ORIGINS || "")
       .split(",")
@@ -303,6 +373,15 @@ export const requireGoogleSession = (req, res, next) => {
   const account = getGoogleSessionAccount(req);
   if (!account) {
     return res.status(401).json({ status: "error", message: "Google account connection is required." });
+  }
+  if (req.get("authorization")) {
+    try {
+      if (!await hasStoredIntegrationToken("google", account)) {
+        return res.status(401).json({ status: "error", message: "Google account connection is required." });
+      }
+    } catch (error) {
+      return next(error);
+    }
   }
   req.integrationAccount = account;
   return next();
