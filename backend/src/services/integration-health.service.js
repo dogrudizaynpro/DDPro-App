@@ -1,6 +1,5 @@
 import { createSign } from "node:crypto";
 import { getIntegrationAdmin } from "../config/integration-admin.js";
-import { getSupabaseClient, isSupabaseAvailable } from "../config/supabase.js";
 import { requestAiCompletion } from "./ai.service.js";
 import { requestWebsiteCms } from "./website-cms.service.js";
 import { testGoogleWorkspaceConnection } from "./google-workspace.service.js";
@@ -81,25 +80,19 @@ const testApple = async () => {
 };
 
 const testCrmAndSupabase = async (provider) => {
-  if (!isSupabaseAvailable()) {
-    throw Object.assign(new Error("Supabase is not configured."), {
-      statusCode: 503,
-      expose: true,
-    });
-  }
-  const { error } = await getSupabaseClient().from("projects").select("id").limit(1);
-  if (error) throw Object.assign(new Error("Supabase database connection test failed."), { statusCode: 502, expose: true });
   const admin = getIntegrationAdmin();
   if (!admin) {
-    throw Object.assign(new Error("Supabase service-role credentials are required for operations integrations."), {
+    throw Object.assign(new Error("Supabase service-role credentials are required for core data and integrations."), {
       statusCode: 503,
       expose: true,
     });
   }
-  const [{ error: crmError }, { error: tokenError }] = await Promise.all([
+  const [{ error: projectsError }, { error: crmError }, { error: tokenError }] = await Promise.all([
+    admin.from("projects").select("id").limit(1),
     admin.from("crm_contacts").select("id").limit(1),
     admin.from("integration_tokens").select("provider").limit(1),
   ]);
+  if (projectsError) throw Object.assign(new Error("Supabase core data tables are unavailable; apply the core data migrations."), { statusCode: 503, expose: true });
   if (crmError) throw Object.assign(new Error("CRM storage is unavailable; apply the operations integration migration."), { statusCode: 503, expose: true });
   if (tokenError) throw Object.assign(new Error("Secure OAuth token storage is unavailable; apply the operations integration migration."), { statusCode: 503, expose: true });
 };

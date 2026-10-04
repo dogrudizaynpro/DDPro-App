@@ -1,4 +1,4 @@
-import { getSupabaseClient, isSupabaseAvailable } from "../config/supabase.js";
+import { getIntegrationAdmin } from "../config/integration-admin.js";
 
 const AI_API_URL = process.env.AI_API_URL;
 const AI_API_KEY = process.env.AI_API_KEY;
@@ -29,12 +29,13 @@ const SYSTEM_INSTRUCTIONS = [
 
 export const requestAiCompletion = async ({ message, context = {} }) => {
   if (/fiyat|ücret|maliyet|bütçe|teklif tutarı|ne kadar|kaç para|kaç tl|price|cost|budget|how much/i.test(message.toLocaleLowerCase("tr-TR"))) {
-    if (!isSupabaseAvailable()) {
+    const supabase = getIntegrationAdmin();
+    if (!supabase) {
       return "Sunucu veritabanına bağlı değil; doğrulanmış fiyat kaydı bulunamadı. Tahmin üretmiyorum.";
     }
 
     try {
-      const { data, error } = await getSupabaseClient()
+      const { data, error } = await supabase
         .from("research_items")
         .select("title, price, price_verification, source, url")
         .eq("price_verification", "Kullanıcı kaynağı kontrol etti")

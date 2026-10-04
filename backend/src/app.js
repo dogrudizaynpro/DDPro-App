@@ -15,9 +15,27 @@ import {
   postWebsiteLead,
   postWhatsAppWebhook,
 } from "./controllers/integration-workspace.controller.js";
-import { getSupabaseClient, isSupabaseAvailable } from "./config/supabase.js";
+import { getIntegrationAdmin } from "./config/integration-admin.js";
 
 const app = express();
+const isProduction = process.env.NODE_ENV === "production";
+const parseOrigin = (value) => {
+  try {
+    return new URL(value).origin;
+  } catch {
+    return "";
+  }
+};
+const allowedOrigins = [
+  ...(process.env.ALLOWED_ORIGINS || (isProduction ? "" : "http://localhost:3000,http://localhost:5173"))
+    .split(",")
+    .map((origin) => parseOrigin(origin.trim()))
+    .filter(Boolean),
+  parseOrigin(process.env.FRONTEND_URL || ""),
+].filter((origin, index, origins) =>
+  origins.indexOf(origin) === index &&
+  (!isProduction || !/^https?:\/\/(localhost|127(?:\.\d{1,3}){3}|\[::1\])(?::\d+)?$/i.test(origin))
+);
 
 // ============================================================
 // MIDDLEWARE
@@ -29,9 +47,8 @@ app.use(helmet());
 // CORS
 app.use(
   cors({
-    origin: process.env.ALLOWED_ORIGINS
-      ? process.env.ALLOWED_ORIGINS.split(",")
-      : ["http://localhost:3000", "http://localhost:5173"],
+    origin: (origin, callback) =>
+      callback(null, !origin || allowedOrigins.includes(origin)),
     credentials: true,
   })
 );
@@ -94,7 +111,8 @@ app.post(
 // ============================================================
 
 app.get("/health", async (req, res) => {
-  if (!isSupabaseAvailable()) {
+  const supabase = getIntegrationAdmin();
+  if (!supabase) {
     return res.status(503).json({
       status: "degraded",
       service: "ddpro-backend",
@@ -107,13 +125,12 @@ app.get("/health", async (req, res) => {
   }
 
   try {
-    const supabase = getSupabaseClient();
     const { data, error } = await supabase
-  .from("projects")
-  .select("id")
-  .limit(1);
-     if (error) {
-  console.error("❌ Supabase health check error:", error);
+      .from("projects")
+      .select("id")
+      .limit(1);
+    if (error) {
+      console.error("❌ Supabase health check error:", error);
       return res.status(503).json({
         status: "degraded",
         service: "ddpro-backend",

@@ -3,6 +3,7 @@ import {
   getIntegrationStatus,
   testIntegrationConnection,
 } from "../services/integrations.service.js";
+import { CAN_USE_LOCAL_FALLBACK } from "../services/api.js";
 import {
   beginGoogleConnection,
   createGoogleCalendarEvent,
@@ -458,7 +459,9 @@ function CalendarWorkspace() {
 }
 
 function CrmWorkspace({ onNavigate, setAiInput }) {
-  const [contacts, setContacts] = useState(() => readRecords("ddpro_crm_contacts_v1"));
+  const [contacts, setContacts] = useState(() =>
+    CAN_USE_LOCAL_FALLBACK ? readRecords("ddpro_crm_contacts_v1") : []
+  );
   const [remoteMode, setRemoteMode] = useState(false);
   const [editing, setEditing] = useState(null);
   const [error, setError] = useState("");
@@ -483,6 +486,7 @@ function CrmWorkspace({ onNavigate, setAiInput }) {
       })
       .catch((loadError) => {
         if (active) {
+          if (!CAN_USE_LOCAL_FALLBACK) setContacts([]);
           setRemoteMode(false);
           setError(loadError.message || "CRM backend bağlantısı kullanılamıyor.");
         }
@@ -505,7 +509,7 @@ function CrmWorkspace({ onNavigate, setAiInput }) {
     setError("");
     setNotice("");
     try {
-      if (remoteMode) {
+      if (remoteMode || !CAN_USE_LOCAL_FALLBACK) {
         const response = editing
           ? await updateCrmContact(editing.id, contact)
           : await createCrmContact(contact);
@@ -530,7 +534,7 @@ function CrmWorkspace({ onNavigate, setAiInput }) {
       setEditing(null);
       event.currentTarget.reset();
     } catch (saveError) {
-      setError(saveError.message || "CRM kaydı kaydedilemedi.");
+      setError(`CRM kaydı kaydedilmedi: ${saveError.message || "CRM backend bağlantısı kullanılamıyor."}`);
     } finally {
       setBusy(false);
     }
@@ -539,7 +543,7 @@ function CrmWorkspace({ onNavigate, setAiInput }) {
   const removeContact = async (contact) => {
     setError("");
     try {
-      if (remoteMode) {
+      if (remoteMode || !CAN_USE_LOCAL_FALLBACK) {
         await deleteCrmContact(contact.id);
         await reloadRemoteContacts();
       } else {
@@ -604,7 +608,9 @@ function CrmWorkspace({ onNavigate, setAiInput }) {
       <p className={`status-banner ${remoteMode ? "success" : "info"}`}>
         {remoteMode
           ? "CRM bağlı: kayıtlar Supabase backend üzerinden okunup yazılıyor."
-          : "CRM backend oturumu bağlı değil. Yerel kayıtlar yalnızca bu tarayıcıda saklanır."}
+          : CAN_USE_LOCAL_FALLBACK
+            ? "CRM backend oturumu bağlı değil. Yerel kayıtlar yalnızca bu tarayıcıda saklanır."
+            : "CRM backend oturumu bağlı değil. Kayıtlar gösterilmiyor veya tarayıcıya kaydedilmiyor."}
       </p>
       {!remoteMode ? (
         <button type="button" onClick={connectGoogle}>Google hesabıyla güvenli CRM oturumu aç</button>
@@ -631,7 +637,7 @@ function CrmWorkspace({ onNavigate, setAiInput }) {
         <p>Kaynak: {editing?.source || "manual"} (yalnızca doğrulanmış entegrasyonlar kaynak atayabilir)</p>
         <label>Notlar<textarea name="notes" rows={3} defaultValue={editing?.notes || ""} /></label>
         <div className="module-toolbar">
-          <button type="submit" disabled={busy}>{busy ? "Kaydediliyor…" : remoteMode ? "CRM'e kaydet" : "Yerel taslak kaydet"}</button>
+          <button type="submit" disabled={busy}>{busy ? "Kaydediliyor…" : remoteMode || !CAN_USE_LOCAL_FALLBACK ? "CRM'e kaydet" : "Yerel taslak kaydet"}</button>
           {editing ? <button type="button" onClick={() => setEditing(null)}>Düzenlemeyi iptal et</button> : null}
         </div>
       </form>
@@ -762,17 +768,19 @@ export default function OperationsModule({
 }) {
   const definition = moduleDefinitions[moduleId];
   const [records, setRecords] = useState(() =>
-    definition ? readRecords(definition.storageKey) : []
+    definition && moduleId !== "crm" ? readRecords(definition.storageKey) : []
   );
   const [formOpen, setFormOpen] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (definition) setRecords(readRecords(definition.storageKey));
+    if (definition && moduleId !== "crm") {
+      setRecords(readRecords(definition.storageKey));
+    }
   }, [definition]);
 
   useEffect(() => {
-    if (!definition || moduleId === "reports") return;
+    if (!definition || moduleId === "reports" || moduleId === "crm") return;
     try {
       localStorage.setItem(definition.storageKey, JSON.stringify(records));
     } catch {
@@ -788,7 +796,10 @@ export default function OperationsModule({
   if (moduleId === "reports") {
     return (
       <ReportsWorkspace
-        records={{ crm: readRecords("ddpro_crm_contacts_v1"), calendar: readRecords("ddpro_calendar_events_v1") }}
+        records={{
+          crm: CAN_USE_LOCAL_FALLBACK ? readRecords("ddpro_crm_contacts_v1") : [],
+          calendar: readRecords("ddpro_calendar_events_v1"),
+        }}
         projects={projects}
         offers={offers}
         research={research}

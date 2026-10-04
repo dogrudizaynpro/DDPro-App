@@ -1,5 +1,4 @@
 import { getIntegrationAdmin, hasIntegrationAdmin } from "../config/integration-admin.js";
-import { getSupabaseClient, isSupabaseAvailable } from "../config/supabase.js";
 import {
   getGoogleConfigurationStatus,
   getGoogleSessionAccount,
@@ -26,8 +25,8 @@ export const getIntegrationStatus = async (req, res, next) => {
   const websiteConfigured = cmsConfigured && websiteWebhookConfigured && databaseConfigured;
   let supabaseConnected = false;
   let crmStorageConnected = false;
-  if (isSupabaseAvailable()) {
-    const { error } = await getSupabaseClient().from("projects").select("id").limit(1);
+  if (databaseConfigured) {
+    const { error } = await getIntegrationAdmin().from("projects").select("id").limit(1);
     supabaseConnected = !error;
   }
   if (databaseConfigured) {

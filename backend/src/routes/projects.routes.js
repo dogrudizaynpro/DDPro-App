@@ -6,6 +6,7 @@
 // ============================================================
 
 import express from "express";
+import { requireGoogleSession } from "../services/google-integration.service.js";
 import {
   createProject,
   deleteProject,
@@ -15,6 +16,8 @@ import {
 } from "../controllers/projects.controller.js";
 
 const router = express.Router();
+
+router.use(requireGoogleSession);
 
 // ============================================================
 // GET ROUTES

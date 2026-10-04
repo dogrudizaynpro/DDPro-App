@@ -1214,7 +1214,10 @@ function App() {
 
     try {
       const createdProject = await createProjectRequest(newProject);
-      const nextProject = createdProject || newProject;
+      if (!createdProject) {
+        throw new Error("Project API did not return the saved project.");
+      }
+      const nextProject = createdProject;
 
       setProjects((currentProjects) => [nextProject, ...currentProjects]);
       setProjectsFetchState("success");
@@ -1328,7 +1331,10 @@ function App() {
 
     try {
       const createdProcurement = await createProcurementRequest(newProcurement);
-      const nextProcurement = createdProcurement || newProcurement;
+      if (!createdProcurement) {
+        throw new Error("Research API did not return the saved record.");
+      }
+      const nextProcurement = createdProcurement;
 
       setProcurementItems((currentItems) => [nextProcurement, ...currentItems]);
       setProcurementFetchState("success");
@@ -1478,7 +1484,10 @@ function App() {
 
     try {
       const createdOffer = await createOfferRequest(newOffer);
-      const nextOffer = createdOffer || newOffer;
+      if (!createdOffer) {
+        throw new Error("Offers API did not return the saved offer.");
+      }
+      const nextOffer = createdOffer;
 
       setOffers((currentOffers) => [
         nextOffer,

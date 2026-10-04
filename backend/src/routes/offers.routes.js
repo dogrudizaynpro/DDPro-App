@@ -6,6 +6,7 @@
 // ============================================================
 
 import express from "express";
+import { requireGoogleSession } from "../services/google-integration.service.js";
 import {
   createOffer,
   deleteOffer,
@@ -14,6 +15,8 @@ import {
 } from "../controllers/offers.controller.js";
 
 const router = express.Router();
+
+router.use(requireGoogleSession);
 
 // ============================================================
 // GET ROUTES

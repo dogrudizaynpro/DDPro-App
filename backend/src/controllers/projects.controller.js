@@ -4,7 +4,7 @@
 // Business logic and database interactions for projects domain
 // ============================================================
 
-import { getSupabaseClient, isSupabaseAvailable } from "../config/supabase.js";
+import { getIntegrationAdmin } from "../config/integration-admin.js";
 
 const DEFAULT_PROJECT_STATUS = "Aktif";
 
@@ -52,15 +52,13 @@ const getProjectPayload = (body = {}) => {
 
 export const getProjects = async (req, res, next) => {
   try {
-    // Check if Supabase is available
-    if (!isSupabaseAvailable()) {
+    const supabase = getIntegrationAdmin();
+    if (!supabase) {
       return res.status(503).json({
         status: "error",
-        message: "Database service is not configured",
+        message: "Database service-role configuration is required",
       });
     }
-
-    const supabase = getSupabaseClient();
 
     // Fetch all projects ordered by created_at descending
     const { data, error } = await supabase
@@ -93,16 +91,13 @@ export const getProjects = async (req, res, next) => {
 export const getProjectById = async (req, res, next) => {
   try {
     const { id } = req.params;
-
-    // Check if Supabase is available
-    if (!isSupabaseAvailable()) {
+    const supabase = getIntegrationAdmin();
+    if (!supabase) {
       return res.status(503).json({
         status: "error",
-        message: "Database service is not configured",
+        message: "Database service-role configuration is required",
       });
     }
-
-    const supabase = getSupabaseClient();
 
     // Fetch project by id
     const { data, error } = await supabase
@@ -140,14 +135,14 @@ export const getProjectById = async (req, res, next) => {
 
 export const createProject = async (req, res, next) => {
   try {
-    if (!isSupabaseAvailable()) {
+    const supabase = getIntegrationAdmin();
+    if (!supabase) {
       return res.status(503).json({
         status: "error",
-        message: "Database service is not configured",
+        message: "Database service-role configuration is required",
       });
     }
 
-    const supabase = getSupabaseClient();
     const payload = getProjectPayload(req.body);
 
     const { data, error } = await supabase
@@ -173,10 +168,11 @@ export const createProject = async (req, res, next) => {
 
 export const updateProject = async (req, res, next) => {
   try {
-    if (!isSupabaseAvailable()) {
+    const supabase = getIntegrationAdmin();
+    if (!supabase) {
       return res.status(503).json({
         status: "error",
-        message: "Database service is not configured",
+        message: "Database service-role configuration is required",
       });
     }
 
@@ -229,7 +225,7 @@ export const updateProject = async (req, res, next) => {
       return res.status(400).json({ status: "error", message: "No project fields to update." });
     }
 
-    const { data, error } = await getSupabaseClient()
+    const { data, error } = await supabase
       .from("projects")
       .update({ ...updates, updated_at: new Date().toISOString() })
       .eq("id", req.params.id)
@@ -253,14 +249,14 @@ export const deleteProject = async (req, res, next) => {
   try {
     const { id } = req.params;
 
-    if (!isSupabaseAvailable()) {
+    const supabase = getIntegrationAdmin();
+    if (!supabase) {
       return res.status(503).json({
         status: "error",
-        message: "Database service is not configured",
+        message: "Database service-role configuration is required",
       });
     }
 
-    const supabase = getSupabaseClient();
     const { data: existingProject, error: lookupError } = await supabase
       .from("projects")
       .select("*")
