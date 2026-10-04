@@ -104,15 +104,15 @@ export const removeIntegrationToken = async ({ provider, account }) => {
   if (error) throw error;
 };
 
-export const hasStoredIntegrationToken = async (provider) => {
+export const hasStoredIntegrationToken = async (provider, account = "") => {
   const client = getIntegrationAdmin();
   if (!client || !getEncryptionKey()) return false;
-  const { data, error } = await client
+  let query = client
     .from("integration_tokens")
     .select("provider")
-    .eq("provider", provider)
-    .limit(1)
-    .maybeSingle();
+    .eq("provider", provider);
+  if (account) query = query.eq("account", account);
+  const { data, error } = await query.limit(1).maybeSingle();
   if (error) return false;
   return Boolean(data);
 };

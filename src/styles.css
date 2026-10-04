@@ -4031,7 +4031,8 @@ textarea::placeholder {
 }
 
 .integration-error,
-.integration-secret-note {
+.integration-secret-note,
+.integration-check-time {
   display: block;
   margin-top: 7px;
   overflow-wrap: anywhere;

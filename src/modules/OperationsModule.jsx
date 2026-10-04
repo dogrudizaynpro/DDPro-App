@@ -188,6 +188,21 @@ function IntegrationSettings({ onNavigate, hubMode = false }) {
 
   useEffect(() => {
     let active = true;
+    const queryString = window.location.hash.split("?")[1] || "";
+    const oauthResult = new URLSearchParams(queryString);
+    if (oauthResult.get("integration") === "google_connected") {
+      setNotice("Google hesabı güvenli OAuth akışıyla bağlandı. Gmail ve Google Calendar durumları backend'den doğrulanıyor.");
+    } else if (oauthResult.get("integration") === "google_error") {
+      const reasons = {
+        configuration_required: "Google OAuth backend yapılandırması eksik.",
+        state_invalid: "Google OAuth güvenlik kontrolü başarısız; tekrar deneyin.",
+        access_denied: "Google hesap erişimi verilmedi veya iptal edildi.",
+        token_exchange_failed: "Google OAuth token değişimi başarısız.",
+        account_not_allowed: "Bu Google hesabı DDPro izin listesinde değil.",
+        provider_unavailable: "Google bağlantısı tamamlanamadı. Backend yapılandırmasını ve bağlantı durumunu kontrol edin.",
+      };
+      setError(reasons[oauthResult.get("reason")] || "Google OAuth bağlantısı tamamlanamadı.");
+    }
     getIntegrationStatus()
       .then((value) => {
         if (active) setStatus(value);
@@ -217,8 +232,10 @@ function IntegrationSettings({ onNavigate, hubMode = false }) {
 
   const disconnectGoogleAccount = async () => {
     try {
-      await disconnectGoogle();
-      setNotice("Google OAuth oturumu kapatıldı; Gmail ve Calendar erişimi kesildi.");
+      const response = await disconnectGoogle();
+      setNotice(response.data?.providerRevoked
+        ? "Google erişimi sağlayıcıda iptal edildi; Gmail ve Calendar oturumu kapatıldı."
+        : "DDPro token'ı kaldırıldı ve oturum kapatıldı. Google sağlayıcısı token iptalini doğrulamadı; Google hesap izinlerini kontrol edin.");
       await refresh();
     } catch (disconnectError) {
       setError(disconnectError.message || "Google bağlantısı kapatılamadı.");
@@ -280,11 +297,12 @@ function IntegrationSettings({ onNavigate, hubMode = false }) {
                 <p>{integration.description}</p>
                 <small><strong>Gerekli backend yapılandırması</strong><br />{integration.variables.join(" · ")}<br />
                   {connection?.lastTest?.testedAt ? `Son test: ${new Date(connection.lastTest.testedAt).toLocaleString("tr-TR")}` : "Henüz bağlantı testi çalıştırılmadı."}
+                  {connection?.checkedAt ? <span className="integration-check-time">Son kontrol: {new Date(connection.checkedAt).toLocaleString("tr-TR")}</span> : null}
                   {connection?.lastTest?.error ? <span className="integration-error">{connection.lastTest.error}</span> : null}
                   <div className="module-toolbar integration-actions">
                     {integration.requiresOAuth && !isGoogleConnected ? <button type="button" disabled={!status?.gmail?.oauthFlowAvailable} onClick={startGoogleOAuth}>Google hesabını bağla</button> : null}
                     <button type="button" disabled={!configured || testing === integration.id || (integration.requiresOAuth && !isGoogleConnected)} onClick={() => runConnectionTest(integration.id)}>{testing === integration.id ? "Test ediliyor…" : "Bağlantıyı test et"}</button>
-                    {integration.id === "gmail" && isGoogleConnected ? <button type="button" onClick={disconnectGoogleAccount}>Google bağlantısını kes</button> : null}
+                    {integration.requiresOAuth && isGoogleConnected ? <button type="button" onClick={disconnectGoogleAccount}>Google bağlantısını kes (Gmail + Calendar)</button> : null}
                     <button type="button" onClick={() => onNavigate(integration.moduleId)}>{integration.moduleId === "ai-assistant" ? "AI TRADE'i aç" : "Modülü aç"}</button>
                   </div>
                   <span className="integration-secret-note">Credential alanları yalnızca sunucu environment variables üzerinden tanımlanır; secret değeri uygulamada gösterilmez.</span>

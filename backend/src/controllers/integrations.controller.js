@@ -12,7 +12,8 @@ export const getIntegrationStatus = async (req, res, next) => {
   const aiConfigured = Boolean(
     process.env.AI_API_URL && process.env.AI_API_KEY && process.env.AI_MODEL
   );
-  const google = await getGoogleConfigurationStatus();
+  const googleAccount = getGoogleSessionAccount(req);
+  const google = await getGoogleConfigurationStatus(googleAccount);
   const databaseConfigured = hasIntegrationAdmin();
   const whatsappConfigured = Boolean(
     process.env.WHATSAPP_ACCESS_TOKEN && process.env.WHATSAPP_PHONE_NUMBER_ID
@@ -42,24 +43,26 @@ export const getIntegrationStatus = async (req, res, next) => {
     googleConfigured &&
     Boolean(process.env.INTEGRATION_SESSION_SECRET) &&
     (process.env.GOOGLE_ALLOWED_EMAILS || "").split(",").some((email) => email.trim());
-  const googleConnected = googleConfigured && google.connected && Boolean(getGoogleSessionAccount(req));
+  const googleConnected = googleConfigured && google.connected && Boolean(googleAccount);
   const last = (provider) => getIntegrationTestResult(provider);
   const statusAfterTest = (provider, configured, connected = false) => {
     const result = last(provider);
+    const checkedAt = new Date().toISOString();
     const testIsFresh =
       result && Date.now() - Date.parse(result.testedAt) < 5 * 60 * 1000;
-    if (!configured) return { connected: false, status: "credentials_required", lastTest: result };
+    if (!configured) return { connected: false, status: "credentials_required", lastTest: result, checkedAt };
     if (connected && result && !result.connected && testIsFresh) {
-      return { connected: false, status: "test_failed", lastTest: result };
+      return { connected: false, status: "test_failed", lastTest: result, checkedAt };
     }
-    if (connected) return { connected: true, status: "connected", lastTest: result };
+    if (connected) return { connected: true, status: "connected", lastTest: result, checkedAt };
     if (result?.connected && testIsFresh && !["gmail", "googleCalendar", "crm"].includes(provider)) {
-      return { connected: true, status: "connected", lastTest: result };
+      return { connected: true, status: "connected", lastTest: result, checkedAt };
     }
     return {
       connected: false,
       status: result && !result.connected ? "test_failed" : "configured_not_tested",
       lastTest: result,
+      checkedAt,
     };
   };
   const appleConfigured = Boolean(

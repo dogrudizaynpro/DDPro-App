@@ -26,7 +26,7 @@ const getOAuthConfig = () => ({
   redirectUri: process.env.GOOGLE_REDIRECT_URI,
 });
 
-export const getGoogleConfigurationStatus = async () => {
+export const getGoogleConfigurationStatus = async (account = "") => {
   const config = getOAuthConfig();
   const credentialsReady = Boolean(
     config.clientId && config.clientSecret && config.redirectUri
@@ -35,7 +35,7 @@ export const getGoogleConfigurationStatus = async () => {
   const tokenTableReady = storageReady ? await isTokenTableAvailable() : false;
   const hasConnection =
     credentialsReady && storageReady && tokenTableReady
-      ? await hasStoredIntegrationToken("google")
+      ? await hasStoredIntegrationToken("google", account)
       : false;
   return {
     configured: credentialsReady && storageReady && tokenTableReady,
@@ -133,9 +133,6 @@ export const beginGoogleOAuth = async (req, res, next) => {
 };
 
 export const completeGoogleOAuth = async (req, res, next) => {
-  if (!process.env.INTEGRATION_SESSION_SECRET) {
-    return res.status(503).json({ status: "error", message: "Integration OAuth is not configured." });
-  }
   const { clientId, clientSecret, redirectUri } = getOAuthConfig();
   const state = typeof req.query.state === "string" ? req.query.state : "";
   const code = typeof req.query.code === "string" ? req.query.code : "";
@@ -144,6 +141,16 @@ export const completeGoogleOAuth = async (req, res, next) => {
     "Set-Cookie",
     `ddpro_oauth_state=; HttpOnly; Path=/api/integrations/google/callback; Max-Age=0; Secure; SameSite=${process.env.NODE_ENV === "production" ? "None" : "Lax"}`
   );
+  const redirectOAuthResult = (integration, reason) => {
+    const frontendUrl = new URL(
+      process.env.FRONTEND_URL || "http://localhost:5173"
+    );
+    frontendUrl.hash = `/ayarlar?${new URLSearchParams({ integration, reason })}`;
+    return res.redirect(frontendUrl.toString());
+  };
+  if (!process.env.INTEGRATION_SESSION_SECRET) {
+    return redirectOAuthResult("google_error", "configuration_required");
+  }
   const separator = state.lastIndexOf(".");
   const statePayload = separator > 0 ? state.slice(0, separator) : "";
   const signature = separator > 0 ? state.slice(separator + 1) : "";
@@ -159,10 +166,10 @@ export const completeGoogleOAuth = async (req, res, next) => {
     stateDetails.expiresAt < Date.now() ||
     !safeEqual(cookieNonce, stateDetails.browserNonce)
   ) {
-    return res.status(400).json({ status: "error", message: "OAuth state validation failed." });
+    return redirectOAuthResult("google_error", "state_invalid");
   }
   if (req.query.error || !code) {
-    return res.status(400).json({ status: "error", message: "Google OAuth was cancelled or denied." });
+    return redirectOAuthResult("google_error", "access_denied");
   }
 
   try {
@@ -180,7 +187,7 @@ export const completeGoogleOAuth = async (req, res, next) => {
     });
     const token = await response.json();
     if (!response.ok || !token.access_token) {
-      return res.status(502).json({ status: "error", message: "Google token exchange failed." });
+      return redirectOAuthResult("google_error", "token_exchange_failed");
     }
 
     const profileResponse = await fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
@@ -190,7 +197,7 @@ export const completeGoogleOAuth = async (req, res, next) => {
     const profile = await profileResponse.json();
     const email = typeof profile.email === "string" ? profile.email.toLowerCase() : "";
     if (!profileResponse.ok || profile.verified_email !== true || !allowedGoogleEmails().has(email)) {
-      return res.status(403).json({ status: "error", message: "Google account is not authorized for DDPro integrations." });
+      return redirectOAuthResult("google_error", "account_not_allowed");
     }
 
     await saveIntegrationToken({
@@ -206,11 +213,10 @@ export const completeGoogleOAuth = async (req, res, next) => {
     const session = Buffer.from(
       JSON.stringify({ email, expiresAt: Date.now() + 8 * 60 * 60 * 1000 })
     ).toString("base64url");
-    setCookie(res, "ddpro_integration_session", `${session}.${sign(session)}`, 8 * 60 * 60);
-    const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
-    return res.redirect(`${frontendUrl.replace(/\/+$/, "")}/#/ayarlar?integration=google_connected`);
-  } catch (error) {
-    return next(error);
+    setCookie(res, "ddpro_integration_session", `${session}.${sign(session)}`, 8 * 60 * 60    );
+    return redirectOAuthResult("google_connected", "");
+  } catch {
+    return redirectOAuthResult("google_error", "provider_unavailable");
   }
 };
 
@@ -303,13 +309,25 @@ export const revokeGoogleSession = async (req, res, next) => {
       provider: "google",
       account: req.integrationAccount,
     });
+    let revoked = !stored?.refreshToken && !stored?.accessToken;
     if (stored?.refreshToken || stored?.accessToken) {
-      await fetch("https://oauth2.googleapis.com/revoke", {
+      const revoke = async (token) => fetch("https://oauth2.googleapis.com/revoke", {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({ token: stored.refreshToken || stored.accessToken }),
+        body: new URLSearchParams({ token }),
         signal: AbortSignal.timeout(10_000),
       });
+      let response = await revoke(stored.refreshToken || stored.accessToken);
+      if (response.status === 400 && stored.refreshToken && stored.accessToken) {
+        response = await revoke(stored.accessToken);
+      }
+      if (!response.ok && response.status !== 400) {
+        throw Object.assign(new Error("Google revocation failed; the saved connection was kept so you can retry."), {
+          statusCode: 502,
+          expose: true,
+        });
+      }
+      revoked = response.ok;
     }
     await removeIntegrationToken({
       provider: "google",
@@ -322,5 +340,8 @@ export const revokeGoogleSession = async (req, res, next) => {
     "Set-Cookie",
     `ddpro_integration_session=; HttpOnly; Path=/api; Max-Age=0; Secure; SameSite=${process.env.NODE_ENV === "production" ? "None" : "Lax"}`
   );
-  return res.status(200).json({ status: "success", data: { disconnected: true } });
+  return res.status(200).json({
+    status: "success",
+    data: { disconnected: true, providerRevoked: revoked },
+  });
 };
