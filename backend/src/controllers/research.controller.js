@@ -4,9 +4,45 @@
 // Business logic and database interactions for research_items domain
 // ============================================================
 
-import { getSupabaseClient, isSupabaseAvailable } from "../config/supabase.js";
+import { getIntegrationAdmin } from "../config/integration-admin.js";
+import { searchResearchProvider } from "../services/research-provider.service.js";
 
 const DEFAULT_RESEARCH_STATUS = "Aktif";
+const RESEARCH_API_URL = process.env.RESEARCH_API_URL;
+const RESEARCH_API_KEY = process.env.RESEARCH_API_KEY;
+
+export const getResearchProviderStatus = (_req, res) => {
+  res.status(200).json({
+    status: "success",
+    data: {
+      configured: Boolean(RESEARCH_API_URL && RESEARCH_API_KEY),
+      provider: (() => {
+        try {
+          return RESEARCH_API_URL ? new URL(RESEARCH_API_URL).hostname : null;
+        } catch {
+          return null;
+        }
+      })(),
+    },
+  });
+};
+
+export const createResearchSearch = async (req, res, next) => {
+  const query = typeof req.body?.query === "string" ? req.body.query.trim() : "";
+  if (!query || query.length > 500) {
+    return res.status(400).json({
+      status: "error",
+      message: "Research query is required and must be at most 500 characters.",
+    });
+  }
+
+  try {
+    const results = await searchResearchProvider(query);
+    return res.status(200).json({ status: "success", data: results });
+  } catch (error) {
+    return next(error);
+  }
+};
 
 const getResearchPayload = (body = {}) => {
   const title =
@@ -35,11 +71,45 @@ const getResearchPayload = (body = {}) => {
     typeof body.status === "string" && body.status.trim()
       ? body.status.trim()
       : DEFAULT_RESEARCH_STATUS;
+  const url =
+    typeof body.url === "string" && body.url.trim()
+      ? body.url.trim()
+      : null;
+
+  if (url && !/^https?:\/\/\S+$/i.test(url)) {
+    const error = new Error("Research source URL must use HTTP or HTTPS.");
+    error.statusCode = 400;
+    throw error;
+  }
 
   return {
     title,
     description,
     status,
+    source: typeof body.source === "string" ? body.source.trim() || null : null,
+    product: typeof body.product === "string" ? body.product.trim() || null : null,
+    manufacturer:
+      typeof body.manufacturer === "string"
+        ? body.manufacturer.trim() || null
+        : null,
+    technical_info:
+      typeof body.technical_info === "string"
+        ? body.technical_info.trim() || null
+        : null,
+    price: typeof body.price === "string" ? body.price.trim() || null : null,
+    price_verification:
+      typeof body.price_verification === "string"
+        ? body.price_verification.trim() || "Doğrulanmadı"
+        : "Doğrulanmadı",
+    url,
+    project_id:
+      typeof body.project_id === "string" && body.project_id.trim()
+        ? body.project_id.trim()
+        : null,
+    product_id:
+      typeof body.product_id === "string" && body.product_id.trim()
+        ? body.product_id.trim()
+        : null,
   };
 };
 
@@ -53,14 +123,13 @@ const getResearchPayload = (body = {}) => {
 export const getResearchItems = async (req, res, next) => {
   try {
     // Check if Supabase is available
-    if (!isSupabaseAvailable()) {
+    const supabase = getIntegrationAdmin();
+    if (!supabase) {
       return res.status(503).json({
         status: "error",
-        message: "Database service is not configured",
+        message: "Database service-role configuration is required",
       });
     }
-
-    const supabase = getSupabaseClient();
 
     // Fetch all research_items ordered by created_at descending
     const { data, error } = await supabase
@@ -95,14 +164,13 @@ export const getResearchItemById = async (req, res, next) => {
     const { id } = req.params;
 
     // Check if Supabase is available
-    if (!isSupabaseAvailable()) {
+    const supabase = getIntegrationAdmin();
+    if (!supabase) {
       return res.status(503).json({
         status: "error",
-        message: "Database service is not configured",
+        message: "Database service-role configuration is required",
       });
     }
-
-    const supabase = getSupabaseClient();
 
     // Fetch research_item by id
     const { data, error } = await supabase
@@ -140,14 +208,14 @@ export const getResearchItemById = async (req, res, next) => {
 
 export const createResearchItem = async (req, res, next) => {
   try {
-    if (!isSupabaseAvailable()) {
+    const supabase = getIntegrationAdmin();
+    if (!supabase) {
       return res.status(503).json({
         status: "error",
-        message: "Database service is not configured",
+        message: "Database service-role configuration is required",
       });
     }
 
-    const supabase = getSupabaseClient();
     const payload = getResearchPayload(req.body);
 
     const { data, error } = await supabase
@@ -179,14 +247,14 @@ export const deleteResearchItem = async (req, res, next) => {
   try {
     const { id } = req.params;
 
-    if (!isSupabaseAvailable()) {
+    const supabase = getIntegrationAdmin();
+    if (!supabase) {
       return res.status(503).json({
         status: "error",
-        message: "Database service is not configured",
+        message: "Database service-role configuration is required",
       });
     }
 
-    const supabase = getSupabaseClient();
     const { data: existingResearchItem, error: lookupError } = await supabase
       .from("research_items")
       .select("*")

@@ -32,8 +32,7 @@ export const errorHandler = (err, req, res, next) => {
     // In development, provide more descriptive error messages
     errorMessage = err.message || "Internal server error";
   } else {
-    // In production, generic error message
-    errorMessage = "Internal server error";
+    errorMessage = err.expose ? err.message : "Internal server error";
   }
 
   // Send JSON response

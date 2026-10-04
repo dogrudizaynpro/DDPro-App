@@ -4,7 +4,7 @@
 // Business logic and database interactions for offers domain
 // ============================================================
 
-import { getSupabaseClient, isSupabaseAvailable } from "../config/supabase.js";
+import { getIntegrationAdmin } from "../config/integration-admin.js";
 
 const ALLOWED_OFFER_STATUSES = [
   "Hazırlanıyor",
@@ -60,6 +60,10 @@ const getOfferPayload = (body = {}) => {
       typeof body.project_id === "string" && body.project_id.trim()
         ? body.project_id.trim()
         : null,
+    crm_contact_id:
+      typeof body.crm_contact_id === "string" && body.crm_contact_id.trim()
+        ? body.crm_contact_id.trim()
+        : null,
   };
 };
 
@@ -73,14 +77,13 @@ const getOfferPayload = (body = {}) => {
 export const getOffers = async (req, res, next) => {
   try {
     // Check if Supabase is available
-    if (!isSupabaseAvailable()) {
+    const supabase = getIntegrationAdmin();
+    if (!supabase) {
       return res.status(503).json({
         status: "error",
-        message: "Database service is not configured",
+        message: "Database service-role configuration is required",
       });
     }
-
-    const supabase = getSupabaseClient();
 
     // Fetch all offers ordered by created_at descending
     const { data, error } = await supabase
@@ -115,14 +118,13 @@ export const getOfferById = async (req, res, next) => {
     const { id } = req.params;
 
     // Check if Supabase is available
-    if (!isSupabaseAvailable()) {
+    const supabase = getIntegrationAdmin();
+    if (!supabase) {
       return res.status(503).json({
         status: "error",
-        message: "Database service is not configured",
+        message: "Database service-role configuration is required",
       });
     }
-
-    const supabase = getSupabaseClient();
 
     // Fetch offer by id
     const { data, error } = await supabase
@@ -160,14 +162,14 @@ export const getOfferById = async (req, res, next) => {
 
 export const createOffer = async (req, res, next) => {
   try {
-    if (!isSupabaseAvailable()) {
+    const supabase = getIntegrationAdmin();
+    if (!supabase) {
       return res.status(503).json({
         status: "error",
-        message: "Database service is not configured",
+        message: "Database service-role configuration is required",
       });
     }
 
-    const supabase = getSupabaseClient();
     const payload = getOfferPayload(req.body);
 
     const { data, error } = await supabase
@@ -199,14 +201,14 @@ export const deleteOffer = async (req, res, next) => {
   try {
     const { id } = req.params;
 
-    if (!isSupabaseAvailable()) {
+    const supabase = getIntegrationAdmin();
+    if (!supabase) {
       return res.status(503).json({
         status: "error",
-        message: "Database service is not configured",
+        message: "Database service-role configuration is required",
       });
     }
 
-    const supabase = getSupabaseClient();
     const { data: existingOffer, error: lookupError } = await supabase
       .from("offers")
       .select("*")

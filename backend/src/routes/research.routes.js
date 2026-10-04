@@ -6,14 +6,22 @@
 // ============================================================
 
 import express from "express";
+import { requireGoogleSession } from "../services/google-integration.service.js";
 import {
   createResearchItem,
+  createResearchSearch,
   deleteResearchItem,
+  getResearchProviderStatus,
   getResearchItemById,
   getResearchItems,
 } from "../controllers/research.controller.js";
 
 const router = express.Router();
+
+router.use(requireGoogleSession);
+
+router.get("/provider-status", getResearchProviderStatus);
+router.post("/agent", createResearchSearch);
 
 // ============================================================
 // GET ROUTES

@@ -41,5 +41,23 @@ DDPro-App; gerçek veriler, gerçek projeler ve kontrollü entegrasyonlar üzeri
 ### Backend Notları
 
 - Backend kodu `/backend` altında Node.js + Express + Supabase yapısındadır.
-- Aktif API rotaları: `/api/projects`, `/api/research`, `/api/offers`
-- Production CORS origin'i `https://dogrudizaynpro.github.io` olacak şekilde yapılandırılmalıdır.
+- API rotaları: `/api/projects`, `/api/research`, `/api/offers`, `/api/crm`, `/api/ai`, `/api/integrations`
+- Production `FRONTEND_URL` ve `ALLOWED_ORIGINS` yalnızca gerçek yayınlanan frontend origin'lerini içermelidir; localhost production'da kabul edilmez.
+
+### Entegrasyon Kurulumu
+
+- `backend/.env.example` dosyasını backend `.env` dosyasına kopyalayın. Secret/token değerlerini frontend `VITE_*` değişkenlerine veya kaynak koda koymayın.
+- Frontend için repository kökündeki `.env.example` yalnızca `VITE_API_URL` değişkenini içerir. Yerel geliştirmede bu değişken boş bırakılabilir; uygulamanın mevcut localhost fallback'i korunur. Production deploy için GitHub repository variable veya Vercel build environment içine gerçek backend origin'i tanımlayın. Secret/API key'leri `VITE_*` değişkenlerine koymayın.
+- Supabase SQL Editor'da `backend/database/migrations/004_operations_integrations.sql` migration'ını, önceki proje/araştırma migration'larından sonra çalıştırın.
+- Core projects, offers, and research API operations use the backend-only `SUPABASE_SERVICE_ROLE_KEY`; migration `005_core_data_access.sql` enables RLS and removes direct `anon`/`authenticated` table access. It expects the existing base tables and migrations 002–004 to be applied first. CRM table access is secured by migration 004.
+- `/api/projects`, `/api/offers`, `/api/research`, and `/api/crm` require the existing allowlisted Google OAuth session. Configure `GOOGLE_ALLOWED_EMAILS`, OAuth credentials, `INTEGRATION_SESSION_SECRET`, and secure token storage before using these operations.
+- Set Render `FRONTEND_URL` and comma-separated `ALLOWED_ORIGINS` to the deployed frontend origin(s), and set GitHub repository variable / Vercel build environment `VITE_API_URL` to the backend origin only. Production deploy rejects a missing `VITE_API_URL`; production CORS excludes localhost origins.
+- The existing OAuth session uses cross-site cookies; production frontend and backend should share a site through a custom domain/reverse proxy because third-party cookie behavior between GitHub Pages and a separate backend is not guaranteed.
+- Google Cloud OAuth callback URI'sini backend'in `/api/integrations/google/callback` adresine ayarlayın. `GOOGLE_ALLOWED_EMAILS` yalnızca yetkili e-posta adreslerini içermelidir.
+- Google token'ları Supabase `integration_tokens` tablosunda AES-256-GCM ile şifrelenir. OAuth için `SUPABASE_SERVICE_ROLE_KEY`, 32-byte hex `INTEGRATION_TOKEN_ENCRYPTION_KEY`, `INTEGRATION_SESSION_SECRET`, Google OAuth credentials ve allowlist gereklidir. Service-role anahtarı yalnızca backend'de tutulur.
+- `backend/.env.example` içindeki `APPLE_ISSUER_ID`, `APPLE_KEY_ID` ve `APPLE_PRIVATE_KEY` App Store Connect API testinde kullanılır; `.p8` anahtarını yalnızca backend secret store/environment içine koyun. Bu altyapı uygulamayı App Store'a göndermiyor.
+- Cookie tabanlı entegrasyon oturumlarının tarayıcı kısıtlamalarına takılmaması için production frontend ve backend aynı site altında reverse proxy/custom domain ile sunulmalıdır; GitHub Pages ile farklı origin arasında third-party cookie desteği garanti edilmez.
+- WhatsApp Business webhook adresi `/webhooks/whatsapp`, web form lead endpoint'i `/webhooks/website/leads` yoludur. Her iki sağlayıcı da imza doğrulamasıyla korunur; web sitesinin bu endpoint'e HMAC `x-ddpro-signature` eklemesi gerekir.
+- Web CMS adapter'ı yalnızca `pages`, `products` ve `references` içerik yollarını ve HTTPS provider URL'sini kabul eder.
+- AI, Gmail/Google Calendar, WhatsApp, CRM, Web/CMS, Apple, Supabase ve web araştırması bağlantı durumları Ayarlar > Entegrasyon Merkezi'nde görüntülenip gerçek provider istekleriyle sınanır. Kimlik bilgileri tanımlı olması tek başına provider bağlantı testi yerine geçmez. Environment ile yönetilen servislerin bağlantısını kesmek için ilgili sunucu değişkenlerini kaldırıp backend'i yeniden başlatın; Google OAuth oturumu uygulamadan kapatılabilir.
+- Google bağlantısı Gmail salt-okunur ve Calendar etkinlik erişim kapsamlarını ister. OAuth grant'i uygulandığında gelen e-postalar CRM'e kullanıcı tarafından aktarılır; WhatsApp ve web form lead'leri imzalı webhook ile CRM'e alınır.

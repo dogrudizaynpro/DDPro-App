@@ -1,14 +1,41 @@
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
+import rateLimit from "express-rate-limit";
 import { notFound } from "./middleware/notFound.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 import projectsRouter from "./routes/projects.routes.js";
 import researchRouter from "./routes/research.routes.js";
 import offersRouter from "./routes/offers.routes.js";
-import { getSupabaseClient, isSupabaseAvailable } from "./config/supabase.js";
+import aiRouter from "./routes/ai.routes.js";
+import integrationsRouter from "./routes/integrations.routes.js";
+import crmRouter from "./routes/crm.routes.js";
+import {
+  getWhatsAppWebhookChallenge,
+  postWebsiteLead,
+  postWhatsAppWebhook,
+} from "./controllers/integration-workspace.controller.js";
+import { getIntegrationAdmin } from "./config/integration-admin.js";
 
 const app = express();
+const isProduction = process.env.NODE_ENV === "production";
+const parseOrigin = (value) => {
+  try {
+    return new URL(value).origin;
+  } catch {
+    return "";
+  }
+};
+const allowedOrigins = [
+  ...(process.env.ALLOWED_ORIGINS || (isProduction ? "" : "http://localhost:3000,http://localhost:5173"))
+    .split(",")
+    .map((origin) => parseOrigin(origin.trim()))
+    .filter(Boolean),
+  parseOrigin(process.env.FRONTEND_URL || ""),
+].filter((origin, index, origins) =>
+  origins.indexOf(origin) === index &&
+  (!isProduction || !/^https?:\/\/(localhost|127(?:\.\d{1,3}){3}|\[::1\])(?::\d+)?$/i.test(origin))
+);
 
 // ============================================================
 // MIDDLEWARE
@@ -20,15 +47,19 @@ app.use(helmet());
 // CORS
 app.use(
   cors({
-    origin: process.env.ALLOWED_ORIGINS
-      ? process.env.ALLOWED_ORIGINS.split(",")
-      : ["http://localhost:3000", "http://localhost:5173"],
+    origin: (origin, callback) =>
+      callback(null, !origin || allowedOrigins.includes(origin)),
     credentials: true,
   })
 );
 
 // Body parser
-app.use(express.json());
+app.use(express.json({
+  limit: "1mb",
+  verify: (req, _res, buffer) => {
+    req.rawBody = Buffer.from(buffer);
+  },
+}));
 app.use(express.urlencoded({ extended: true }));
 
 // ============================================================
@@ -38,13 +69,50 @@ app.use(express.urlencoded({ extended: true }));
 app.use("/api/projects", projectsRouter);
 app.use("/api/research", researchRouter);
 app.use("/api/offers", offersRouter);
+app.use("/api/ai", aiRouter);
+app.use("/api/integrations", integrationsRouter);
+app.use("/api/crm", crmRouter);
+app.get(
+  "/webhooks/whatsapp",
+  rateLimit({
+    windowMs: 60_000,
+    limit: 120,
+    standardHeaders: "draft-8",
+    legacyHeaders: false,
+    message: { status: "error", message: "Too many webhook requests. Try again later." },
+  }),
+  getWhatsAppWebhookChallenge
+);
+app.post(
+  "/webhooks/whatsapp",
+  rateLimit({
+    windowMs: 60_000,
+    limit: 600,
+    standardHeaders: "draft-8",
+    legacyHeaders: false,
+    message: { status: "error", message: "Too many webhook requests. Try again later." },
+  }),
+  postWhatsAppWebhook
+);
+app.post(
+  "/webhooks/website/leads",
+  rateLimit({
+    windowMs: 60_000,
+    limit: 120,
+    standardHeaders: "draft-8",
+    legacyHeaders: false,
+    message: { status: "error", message: "Too many webhook requests. Try again later." },
+  }),
+  postWebsiteLead
+);
 
 // ============================================================
 // HEALTH CHECK ENDPOINT
 // ============================================================
 
 app.get("/health", async (req, res) => {
-  if (!isSupabaseAvailable()) {
+  const supabase = getIntegrationAdmin();
+  if (!supabase) {
     return res.status(503).json({
       status: "degraded",
       service: "ddpro-backend",
@@ -57,19 +125,30 @@ app.get("/health", async (req, res) => {
   }
 
   try {
-    const supabase = getSupabaseClient();
-    const { data, error } = await supabase
-  .from("projects")
-  .select("id")
-  .limit(1);
-     if (error) {
-  console.error("❌ Supabase health check error:", error);
+    const coreTables = [
+      ["projects", "id"],
+      ["offers", "id"],
+      ["research_items", "id"],
+      ["crm_contacts", "id"],
+      ["integration_tokens", "provider"],
+    ];
+    const results = await Promise.all(
+      coreTables.map(([table, column]) =>
+        supabase.from(table).select(column, { head: true }).limit(1)
+      )
+    );
+    const unavailableTables = results.flatMap(({ error }, index) =>
+      error ? [coreTables[index][0]] : []
+    );
+    if (unavailableTables.length > 0) {
+      console.error("❌ Supabase health check failed:", unavailableTables);
       return res.status(503).json({
         status: "degraded",
         service: "ddpro-backend",
         database: {
           provider: "supabase",
           ready: false,
+          unavailableTables,
         },
         timestamp: new Date().toISOString(),
       });
@@ -81,6 +160,7 @@ app.get("/health", async (req, res) => {
       database: {
         provider: "supabase",
         ready: true,
+        unavailableTables: [],
       },
       timestamp: new Date().toISOString(),
     });

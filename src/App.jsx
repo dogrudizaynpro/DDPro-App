@@ -1,8 +1,11 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useId, useMemo, useRef, useState } from "react";
+import ddproMasterLogo from "./assets/DDPRO_LOGO_MASTER_V1_EXACT.png";
+import dashboardDesignReference from "./assets/DDPro-Dashboard-Referans.png";
 import {
   createProject as createProjectRequest,
   deleteProject as deleteProjectRequest,
   getProjects,
+  updateProject as updateProjectRequest,
 } from "./services/projects.service.js";
 import "./styles.css";
 import {
@@ -17,6 +20,9 @@ import {
   CAN_USE_LOCAL_FALLBACK,
   getApiHealth,
 } from "./services/api.js";
+import { requestAiCompletion } from "./services/ai.service.js";
+import { getCrmContacts } from "./services/operations-integrations.service.js";
+import { getIntegrationStatus } from "./services/integrations.service.js";
 import {
   createResearchItem as createProcurementRequest,
   deleteResearchItem as deleteProcurementRequest,
@@ -29,6 +35,7 @@ const OffersModule = lazy(() => import("./modules/OffersModule.jsx"));
 const SystemsModule = lazy(() => import("./modules/SystemsModule.jsx"));
 const AIModule = lazy(() => import("./modules/AIModule.jsx"));
 const SkeletonModule = lazy(() => import("./modules/SkeletonModule.jsx"));
+const OperationsModule = lazy(() => import("./modules/OperationsModule.jsx"));
 
 const STORAGE_KEYS = {
   projects: "ddpro_projects_v1",
@@ -36,7 +43,6 @@ const STORAGE_KEYS = {
   offers: "ddpro_offers_v1",
   memory: "ddpro_memory_v1",
   logs: "ddpro_system_logs_v1",
-  integrations: "ddpro_integrations_v1",
   products: "ddpro_products_v1",
   systems: "ddpro_system_inventory_v1",
   priceAnalysis: "ddpro_price_analysis_v1",
@@ -52,7 +58,7 @@ const modules = [
     id: "dashboard",
     path: "/dashboard",
     icon: "⌂",
-    title: "Dashboard",
+    title: "Genel Bakış",
     short: "Ana Ekran",
     description:
       "DDPro operasyonlarının merkezi görünümü.",
@@ -148,6 +154,24 @@ const modules = [
       "DDPro AI çalışma alanı ve asistan konuşma akışı.",
   },
   {
+    id: "calendar",
+    path: "/takvim",
+    icon: "▦",
+    title: "Takvim",
+    short: "Proje Takvimi",
+    description:
+      "Aylık takvim görünümü. Etkinlik verileri backend bağlantısı bekliyor.",
+  },
+  {
+    id: "messages",
+    path: "/mesajlar",
+    icon: "✉",
+    title: "Mesajlar",
+    short: "Yerel Mesajlar",
+    description:
+      "Mevcut DDPro AI yerel sohbet akışındaki mesajlar.",
+  },
+  {
     id: "finance",
     path: "/finans-maliyet",
     icon: "⟐",
@@ -174,6 +198,36 @@ const modules = [
     description:
       "Uygulama tercihleri ve sistem ayarları yönetimi.",
   },
+  {
+    id: "integrations",
+    path: "/entegrasyon-merkezi",
+    icon: "⌘",
+    title: "Entegrasyon Merkezi",
+    short: "Bağlantı Yönetimi",
+    description:
+      "Harici servis bağlantıları, yapılandırma gereksinimleri ve canlı bağlantı testleri.",
+  },
+  {
+    id: "website",
+    path: "/web-sitesi",
+    icon: "↗",
+    title: "Web Sitesi",
+    short: "Resmi Site",
+    description:
+      "Resmi DOĞRU DİZAYN PRO web sitesi ve açıkça belirtilen entegrasyon durumu.",
+  },
+];
+
+const dashboardReferenceNavigation = [
+  { label: "Genel Bakış", moduleId: "dashboard" },
+  { label: "Projeler", moduleId: "projects" },
+  { label: "Tedarik ve araştırma", moduleId: "procurement" },
+  { label: "AI Asistan", moduleId: "ai-assistant" },
+  { label: "Takvim ve proje planı", moduleId: "calendar" },
+  { label: "Mesajlar ve AI çalışma alanı", moduleId: "messages" },
+  { label: "Raporlar", moduleId: "reports" },
+  { label: "Ayarlar", moduleId: "settings" },
+  { label: "Web sitesi", moduleId: "website" },
 ];
 
 const moduleRouteMap = Object.fromEntries(
@@ -184,6 +238,25 @@ const routeModuleMap = Object.fromEntries(
   modules.map((module) => [module.path, module.id])
 );
 const moduleIds = new Set(modules.map((module) => module.id));
+const dashboardQuickAccessModuleIds = new Set([
+  "offers",
+  "procurement",
+  "ai-assistant",
+  "reports",
+]);
+const calendarMonthFormatter = new Intl.DateTimeFormat("tr-TR", {
+  month: "short",
+  year: "numeric",
+});
+const footerDateFormatter = new Intl.DateTimeFormat("tr-TR", {
+  day: "2-digit",
+  month: "long",
+  year: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23",
+  timeZone: "Europe/Istanbul",
+});
 
 const normalizeModulePath = (pathValue) => {
   const sanitizedPath = (pathValue || "").trim();
@@ -289,6 +362,55 @@ const formatDate = () =>
     timeStyle: "short",
   });
 
+function DashboardCalendar({ now, title = "YAKLAŞAN TAKVİM", onOpenCalendar }) {
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const leadingDays = (monthStart.getDay() + 6) % 7;
+
+  return (
+    <section className="panel calendar-panel">
+      <div className="panel-header">
+        <h2>{title}</h2>
+        {onOpenCalendar ? (
+          <button type="button" className="calendar-open-button" onClick={onOpenCalendar}>
+            {calendarMonthFormatter.format(now)}
+          </button>
+        ) : (
+          <span className="calendar-month">{calendarMonthFormatter.format(now)}</span>
+        )}
+      </div>
+      <div className="calendar-widget">
+        <div className="calendar-weekdays" aria-hidden="true">
+          {["Pt", "Sa", "Ça", "Pe", "Cu", "Ct", "Pa"].map((day) => (
+            <span key={day}>{day}</span>
+          ))}
+        </div>
+        <div className="calendar-days">
+          {Array.from({ length: leadingDays }, (_, index) => (
+            <span className="calendar-day muted" key={`blank-${index}`} aria-hidden="true" />
+          ))}
+          {Array.from({ length: daysInMonth }, (_, index) => {
+            const day = index + 1;
+            return (
+              <span
+                className={`calendar-day${day === now.getDate() ? " today" : ""}`}
+                key={day}
+                aria-current={day === now.getDate() ? "date" : undefined}
+              >
+                {day}
+              </span>
+            );
+          })}
+        </div>
+        <div className="calendar-empty">
+          <span className="status-dot" aria-hidden="true" />
+          <p>Etkinlik verileri bağlandığında burada listelenecek.</p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 const getInitialItems = (key, fallback = EMPTY_ITEMS) =>
   CAN_USE_LOCAL_FALLBACK ? getStoredData(key, fallback) : fallback;
 
@@ -319,15 +441,67 @@ const getApiFailureReason = (error) => {
 const getApiStatusCode = (error) =>
   error?.status || error?.statusCode || error?.data?.statusCode || null;
 
+const integrationStatusQuestion = (message) => {
+  const text = message.toLocaleLowerCase("tr-TR");
+  if (!/bağlı|bagli|bağlant|baglanti|hazır|hazir|durum|entegrasyon|çalışıyor mu|çalışır mı|connected|connection|status|ready/i.test(text)) {
+    return null;
+  }
+  if (/gmail|e-posta|email/.test(text)) return ["Gmail", "gmail"];
+  if (/google calendar|google takvim/.test(text)) return ["Google Calendar", "googleCalendar"];
+  if (/whatsapp/.test(text)) return ["WhatsApp Business", "whatsapp"];
+  if (/app store|apple|ios|ipad/.test(text)) return ["App Store Connect / Apple", "appStore"];
+  if (/crm|müşteri yönetimi/.test(text)) return ["CRM", "crm"];
+  if (/web sitesi|cms|ddpro web/.test(text)) return ["DDPro Web Sitesi / CMS", "web"];
+  if (/supabase|veritabanı|database/.test(text)) return ["Supabase", "supabase"];
+  if (/web araştırma|araştırma servisi|research provider/.test(text)) return ["Web araştırma servisi", "research"];
+  if (/ai provider|ai sağlayıcı|yapay zeka bağlant|ai bağlant|ai connection/.test(text)) return ["AI Provider", "ai"];
+  if (/google|takvim|calendar/.test(text)) return ["Google Calendar", "googleCalendar"];
+  if (/entegrasyon|bağlantı|bağlı/.test(text)) return ["Entegrasyonlar", null];
+  return null;
+};
+
+const describeIntegrationStatus = (label, key, status) => {
+  const stateLabel = (entry) => {
+    if (!entry) return "durumu bu yanıtta alınamadı";
+    if (entry.connected) return "BAĞLI";
+    if (!entry.configured) return "YAPILANDIRMA GEREKLİ";
+    if (entry.status === "test_failed") return `BAĞLI DEĞİL · son test başarısız: ${entry.lastTest?.error || "ayrıntı yok"}`;
+    return "BAĞLI DEĞİL · OAuth oturumu veya başarılı bağlantı testi bekliyor";
+  };
+  if (key) return `${label}: ${stateLabel(status[key])}. Durum uygulamanın entegrasyon API'sinden alındı.`;
+  return `Gerçek backend durumuna göre entegrasyonlar: ${[
+    ["Gmail", status.gmail],
+    ["Google Calendar", status.googleCalendar],
+    ["WhatsApp", status.whatsapp],
+    ["CRM", status.crm],
+    ["Web sitesi/CMS", status.web],
+    ["Apple App Store Connect", status.appStore],
+    ["Supabase", status.supabase],
+    ["AI Provider", status.ai],
+    ["Web araştırma", status.research],
+  ].map(([name, entry]) => `${name}: ${stateLabel(entry)}`).join("; ")}.`;
+};
+
 function App() {
+  const dashboardMapId = useId().replace(/:/g, "");
+  const [currentDate, setCurrentDate] = useState(() => new Date());
   const [activeModule, setActiveModule] = useState(() =>
     resolveModuleFromHash(window.location.hash)
   );
+  const [selectedProjectId, setSelectedProjectId] = useState(() => {
+    const hashPath = window.location.hash.replace(/^#/, "");
+    return new URLSearchParams(hashPath.slice(hashPath.indexOf("?") + 1)).get("id") || "";
+  });
+  const [showDashboardReference, setShowDashboardReference] = useState(true);
+  const dashboardReferenceDialogRef = useRef(null);
+  const dashboardReferenceLiveRef = useRef(null);
+  const dashboardReferenceReturnRef = useRef(null);
 
   const [apiHealthState, setApiHealthState] = useState({
     status: "loading",
     message: "",
   });
+  const [integrationState, setIntegrationState] = useState(null);
 
   const [projects, setProjects] = useState(() => getInitialItems(STORAGE_KEYS.projects));
 
@@ -367,22 +541,6 @@ function App() {
     getStoredData(STORAGE_KEYS.logs)
   );
 
-  const [integrations, setIntegrations] = useState(() =>
-    getStoredData(STORAGE_KEYS.integrations, [
-      {
-        id: "ddpro-core",
-        name: "DDPro Core",
-        status: "Aktif",
-        description: "Merkezi uygulama ve veri yönetim katmanı.",
-      },
-      {
-        id: "local-storage",
-        name: "Local Storage",
-        status: "Aktif",
-        description: "Tarayıcı içi kalıcı kayıt sistemi.",
-      },
-    ])
-  );
   const [products] = useStoredDataState(STORAGE_KEYS.products);
   const [systemInventory] = useStoredDataState(STORAGE_KEYS.systems);
   const [priceAnalysisItems] = useStoredDataState(STORAGE_KEYS.priceAnalysis);
@@ -412,6 +570,7 @@ function App() {
   const [memoryContent, setMemoryContent] = useState("");
 
   const [aiInput, setAiInput] = useState("");
+  const [aiSending, setAiSending] = useState(false);
 
   const [aiMessages, setAiMessages] = useState([
     {
@@ -424,8 +583,35 @@ function App() {
   ]);
 
   useEffect(() => {
+    const intervalId = window.setInterval(() => setCurrentDate(new Date()), 60_000);
+    return () => window.clearInterval(intervalId);
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    const refreshIntegrationState = () =>
+      getIntegrationStatus()
+        .then((status) => {
+          if (active) setIntegrationState(status);
+        })
+        .catch(() => {
+          if (active) setIntegrationState(null);
+        });
+    refreshIntegrationState();
+    const intervalId = window.setInterval(refreshIntegrationState, 60_000);
+    return () => {
+      active = false;
+      window.clearInterval(intervalId);
+    };
+  }, []);
+
+  useEffect(() => {
     const syncModuleFromHash = () => {
       const nextModule = resolveModuleFromHash(window.location.hash);
+      const hashPath = window.location.hash.replace(/^#/, "");
+      setSelectedProjectId(
+        new URLSearchParams(hashPath.slice(hashPath.indexOf("?") + 1)).get("id") || ""
+      );
       setActiveModule((currentModule) =>
         currentModule === nextModule ? currentModule : nextModule
       );
@@ -438,6 +624,63 @@ function App() {
       window.removeEventListener("hashchange", syncModuleFromHash);
     };
   }, []);
+
+  useEffect(() => {
+    if (activeModule !== "dashboard") return;
+    const focusTarget = showDashboardReference
+      ? dashboardReferenceLiveRef.current
+      : dashboardReferenceReturnRef.current;
+    focusTarget?.focus({ preventScroll: true });
+  }, [activeModule, showDashboardReference]);
+
+  useEffect(() => {
+    if (activeModule !== "dashboard" || !showDashboardReference) return;
+
+    const handleReferenceDialogKeydown = (event) => {
+      if (event.key === "Escape") {
+        setShowDashboardReference(false);
+        return;
+      }
+
+      if (event.key !== "Tab") return;
+
+      const focusableElements = [
+        ...(dashboardReferenceDialogRef.current?.querySelectorAll(
+          'a[href], button:not([disabled]), summary, [tabindex]:not([tabindex="-1"])'
+        ) ?? []),
+      ].filter((element) => {
+        const isVisible =
+          typeof element.checkVisibility === "function"
+            ? element.checkVisibility()
+            : element.getClientRects().length > 0;
+        const isInsideClosedDetails = element.closest("details:not([open])");
+        return isVisible && (!isInsideClosedDetails || element.matches("summary"));
+      });
+      if (focusableElements.length === 0) {
+        event.preventDefault();
+        return;
+      }
+
+      const firstElement = focusableElements[0];
+      const lastElement = focusableElements[focusableElements.length - 1];
+      const focusIsOutsideDialog =
+        !dashboardReferenceDialogRef.current?.contains(document.activeElement);
+
+      if (event.shiftKey && (document.activeElement === firstElement || focusIsOutsideDialog)) {
+        event.preventDefault();
+        lastElement.focus({ preventScroll: true });
+      } else if (
+        !event.shiftKey &&
+        (document.activeElement === lastElement || focusIsOutsideDialog)
+      ) {
+        event.preventDefault();
+        firstElement.focus({ preventScroll: true });
+      }
+    };
+
+    window.addEventListener("keydown", handleReferenceDialogKeydown);
+    return () => window.removeEventListener("keydown", handleReferenceDialogKeydown);
+  }, [activeModule, showDashboardReference]);
 
   useEffect(() => {
     if (!moduleIds.has(activeModule)) {
@@ -755,13 +998,6 @@ function App() {
   }, [systemLogs]);
 
   useEffect(() => {
-    localStorage.setItem(
-      STORAGE_KEYS.integrations,
-      JSON.stringify(integrations)
-    );
-  }, [integrations]);
-
-  useEffect(() => {
     let cancelled = false;
 
     const fetchProjectsFromApi = async () => {
@@ -848,35 +1084,67 @@ function App() {
     [offers]
   );
 
+  const aiUserMessageCount = useMemo(
+    () => aiMessages.filter((message) => message.role === "user").length,
+    [aiMessages]
+  );
+
   const dashboardStats = useMemo(
     () => [
       {
         label: "AKTİF PROJELER",
         value: activeProjects.length,
+        detail: "Devam eden projeler",
+        icon: "▣",
+        moduleId: "projects",
       },
       {
-        label: "BEKLEYEN TEKLİFLER",
-        value: pendingOffers.length,
+        label: "TEKLİFLER",
+        value: offers.length,
+        detail: `${pendingOffers.length} bekleyen teklif`,
+        icon: "◈",
+        moduleId: "offers",
       },
       {
-        label: "ÜRÜNLER",
-        value: products.length,
+        label: "ARAŞTIRMALAR",
+        value: procurementItems.length,
+        detail: "Tedarik ve ürün araştırması",
+        icon: "⌕",
+        moduleId: "procurement",
       },
       {
-        label: "SİSTEMLER",
-        value: systemInventory.length,
+        label: "AI ETKİLEŞİMİ",
+        value: aiUserMessageCount,
+        detail: "Asistan sohbet isteği",
+        icon: "AI",
+        moduleId: "ai-assistant",
       },
     ],
-    [activeProjects.length, pendingOffers.length, products.length, systemInventory.length]
+    [
+      activeProjects.length,
+      aiUserMessageCount,
+      offers.length,
+      pendingOffers.length,
+      procurementItems.length,
+    ]
   );
 
-  const handleModuleNavigation = (moduleId) => {
+  const handleModuleNavigation = (moduleId, params = {}) => {
+    if (moduleId === "dashboard") {
+      setShowDashboardReference(true);
+    }
+
     const nextRoute = moduleRouteMap[moduleId] || "/dashboard";
-    if (window.location.hash !== `#${nextRoute}`) {
-      window.location.hash = nextRoute;
+    const query = moduleId === "projects" && params.id
+      ? `?id=${encodeURIComponent(params.id)}`
+      : "";
+    const nextHash = `#${nextRoute}${query}`;
+    if (window.location.hash !== nextHash) {
+      window.location.hash = `${nextRoute}${query}`;
       return;
     }
 
+    setSelectedProjectId(params.id || "");
     setActiveModule(moduleId);
   };
 
@@ -946,7 +1214,10 @@ function App() {
 
     try {
       const createdProject = await createProjectRequest(newProject);
-      const nextProject = createdProject || newProject;
+      if (!createdProject) {
+        throw new Error("Project API did not return the saved project.");
+      }
+      const nextProject = createdProject;
 
       setProjects((currentProjects) => [nextProject, ...currentProjects]);
       setProjectsFetchState("success");
@@ -1023,25 +1294,47 @@ function App() {
     }
   };
 
-  const createProcurement = async (event) => {
-    event.preventDefault();
+  const updateProject = async (id, updates) => {
+    projectsTouchedRef.current = true;
+    const project = projects.find((item) => item.id === id);
 
-    if (!procurementName.trim()) return;
+    if (!project) return false;
+    if (!isUuid(id)) {
+      setProjects((current) =>
+        current.map((item) => item.id === id ? { ...item, ...updates } : item)
+      );
+      addLog(`Yerel proje ayrıntıları güncellendi: ${project.name}`);
+      return true;
+    }
+
+    try {
+      const updatedProject = await updateProjectRequest(id, updates);
+      if (!updatedProject) return false;
+      setProjects((current) =>
+        current.map((item) => item.id === id ? updatedProject : item)
+      );
+      setProjectsError(null);
+      addLog(`Proje API üzerinden güncellendi: ${project.name}`);
+      return true;
+    } catch (error) {
+      setProjectsError(
+        `Proje ayrıntıları kaydedilemedi (${getApiFailureReason(error)}).`
+      );
+      return false;
+    }
+  };
+
+  const persistProcurementRecord = async (newProcurement) => {
     procurementTouchedRef.current = true;
     let shouldResetForm = false;
-
-    const newProcurement = {
-      id: createId(),
-      name: procurementName.trim(),
-      note: procurementNote.trim() || "Not eklenmedi.",
-      date: formatDate(),
-    };
-
     setProcurementError(null);
 
     try {
       const createdProcurement = await createProcurementRequest(newProcurement);
-      const nextProcurement = createdProcurement || newProcurement;
+      if (!createdProcurement) {
+        throw new Error("Research API did not return the saved record.");
+      }
+      const nextProcurement = createdProcurement;
 
       setProcurementItems((currentItems) => [nextProcurement, ...currentItems]);
       setProcurementFetchState("success");
@@ -1071,6 +1364,52 @@ function App() {
       setProcurementNote("");
       setShowProcurementForm(false);
     }
+  };
+
+  const createProcurement = async (event) => {
+    event.preventDefault();
+    if (!procurementName.trim()) return;
+    const formValues = Object.fromEntries(new FormData(event.currentTarget).entries());
+    await persistProcurementRecord({
+      id: createId(),
+      name: procurementName.trim(),
+      note: procurementNote.trim() || "Not eklenmedi.",
+      date: formatDate(),
+      source: formValues.source.trim(),
+      product: formValues.product.trim(),
+      manufacturer: formValues.manufacturer.trim(),
+      technicalInfo: formValues.technicalInfo.trim(),
+      price: formValues.price.trim(),
+      priceVerification: formValues.priceVerification || "Doğrulanmadı",
+      url: formValues.url.trim(),
+      projectId: formValues.projectId || "",
+      productId: formValues.productId.trim(),
+      status: formValues.status || "Taslak",
+    });
+  };
+
+  const saveResearchResult = async (result) => {
+    const title = result.product || result.manufacturer || result.source;
+    if (!title) {
+      setProcurementError("Sonuçta kaydedilebilir ürün, üretici veya kaynak adı yok.");
+      return;
+    }
+    await persistProcurementRecord({
+      id: createId(),
+      name: title,
+      note: result.technicalInfo || "Harici araştırma sonucu; kaynak kullanıcı tarafından kontrol edilmedi.",
+      date: formatDate(),
+      source: result.source || "",
+      product: result.product || "",
+      manufacturer: result.manufacturer || "",
+      technicalInfo: result.technicalInfo || "",
+      price: result.price || "",
+      priceVerification: "Doğrulanmadı",
+      url: result.url || "",
+      projectId: result.projectId || "",
+      productId: result.productId || "",
+      status: "Harici sonuç · doğrulama bekliyor",
+    });
   };
 
   const deleteProcurement = async (id) => {
@@ -1136,6 +1475,8 @@ function App() {
       status: offerStatus,
       statusRaw: offerStatus,
       date: formatDate(),
+      projectId: new FormData(event.currentTarget).get("projectId") || null,
+      crmContactId: new FormData(event.currentTarget).get("crmContactId") || null,
       source: "local",
     });
 
@@ -1143,7 +1484,10 @@ function App() {
 
     try {
       const createdOffer = await createOfferRequest(newOffer);
-      const nextOffer = createdOffer || newOffer;
+      if (!createdOffer) {
+        throw new Error("Offers API did not return the saved offer.");
+      }
+      const nextOffer = createdOffer;
 
       setOffers((currentOffers) => [
         nextOffer,
@@ -1282,36 +1626,13 @@ function App() {
     }
   };
 
-  const toggleIntegration = (id) => {
-    const integration = integrations.find((item) => item.id === id);
 
-    if (!integration) return;
-
-    const nextStatus =
-      integration.status === "Aktif" ? "Pasif" : "Aktif";
-
-    setIntegrations((currentItems) =>
-      currentItems.map((item) =>
-        item.id === id
-          ? {
-              ...item,
-              status: nextStatus,
-            }
-          : item
-      )
-    );
-
-    addLog(
-      `${integration.name} entegrasyon durumu değiştirildi: ${nextStatus}`
-    );
-  };
-
-  const sendAiMessage = (event) => {
+  const sendAiMessage = async (event) => {
     event.preventDefault();
 
     const message = aiInput.trim();
 
-    if (!message) return;
+    if (!message || aiSending) return;
 
     const userMessage = {
       id: createId(),
@@ -1319,26 +1640,186 @@ function App() {
       text: message,
       date: formatDate(),
     };
+    setAiMessages((currentMessages) => [...currentMessages, userMessage]);
+    setAiInput("");
+    setAiSending(true);
 
-    const assistantMessage = {
-      id: createId(),
-      role: "assistant",
-      text:
-        `Mesaj alındı: "${message}". ` +
-        "DDPro AI çalışma alanı bu mesajı kayıt altına aldı. " +
-        "Gelişmiş AI/API entegrasyonu sonraki altyapı aşamasında bu alana bağlanabilir.",
-      date: formatDate(),
+    const normalizedMessage = message.toLocaleLowerCase("tr-TR");
+    const suggestedModuleId =
+      /entegrasyon|gmail|google calendar|whatsapp|supabase|app store|cms|bağlantı durumu/.test(normalizedMessage) ? "integrations"
+        : /teklif|offer/.test(normalizedMessage) ? "offers"
+        : /tedarik|araştır|malzeme/.test(normalizedMessage) ? "procurement"
+          : /takvim|toplantı|saha ziyareti/.test(normalizedMessage) ? "calendar"
+            : /crm|müşteri|firma|iletişim/.test(normalizedMessage) ? "crm"
+              : /rapor/.test(normalizedMessage) ? "reports"
+                : /proje/.test(normalizedMessage) ? "projects"
+                  : /fiyat|maliyet/.test(normalizedMessage) ? "price-analysis"
+                    : /ürün|product/.test(normalizedMessage) ? "products"
+                      : /sistem|system/.test(normalizedMessage) ? "systems"
+                        : null;
+
+    const statusQuestion = integrationStatusQuestion(message);
+    if (statusQuestion) {
+      try {
+        const liveStatus = await getIntegrationStatus();
+        setIntegrationState(liveStatus);
+        setAiMessages((currentMessages) => [
+          ...currentMessages,
+          {
+            id: createId(),
+            role: "assistant",
+            text: describeIntegrationStatus(statusQuestion[0], statusQuestion[1], liveStatus),
+            date: formatDate(),
+            moduleSuggestion: "integrations",
+          },
+        ]);
+      } catch (error) {
+        setAiMessages((currentMessages) => [
+          ...currentMessages,
+          {
+            id: createId(),
+            role: "assistant",
+            text: `Entegrasyon durumu backend API'sinden alınamadı; bağlantı varmış gibi varsayım yapmıyorum. Hata: ${getApiFailureReason(error)}`,
+            date: formatDate(),
+            status: "unavailable",
+            moduleSuggestion: "integrations",
+          },
+        ]);
+      } finally {
+        setAiSending(false);
+      }
+      return;
+    }
+
+    let crmContext = getStoredData("ddpro_crm_contacts_v1");
+    try {
+      const response = await getCrmContacts();
+      crmContext = response.data || [];
+    } catch {
+      // Existing locally stored contacts remain available as context when authenticated CRM is offline.
+    }
+
+    let liveIntegrationContext;
+    try {
+      liveIntegrationContext = await getIntegrationStatus();
+      setIntegrationState(liveIntegrationContext);
+    } catch (error) {
+      liveIntegrationContext = { available: false, error: getApiFailureReason(error) };
+    }
+    const context = {
+      integrationStatus: liveIntegrationContext,
+      projects: projects.slice(0, 30).map(({ id, name, type, status, areaM2, systems, notes }) => ({
+        id,
+        name,
+        type,
+        status,
+        areaM2,
+        systems,
+        notes,
+      })),
+      offers: offers.slice(0, 30).map(({ id, title, amountDisplay, status, source }) => ({
+        id,
+        title,
+        amount: amountDisplay,
+        status,
+        source,
+      })),
+      products: getStoredData("ddpro_products_v1").slice(0, 30).map(({ id, name, detail }) => ({
+        id,
+        name,
+        detail,
+      })),
+      systems: getStoredData("ddpro_system_inventory_v1").slice(0, 30).map(({ id, name, status, detail }) => ({
+        id,
+        name,
+        status,
+        detail,
+      })),
+      research: procurementItems.slice(0, 30).map(({
+        id,
+        name,
+        note,
+        status,
+        source,
+        product,
+        manufacturer,
+        technicalInfo,
+        price,
+        priceVerification,
+        url,
+      }) => ({
+        id,
+        name,
+        note,
+        status,
+        source,
+        product,
+        manufacturer,
+        technicalInfo,
+        price,
+        priceVerification,
+        url,
+      })),
+      crm: crmContext
+        .slice(0, 20)
+        .map(({ id, name, company, request, project, project_id, system, status, source }) => ({
+          id,
+          name,
+          company,
+          request,
+          project: project || project_id,
+          system,
+          status,
+          source,
+        })),
+      calendar: getStoredData("ddpro_calendar_events_v1")
+        .slice(0, 20)
+        .map(({ title, type, date, project, notes }) => ({
+          title,
+          type,
+          date,
+          project,
+          notes,
+        })),
+        reports: getStoredData("ddpro_generated_reports_v1").slice(0, 5).map(({ id, type, createdAt }) => ({
+          id,
+          type,
+          createdAt,
+        })),
     };
 
-    setAiMessages((currentMessages) => [
-      ...currentMessages,
-      userMessage,
-      assistantMessage,
-    ]);
-
-    addLog(`DDPro AI mesajı gönderildi: ${message}`);
-
-    setAiInput("");
+    try {
+      const completion = await requestAiCompletion({ message, context });
+      setAiMessages((currentMessages) => [
+        ...currentMessages,
+        {
+          id: createId(),
+          role: "assistant",
+          text: completion.answer,
+          date: formatDate(),
+          moduleSuggestion: suggestedModuleId,
+        },
+      ]);
+      addLog("DDPro AI isteği yapılandırılmış sağlayıcıya gönderildi.");
+    } catch (error) {
+      const explanation =
+        error.code === "AI_PROVIDER_NOT_CONFIGURED" || error.status === 503
+          ? "AI sağlayıcısı şu anda bağlı değil. Gerçek yanıt için backend ortamında AI_API_URL, AI_API_KEY ve AI_MODEL yapılandırılmalıdır."
+          : `AI sağlayıcısından yanıt alınamadı (${getApiFailureReason(error)}). Mesajın yanıtlandığı varsayılmadı.`;
+      setAiMessages((currentMessages) => [
+        ...currentMessages,
+        {
+          id: createId(),
+          role: "assistant",
+          text: explanation,
+          date: formatDate(),
+          status: "unavailable",
+          moduleSuggestion: suggestedModuleId,
+        },
+      ]);
+    } finally {
+      setAiSending(false);
+    }
   };
 
   const renderDashboard = () => (
@@ -1349,52 +1830,155 @@ function App() {
 
       <div className="stats-grid">
         {dashboardStats.map((stat) => (
-          <div className="stat-card" key={stat.label}>
-            <span>{stat.label}</span>
+          <button
+            className="stat-card"
+            key={stat.label}
+            type="button"
+            onClick={() => handleModuleNavigation(stat.moduleId)}
+          >
+            <span className="stat-icon" aria-hidden="true">{stat.icon}</span>
+            <span className="stat-label">{stat.label}</span>
             <strong>{stat.value}</strong>
-          </div>
+            <small>{stat.detail}</small>
+          </button>
         ))}
       </div>
 
-      <div className="dashboard-grid">
-        <div className="panel">
+      <div className="dashboard-overview-grid">
+        <section className="panel project-map-panel">
           <div className="panel-header">
-            <h2>Proje Özeti</h2>
+            <h2>PROJE HARİTASI</h2>
+            <span className="panel-kicker">DDPRO GLOBAL AĞI</span>
           </div>
 
-          <div className="panel-content">
-            <div className="quick-status">
-              <span>Toplam Proje</span>
-              <strong>{projects.length}</strong>
-            </div>
-            <div className="quick-status">
-              <span>Aktif Projeler</span>
-              <strong>
-                {activeProjects.length}
-              </strong>
-            </div>
-            <div className="quick-status">
-              <span>Bekleyen Teklifler</span>
-              <strong>
-                {pendingOffers.length}
-              </strong>
-            </div>
-            <div className="quick-status">
-              <span>Ürün / Sistem Özeti</span>
-              <strong>{products.length + systemInventory.length}</strong>
-            </div>
+          <div className="project-map-canvas">
+            <svg className="world-map" viewBox="0 0 600 320" aria-hidden="true">
+              <defs>
+                <pattern id={`${dashboardMapId}-grid`} width="28" height="28" patternUnits="userSpaceOnUse">
+                  <path d="M 28 0 L 0 0 0 28" fill="none" stroke="currentColor" strokeWidth="0.7" />
+                </pattern>
+                <pattern id={`${dashboardMapId}-dots`} width="9" height="9" patternUnits="userSpaceOnUse">
+                  <circle cx="2" cy="2" r="1.1" fill="currentColor" />
+                </pattern>
+              </defs>
+              <rect width="600" height="320" fill={`url(#${dashboardMapId}-grid)`} />
+              <g className="map-land">
+                <path d="m67 83 23-17 35-3 13-13 32 3 18 17 32 7 8 17-20 10-8 17-27 4-12 19-21-2-13 16-21-5-9-19-22-5-17-23-20-4-7-17zM166 160l28 8 17 20 2 27-14 22-10 28-16 21-14-17-1-26-13-24 1-30 10-29zM273 74l23-14 24 5 13-12 28 4 11-12 36 8 10 15 30 5 19 20-12 18-29 3-6 19-18 6-15 27-20 4-13 20-21-7-7-20-22-11-3-20-20-7-6-18-19-7-9-20 16-6zM310 181l18 6 11 18 16 7 17 22-5 28-17 19-17-8-5-20-19-13-6-23-12-15zM452 218l21-9 28 8 18 19-9 17-27 3-18-13-18-2z" />
+                <path d="m60 70 57-26 45 4 36 21 32 16-14 24-29 10-18 27-26-4-16 16-19-18-25-7-19-22-21-9zM270 64l38-16 31 8 35-8 30 14 41 8 34 24-8 27-28 8-15 23-28 10-14 29-25 8-17-16-14-20-28-5-19-18-23-9-16-28-19-12z" />
+              </g>
+              <circle className="map-orbit" cx="304" cy="157" r="100" />
+              <circle className="map-orbit map-orbit-inner" cx="304" cy="157" r="65" />
+              <g className="map-network" aria-hidden="true">
+                <path d="M138 129 236 104 316 157 401 109 482 166 365 218 236 205 138 129" />
+                <circle cx="138" cy="129" r="5" />
+                <circle cx="236" cy="104" r="4" />
+                <circle cx="316" cy="157" r="6" />
+                <circle cx="401" cy="109" r="4" />
+                <circle cx="482" cy="166" r="5" />
+                <circle cx="365" cy="218" r="4" />
+                <circle cx="236" cy="205" r="4" />
+              </g>
+              <rect width="600" height="320" fill={`url(#${dashboardMapId}-dots)`} />
+            </svg>
+            <div className="map-legend"><span aria-hidden="true" /> Proje ağı görünümü</div>
           </div>
-        </div>
+        </section>
 
-        <div className="panel">
+        <section className="panel active-projects-panel">
           <div className="panel-header">
-            <h2>Hızlı Erişim Kartları</h2>
+            <h2>AKTİF PROJELER</h2>
+            <button type="button" onClick={() => handleModuleNavigation("projects")}>
+              Tümü <span aria-hidden="true">↗</span>
+            </button>
           </div>
 
-          <div className="panel-content quick-links-grid">
+          <div className="panel-content project-preview-list">
+            {projectsLoading ? (
+              <p className="empty-state">Projeler yükleniyor...</p>
+            ) : activeProjects.length === 0 ? (
+              <div className="dashboard-empty-state">
+                <span aria-hidden="true">▣</span>
+                <p>Henüz aktif proje bulunmuyor.</p>
+                <button type="button" onClick={() => handleModuleNavigation("projects")}>
+                  Projeleri görüntüle
+                </button>
+              </div>
+            ) : (
+              activeProjects.slice(0, 4).map((project, index) => (
+                <button
+                  className="project-preview"
+                  key={project.id}
+                  type="button"
+                  onClick={() => handleModuleNavigation("projects", { id: project.id })}
+                >
+                  <span className={`project-preview-mark mark-${index % 4}`} aria-hidden="true">
+                    {project.name.slice(0, 1).toLocaleUpperCase("tr-TR")}
+                  </span>
+                  <span className="project-preview-copy">
+                    <strong>{project.name}</strong>
+                    <small>{project.type || "Genel Proje"}</small>
+                  </span>
+                  <span className="project-status">{project.status}</span>
+                </button>
+              ))
+            )}
+          </div>
+        </section>
+
+        <DashboardCalendar
+          now={currentDate}
+          onOpenCalendar={() => handleModuleNavigation("calendar")}
+        />
+      </div>
+
+      <div className="dashboard-footer-grid">
+        <section className="panel system-panel">
+          <div className="panel-header">
+            <h2>SİSTEM DURUMLARI</h2>
+            <span className={`system-overall ${headerStatusTone}`}>
+              <span className={`status-dot ${headerStatusTone}`} aria-hidden="true" />
+              API: {getConnectionLabel(apiHealthState.status)}
+            </span>
+          </div>
+          <div className="system-status-list">
+            <div className="system-status-item">
+              <span>DDPro Core</span><strong>Hazır</strong>
+            </div>
+            <div className="system-status-item">
+              <span>Projeler API</span><strong>{getConnectionLabel(projectsFetchState)}</strong>
+            </div>
+            <div className="system-status-item">
+              <span>Teklifler API</span><strong>{getConnectionLabel(offersFetchState)}</strong>
+            </div>
+            <div className="system-status-item">
+              <span>Tedarik API</span><strong>{getConnectionLabel(procurementFetchState)}</strong>
+            </div>
+            <div className="system-status-item integration-summary-item">
+              <span>Entegrasyonlar</span>
+              <strong>{integrationState ? `${[
+                integrationState.gmail,
+                integrationState.googleCalendar,
+                integrationState.whatsapp,
+                integrationState.crm,
+                integrationState.web,
+                integrationState.appStore,
+                integrationState.supabase,
+                integrationState.ai,
+                integrationState.research,
+              ].filter((item) => item?.connected).length}/9 bağlı` : "Durum alınamadı"}</strong>
+            </div>
+            <button className="integration-dashboard-link" type="button" onClick={() => handleModuleNavigation("integrations")}>
+              Tüm entegrasyon durumları <span aria-hidden="true">↗</span>
+            </button>
+          </div>
+        </section>
+        <section className="panel quick-access-panel">
+          <div className="panel-header">
+            <h2>HIZLI ERİŞİM</h2>
+          </div>
+          <div className="quick-links-grid">
             {modules
-              .filter((module) => module.id !== "dashboard")
-              .slice(0, 6)
+              .filter((module) => dashboardQuickAccessModuleIds.has(module.id))
               .map((module) => (
                 <button
                   type="button"
@@ -1405,90 +1989,31 @@ function App() {
                 >
                   <span aria-hidden="true">{module.icon}</span>
                   <strong>{module.title}</strong>
+                  <span className="quick-link-arrow" aria-hidden="true">↗</span>
                 </button>
               ))}
           </div>
-        </div>
+        </section>
       </div>
 
-      <div className="dashboard-grid">
-        <div className="panel">
-          <div className="panel-header">
-            <h2>Aktif Projeler</h2>
-          </div>
-
-          <div className="panel-content">
-            {projectsLoading ? (
-              <p className="empty-state">Projeler yükleniyor...</p>
-            ) : activeProjects.length === 0 ? (
-              <p className="empty-state">Henüz veri bulunmuyor.</p>
-            ) : (
-              <div className="log-list">
-                {activeProjects
-                  .slice(0, 6)
-                  .map((project) => (
-                    <div className="log-item" key={project.id}>
-                      <strong>{project.name}</strong>
-                      <small>
-                        {project.type} · {project.date}
-                      </small>
-                    </div>
-                  ))}
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="panel">
-          <div className="panel-header">
-            <h2>Sistem Durumu</h2>
-          </div>
-
-          <div className="panel-content">
-            <div className="quick-status">
-              <span>DDPro Core</span>
-              <strong>Hazır</strong>
-            </div>
-            <div className="quick-status">
-              <span>Projeler API</span>
-              <strong>{getConnectionLabel(projectsFetchState)}</strong>
-            </div>
-            <div className="quick-status">
-              <span>Teklifler API</span>
-              <strong>{getConnectionLabel(offersFetchState)}</strong>
-            </div>
-            <div className="quick-status">
-              <span>Tedarik API</span>
-              <strong>{getConnectionLabel(procurementFetchState)}</strong>
-            </div>
-            <div className="quick-status">
-              <span>Diğer Modüller</span>
-              <strong>API entegrasyonu bekliyor</strong>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="panel">
+      <section className="panel recent-activity-panel">
         <div className="panel-header">
-          <h2>Son İşlemler</h2>
+          <h2>SON İŞLEMLER</h2>
+          <span className="panel-kicker">{systemLogs.length ? "SON KAYITLAR" : "HAREKET BEKLENİYOR"}</span>
         </div>
-
-        <div className="panel-content">
-          {systemLogs.length === 0 ? (
-            <p className="empty-state">Henüz veri bulunmuyor.</p>
-          ) : (
-            <div className="log-list">
-              {systemLogs.slice(0, 8).map((log) => (
-                <div className="log-item" key={log.id}>
-                  <strong>{log.message}</strong>
-                  <small>{log.date}</small>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
+        {systemLogs.length > 0 ? (
+          <div className="log-list">
+            {systemLogs.slice(0, 4).map((log) => (
+              <div className="log-item" key={log.id}>
+                <strong>{log.message}</strong>
+                <small>{log.date}</small>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="activity-empty">Yeni işlem kayıtları burada görüntülenecek.</p>
+        )}
+      </section>
     </div>
   );
 
@@ -1501,7 +2026,6 @@ function App() {
       documents: documentItems.length,
       finance: financeItems.length,
       reports: reportItems.length,
-      integrations: integrations.length,
     }),
     [
       products.length,
@@ -1511,7 +2035,6 @@ function App() {
       documentItems.length,
       financeItems.length,
       reportItems.length,
-      integrations.length,
     ]
   );
 
@@ -1697,12 +2220,28 @@ function App() {
             id: "settings-integrations",
             title: "Sistem Yapılandırması",
             description: "API ve entegrasyon ayarları.",
-            count: moduleCounts.integrations,
+            count: 0,
           },
         ],
         statusNote: {
           tone: "info",
           message: LOCAL_ONLY_MODULE_MESSAGE,
+        },
+      },
+      integrations: {
+        title: "Entegrasyon Merkezi",
+        description: "Provider bağlantılarını test et, durumlarını izle ve gerekli backend environment ayarlarını görüntüle.",
+        sections: [
+          {
+            id: "integration-providers",
+            title: "Bağlantı Merkezi",
+            description: "Gmail, Google Calendar, WhatsApp, CRM, Web/CMS, Apple, Supabase, AI ve araştırma sağlayıcısı.",
+            count: 9,
+          },
+        ],
+        statusNote: {
+          tone: "info",
+          message: "API secret ve OAuth token değerleri yalnızca sunucuda kalır.",
         },
       },
     }),
@@ -1712,6 +2251,10 @@ function App() {
   const renderModule = () => {
     if (activeModule === "dashboard") {
       return renderDashboard();
+    }
+
+    if (activeModule === "integrations") {
+      return <OperationsModule moduleId="integrations" onNavigate={handleModuleNavigation} />;
     }
 
     if (activeModule === "projects") {
@@ -1730,6 +2273,9 @@ function App() {
           projectsError={projectsError}
           projects={projects}
           deleteProject={deleteProject}
+          updateProject={updateProject}
+          selectedProjectId={selectedProjectId}
+          onNavigate={handleModuleNavigation}
         />
       );
     }
@@ -1747,8 +2293,7 @@ function App() {
           setMemoryContent={setMemoryContent}
           memoryItems={memoryItems}
           deleteMemory={deleteMemory}
-          integrations={integrations}
-          toggleIntegration={toggleIntegration}
+          onNavigate={handleModuleNavigation}
           statusNote={{
             tone: "info",
             message: LOCAL_ONLY_MODULE_MESSAGE,
@@ -1782,6 +2327,7 @@ function App() {
           offerDetailError={offerDetailError}
           getOfferStatusTone={getOfferStatusTone}
           canUseLocalFallback={CAN_USE_LOCAL_FALLBACK}
+          projects={projects}
         />
       );
     }
@@ -1800,6 +2346,8 @@ function App() {
           procurementLoading={procurementLoading}
           procurementItems={procurementItems}
           deleteProcurement={deleteProcurement}
+          saveResearchResult={saveResearchResult}
+          projects={projects}
         />
       );
     }
@@ -1811,6 +2359,49 @@ function App() {
           sendAiMessage={sendAiMessage}
           aiInput={aiInput}
           setAiInput={setAiInput}
+          onNavigate={handleModuleNavigation}
+          aiSending={aiSending}
+        />
+      );
+    }
+
+    if (activeModule === "messages") {
+      return (
+        <AIModule
+          aiMessages={aiMessages}
+          sendAiMessage={sendAiMessage}
+          aiInput={aiInput}
+          setAiInput={setAiInput}
+          messagesOnly
+          onNavigate={handleModuleNavigation}
+          aiSending={aiSending}
+        />
+      );
+    }
+
+    if (
+      [
+        "products",
+        "price-analysis",
+        "material-analysis",
+        "crm",
+        "documents",
+        "finance",
+        "calendar",
+        "reports",
+        "settings",
+        "website",
+      ].includes(activeModule)
+    ) {
+      return (
+        <OperationsModule
+          moduleId={activeModule}
+          onNavigate={handleModuleNavigation}
+          setAiInput={setAiInput}
+          projects={projects}
+          offers={offers}
+          research={procurementItems}
+          aiMessages={aiMessages}
         />
       );
     }
@@ -1825,25 +2416,42 @@ function App() {
     modules[0];
 
   return (
-    <div className="ddpro-app">
+    <div className={`ddpro-app${activeModule === "dashboard" ? " dashboard-shell" : ""}${activeModule === "dashboard" && showDashboardReference ? " dashboard-reference-active" : ""}`}>
       <header className="app-header">
         <div className="brand-area">
-          <div className="brand-logo">DD</div>
-
+          <img
+            className="brand-logo"
+            src={ddproMasterLogo}
+            alt="DOĞRU DİZAYN PRO"
+          />
           <div className="brand-content">
-            <strong>DOĞRU DİZAYN PRO</strong>
-            <span>DDPro Dijital Yönetim Sistemi</span>
+            <span>CREATIVE SOLUTIONS <i aria-hidden="true" /> AI TRADE</span>
           </div>
         </div>
 
+        <div className="header-welcome">
+          <span>Hoş Geldiniz</span>
+          <strong>DOĞRU DİZAYN PRO</strong>
+        </div>
+
         <div className={`header-status ${headerStatusTone}`}>
-          <span className={`status-dot ${headerStatusTone}`}></span>
+          <span className={`status-dot ${headerStatusTone}`} aria-hidden="true"></span>
           {headerStatusLabel}
         </div>
       </header>
 
       <div className="app-layout">
         <aside className="sidebar">
+          {activeModule === "dashboard" ? (
+            <div className="sidebar-master-card">
+              <img
+                className="sidebar-master-logo"
+                src={ddproMasterLogo}
+                alt=""
+              />
+            </div>
+          ) : null}
+
           <div className="sidebar-title">
             ANA MODÜLLER
           </div>
@@ -1872,18 +2480,29 @@ function App() {
 
           <div className="sidebar-footer">
             <div className="sidebar-system">
-              <span className="status-dot"></span>
+              <span className="status-dot" aria-hidden="true"></span>
               DDPro Core v1.1
             </div>
           </div>
         </aside>
 
-        <main className="main-content">
+        <main className={`main-content${activeModule === "dashboard" ? " dashboard-main" : ""}`}>
           <section className="content-header">
             <div>
               <h1>{currentModule.title}</h1>
               <p>{currentModule.description}</p>
             </div>
+            {activeModule === "dashboard" ? (
+              <button
+                className="dashboard-reference-return"
+                type="button"
+                ref={dashboardReferenceReturnRef}
+                aria-expanded={showDashboardReference}
+                onClick={() => setShowDashboardReference(true)}
+              >
+                ANA TASARIM GÖRÜNÜMÜ
+              </button>
+            ) : null}
           </section>
 
           <section className="content-body">
@@ -1903,6 +2522,142 @@ function App() {
           </section>
         </main>
       </div>
+
+      <footer className="app-footer">
+        <div className="footer-slogan">
+          <span>DOĞRU <strong>ÇİZGİ</strong></span>
+          <i aria-hidden="true" />
+          <span>DOĞRU <strong>ÇÖZÜM</strong></span>
+          <i aria-hidden="true" />
+          <span>DOĞRU <strong>SİSTEM</strong></span>
+        </div>
+        <div className="footer-status">
+          <span className="footer-clock" aria-hidden="true">◷</span>
+          <span>{footerDateFormatter.format(currentDate)}</span>
+          <i aria-hidden="true" />
+          <span className="status-dot" aria-hidden="true" />
+          <span>Arayüz Aktif</span>
+        </div>
+      </footer>
+
+      {activeModule === "dashboard" && showDashboardReference ? (
+        <section
+          id="dashboard-reference-screen"
+          className="dashboard-reference-screen"
+          ref={dashboardReferenceDialogRef}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Ana Dashboard referans görünümü"
+        >
+          <div className="dashboard-reference-canvas">
+            <img
+              className="dashboard-reference-image"
+              src={dashboardDesignReference}
+              alt="DOĞRU DİZAYN PRO'nun grafit, metalik ve zümrüt operasyon merkezi Dashboard tasarımı"
+            />
+            <span
+              className="dashboard-reference-clock"
+              aria-label={`Türkiye saati: ${footerDateFormatter.format(currentDate)}`}
+            >
+              {footerDateFormatter.format(currentDate)}
+            </span>
+            <nav className="dashboard-reference-primary-nav" aria-label="Ana modüller">
+              {dashboardReferenceNavigation.map((item) => (
+                <button
+                  className={`dashboard-reference-hotspot dashboard-reference-nav-${item.moduleId}`}
+                  key={`${item.label}-${item.moduleId}`}
+                  type="button"
+                  aria-label={item.label}
+                  onClick={() => handleModuleNavigation(item.moduleId)}
+                />
+              ))}
+            </nav>
+            <div
+              className="dashboard-reference-kpis"
+              role="group"
+              aria-label="Dashboard KPI modülleri"
+            >
+              {dashboardStats.map((stat) => (
+                <button
+                  className={`dashboard-reference-hotspot dashboard-reference-kpi-${stat.moduleId}`}
+                  key={stat.label}
+                  type="button"
+                  aria-label={`${stat.label}: ${stat.value}. Modülü aç`}
+                  onClick={() => handleModuleNavigation(stat.moduleId)}
+                />
+              ))}
+            </div>
+            <button
+              className="dashboard-reference-hotspot dashboard-reference-projects"
+              type="button"
+              aria-label="Aktif projeleri aç"
+              onClick={() => handleModuleNavigation("projects")}
+            />
+            <button
+              className="dashboard-reference-hotspot dashboard-reference-map"
+              type="button"
+              aria-label="Proje haritasından projeleri aç"
+              onClick={() => handleModuleNavigation("projects")}
+            />
+            <button
+              className="dashboard-reference-hotspot dashboard-reference-calendar"
+              type="button"
+              aria-label="Proje takvimini aç"
+              onClick={() => handleModuleNavigation("calendar")}
+            />
+            <button
+              className="dashboard-reference-hotspot dashboard-reference-systems"
+              type="button"
+              aria-label="Sistem durumlarını aç"
+              onClick={() => handleModuleNavigation("systems")}
+            />
+            <button
+              className="dashboard-reference-hotspot dashboard-reference-live"
+              type="button"
+              ref={dashboardReferenceLiveRef}
+              aria-label="Tasarım görselinden canlı Dashboard modüllerine geç"
+              title="Canlı Dashboard'u aç"
+              data-tooltip="Canlı Dashboard"
+              onClick={() => setShowDashboardReference(false)}
+            />
+            <details className="dashboard-reference-module-menu">
+              <summary aria-label="Tüm uygulama modüllerini aç">
+                <span className="sr-only">Tüm uygulama modülleri</span>
+              </summary>
+              <nav aria-label="Tüm uygulama modülleri">
+                {modules.map((module) => (
+                  <button
+                    key={module.id}
+                    type="button"
+                    onClick={() => handleModuleNavigation(module.id)}
+                  >
+                    <span aria-hidden="true">{module.icon}</span>
+                    {module.title}
+                  </button>
+                ))}
+              </nav>
+            </details>
+          </div>
+          <nav className="dashboard-reference-mobile-nav" aria-label="Dashboard modülleri">
+            <button
+              className="dashboard-reference-mobile-live"
+              type="button"
+              onClick={() => setShowDashboardReference(false)}
+            >
+              Canlı Dashboard
+            </button>
+            {modules.map((module) => (
+              <button
+                key={module.id}
+                type="button"
+                onClick={() => handleModuleNavigation(module.id)}
+              >
+                {module.title}
+              </button>
+            ))}
+          </nav>
+        </section>
+      ) : null}
     </div>
   );
 }

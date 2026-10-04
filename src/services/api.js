@@ -77,6 +77,7 @@ export const fetchAPI = async (endpoint, options = {}) => {
         "Content-Type": "application/json",
         ...options.headers,
       },
+      credentials: "include",
       ...options,
     });
 
@@ -104,7 +105,7 @@ export const fetchAPI = async (endpoint, options = {}) => {
     return data;
   } catch (error) {
     // Re-throw with additional context
-    console.error("API Error:", error.message);
+    console.warn("API request unavailable:", error.message);
     throw error;
   }
 };
