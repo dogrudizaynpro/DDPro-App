@@ -6,6 +6,7 @@ import {
 import { CAN_USE_LOCAL_FALLBACK } from "../services/api.js";
 import {
   beginGoogleConnection,
+  completeGoogleConnection,
   createGoogleCalendarEvent,
   createCrmContact,
   deleteCrmContact,
@@ -191,6 +192,11 @@ function IntegrationSettings({ onNavigate, hubMode = false }) {
     let active = true;
     const queryString = window.location.hash.split("?")[1] || "";
     const oauthResult = new URLSearchParams(queryString);
+    const exchangeCode = oauthResult.get("exchange_code");
+    if (exchangeCode) {
+      oauthResult.delete("exchange_code");
+      window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}#${window.location.hash.split("?")[0].slice(1)}?${oauthResult}`);
+    }
     if (oauthResult.get("integration") === "google_connected") {
       setNotice("Google hesabı güvenli OAuth akışıyla bağlandı. Gmail ve Google Calendar durumları backend'den doğrulanıyor.");
     } else if (oauthResult.get("integration") === "google_error") {
@@ -204,12 +210,16 @@ function IntegrationSettings({ onNavigate, hubMode = false }) {
       };
       setError(reasons[oauthResult.get("reason")] || "Google OAuth bağlantısı tamamlanamadı.");
     }
-    getIntegrationStatus()
+    const loadStatus = async () => {
+      await completeGoogleConnection(exchangeCode);
+      return getIntegrationStatus();
+    };
+    loadStatus()
       .then((value) => {
         if (active) setStatus(value);
       })
-      .catch(() => {
-        if (active) setError("Entegrasyon durumu backend'den alınamadı. Backend adresini ve erişimini kontrol edin.");
+      .catch((loadError) => {
+        if (active) setError(loadError.message || "Entegrasyon durumu backend'den alınamadı.");
       });
     return () => {
       active = false;
@@ -223,9 +233,9 @@ function IntegrationSettings({ onNavigate, hubMode = false }) {
     return "BAĞLI DEĞİL · bağlantı testi/oturum bekleniyor";
   };
 
-  const startGoogleOAuth = () => {
+  const startGoogleOAuth = async () => {
     try {
-      beginGoogleConnection();
+      await beginGoogleConnection();
     } catch (connectionError) {
       setError(connectionError.message);
     }
@@ -290,7 +300,7 @@ function IntegrationSettings({ onNavigate, hubMode = false }) {
               : integration.id === "whatsapp"
                 ? connection?.configured
                 : connection?.configured;
-          const isGoogleConnected = status?.gmail?.connected || status?.googleCalendar?.connected;
+          const isGoogleConnected = status?.google?.connected;
           return (
             <article className="data-card integration-card" key={integration.id}>
               <div>
