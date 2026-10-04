@@ -249,7 +249,13 @@ const calendarMonthFormatter = new Intl.DateTimeFormat("tr-TR", {
   year: "numeric",
 });
 const footerDateFormatter = new Intl.DateTimeFormat("tr-TR", {
-  dateStyle: "medium",
+  day: "2-digit",
+  month: "long",
+  year: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23",
+  timeZone: "Europe/Istanbul",
 });
 
 const normalizeModulePath = (pathValue) => {
