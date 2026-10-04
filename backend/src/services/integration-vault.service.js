@@ -22,8 +22,10 @@ export const isTokenTableAvailable = async () => {
       .from("integration_tokens")
       .select("provider")
       .limit(1);
+    if (error) console.error("OAuth token table probe failed", { code: error.code, status: error.status });
     return !error;
-  } catch {
+  } catch (error) {
+    console.error("OAuth token table probe failed", { name: error?.name });
     return false;
   }
 };

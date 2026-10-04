@@ -301,7 +301,7 @@ function IntegrationSettings({ onNavigate, hubMode = false }) {
                   {connection?.checkedAt ? <span className="integration-check-time">Son kontrol: {new Date(connection.checkedAt).toLocaleString("tr-TR")}</span> : null}
                   {connection?.lastTest?.error ? <span className="integration-error">{connection.lastTest.error}</span> : null}
                   <div className="module-toolbar integration-actions">
-                    {integration.requiresOAuth && !isGoogleConnected ? <button type="button" disabled={!status?.gmail?.oauthFlowAvailable} onClick={startGoogleOAuth}>Google hesabını bağla</button> : null}
+                    {integration.requiresOAuth && !isGoogleConnected ? <button type="button" onClick={startGoogleOAuth}>Google hesabını bağla</button> : null}
                     <button type="button" disabled={!configured || testing === integration.id || (integration.requiresOAuth && !isGoogleConnected)} onClick={() => runConnectionTest(integration.id)}>{testing === integration.id ? "Test ediliyor…" : "Bağlantıyı test et"}</button>
                     {integration.requiresOAuth && isGoogleConnected ? <button type="button" onClick={disconnectGoogleAccount}>Google bağlantısını kes (Gmail + Calendar)</button> : null}
                     <button type="button" onClick={() => onNavigate(integration.moduleId)}>{integration.moduleId === "ai-assistant" ? "AI TRADE'i aç" : "Modülü aç"}</button>

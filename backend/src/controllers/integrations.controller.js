@@ -44,11 +44,8 @@ export const getIntegrationStatus = async (req, res, next) => {
     coreDataConnected = coreResults.every(({ error }) => !error);
     crmStorageConnected = !crmError && !tokenError;
   }
-  const googleConfigured = google.configured && crmStorageConnected;
-  const googleOAuthAvailable =
-    googleConfigured &&
-    Boolean(process.env.INTEGRATION_SESSION_SECRET) &&
-    (process.env.GOOGLE_ALLOWED_EMAILS || "").split(",").some((email) => email.trim());
+  const googleConfigured = google.configured;
+  const googleOAuthAvailable = google.oauthFlowAvailable;
   const last = (provider) => getIntegrationTestResult(provider);
   const statusAfterTest = (provider, configured, sessionReady = false) => {
     const result = last(provider);
