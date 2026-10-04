@@ -125,18 +125,30 @@ app.get("/health", async (req, res) => {
   }
 
   try {
-    const { data, error } = await supabase
-      .from("projects")
-      .select("id")
-      .limit(1);
-    if (error) {
-      console.error("❌ Supabase health check error:", error);
+    const coreTables = [
+      ["projects", "id"],
+      ["offers", "id"],
+      ["research_items", "id"],
+      ["crm_contacts", "id"],
+      ["integration_tokens", "provider"],
+    ];
+    const results = await Promise.all(
+      coreTables.map(([table, column]) =>
+        supabase.from(table).select(column, { head: true }).limit(1)
+      )
+    );
+    const unavailableTables = results.flatMap(({ error }, index) =>
+      error ? [coreTables[index][0]] : []
+    );
+    if (unavailableTables.length > 0) {
+      console.error("❌ Supabase health check failed:", unavailableTables);
       return res.status(503).json({
         status: "degraded",
         service: "ddpro-backend",
         database: {
           provider: "supabase",
           ready: false,
+          unavailableTables,
         },
         timestamp: new Date().toISOString(),
       });
@@ -148,6 +160,7 @@ app.get("/health", async (req, res) => {
       database: {
         provider: "supabase",
         ready: true,
+        unavailableTables: [],
       },
       timestamp: new Date().toISOString(),
     });

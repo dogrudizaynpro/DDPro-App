@@ -87,12 +87,28 @@ const testCrmAndSupabase = async (provider) => {
       expose: true,
     });
   }
-  const [{ error: projectsError }, { error: crmError }, { error: tokenError }] = await Promise.all([
-    admin.from("projects").select("id").limit(1),
-    admin.from("crm_contacts").select("id").limit(1),
-    admin.from("integration_tokens").select("provider").limit(1),
-  ]);
-  if (projectsError) throw Object.assign(new Error("Supabase core data tables are unavailable; apply the core data migrations."), { statusCode: 503, expose: true });
+  const coreTables = [
+    ["projects", "id"],
+    ["offers", "id"],
+    ["research_items", "id"],
+  ];
+  const checks = [
+    ...(
+      provider === "supabase"
+        ? coreTables.map(([table, column]) =>
+            admin.from(table).select(column, { head: true }).limit(1)
+          )
+        : [admin.from("projects").select("id", { head: true }).limit(1)]
+    ),
+    admin.from("crm_contacts").select("id", { head: true }).limit(1),
+    admin.from("integration_tokens").select("provider", { head: true }).limit(1),
+  ];
+  const results = await Promise.all(checks);
+  const coreResultCount = provider === "supabase" ? coreTables.length : 1;
+  if (results.slice(0, coreResultCount).some(({ error }) => error)) {
+    throw Object.assign(new Error("Supabase core data tables are unavailable; apply the core data migrations."), { statusCode: 503, expose: true });
+  }
+  const [{ error: crmError }, { error: tokenError }] = results.slice(coreResultCount);
   if (crmError) throw Object.assign(new Error("CRM storage is unavailable; apply the operations integration migration."), { statusCode: 503, expose: true });
   if (tokenError) throw Object.assign(new Error("Secure OAuth token storage is unavailable; apply the operations integration migration."), { statusCode: 503, expose: true });
 };

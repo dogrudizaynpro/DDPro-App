@@ -23,18 +23,25 @@ export const getIntegrationStatus = async (req, res, next) => {
   const websiteWebhookConfigured = Boolean(process.env.WEBSITE_WEBHOOK_SECRET);
   const cmsConfigured = websiteCmsConfigured();
   const websiteConfigured = cmsConfigured && websiteWebhookConfigured && databaseConfigured;
-  let supabaseConnected = false;
+  let coreDataConnected = false;
   let crmStorageConnected = false;
   if (databaseConfigured) {
-    const { error } = await getIntegrationAdmin().from("projects").select("id").limit(1);
-    supabaseConnected = !error;
-  }
-  if (databaseConfigured) {
     const admin = getIntegrationAdmin();
-    const [{ error: crmError }, { error: tokenError }] = await Promise.all([
-      admin.from("crm_contacts").select("id").limit(1),
-      admin.from("integration_tokens").select("provider").limit(1),
+    const coreTables = [
+      ["projects", "id"],
+      ["offers", "id"],
+      ["research_items", "id"],
+    ];
+    const [coreResults, { error: crmError }, { error: tokenError }] = await Promise.all([
+      Promise.all(
+        coreTables.map(([table, column]) =>
+          admin.from(table).select(column, { head: true }).limit(1)
+        )
+      ),
+      admin.from("crm_contacts").select("id", { head: true }).limit(1),
+      admin.from("integration_tokens").select("provider", { head: true }).limit(1),
     ]);
+    coreDataConnected = coreResults.every(({ error }) => !error);
     crmStorageConnected = !crmError && !tokenError;
   }
   const googleConfigured = google.configured && crmStorageConnected;
@@ -42,19 +49,18 @@ export const getIntegrationStatus = async (req, res, next) => {
     googleConfigured &&
     Boolean(process.env.INTEGRATION_SESSION_SECRET) &&
     (process.env.GOOGLE_ALLOWED_EMAILS || "").split(",").some((email) => email.trim());
-  const googleConnected = googleConfigured && google.connected && Boolean(googleAccount);
   const last = (provider) => getIntegrationTestResult(provider);
-  const statusAfterTest = (provider, configured, connected = false) => {
+  const statusAfterTest = (provider, configured, sessionReady = false) => {
     const result = last(provider);
     const checkedAt = new Date().toISOString();
     const testIsFresh =
       result && Date.now() - Date.parse(result.testedAt) < 5 * 60 * 1000;
     if (!configured) return { connected: false, status: "credentials_required", lastTest: result, checkedAt };
-    if (connected && result && !result.connected && testIsFresh) {
+    if (result && !result.connected && testIsFresh) {
       return { connected: false, status: "test_failed", lastTest: result, checkedAt };
     }
-    if (connected) return { connected: true, status: "connected", lastTest: result, checkedAt };
-    if (result?.connected && testIsFresh && !["gmail", "googleCalendar", "crm"].includes(provider)) {
+    const requiresGoogleSession = ["gmail", "googleCalendar", "crm"].includes(provider);
+    if (result?.connected && testIsFresh && (!requiresGoogleSession || sessionReady)) {
       return { connected: true, status: "connected", lastTest: result, checkedAt };
     }
     return {
@@ -74,6 +80,9 @@ export const getIntegrationStatus = async (req, res, next) => {
     process.env.SUPABASE_ANON_KEY &&
     process.env.SUPABASE_SERVICE_ROLE_KEY
   );
+  const googleConnected = googleConfigured && google.connected && Boolean(googleAccount);
+  const supabaseConnected = coreDataConnected && crmStorageConnected;
+  const checkedAt = new Date().toISOString();
 
   res.status(200).json({
     status: "success",
@@ -105,11 +114,12 @@ export const getIntegrationStatus = async (req, res, next) => {
       google: {
         configured: googleConfigured,
         oauthFlowAvailable: googleOAuthAvailable,
-        ...statusAfterTest("google", googleConfigured, googleConnected),
+        ...statusAfterTest("google", googleConfigured, googleConnected && last("google")?.connected),
       },
       supabase: {
-        configured: supabaseConfigured && crmStorageConnected,
-        connected: supabaseConnected && crmStorageConnected,
+        configured: supabaseConfigured,
+        connected: supabaseConfigured && supabaseConnected,
+        coreDataConnected,
         integrationStorageConfigured: databaseConfigured,
         integrationStorageConnected: crmStorageConnected,
       },
@@ -117,6 +127,7 @@ export const getIntegrationStatus = async (req, res, next) => {
         configured: crmStorageConnected,
         ...statusAfterTest("crm", crmStorageConnected, crmStorageConnected && googleConnected),
       },
+      backendApi: { configured: true, connected: true, status: "connected", checkedAt },
       web: {
         url: "https://www.ddizaynpro.com/",
         managementConfigured: cmsConfigured,
