@@ -7,6 +7,7 @@ import {
 import {
   completeGoogleOAuth,
   beginGoogleOAuth,
+  exchangeGoogleSession,
   requireGoogleSession,
   revokeGoogleSession,
 } from "../services/google-integration.service.js";
@@ -51,6 +52,7 @@ router.post(
 );
 router.get("/google/start", googleOAuthRateLimit, beginGoogleOAuth);
 router.get("/google/callback", googleOAuthRateLimit, completeGoogleOAuth);
+router.post("/google/exchange", googleOAuthRateLimit, exchangeGoogleSession);
 router.post("/google/logout", integrationActionRateLimit, requireGoogleSession, revokeGoogleSession);
 router.post("/gmail/import", integrationActionRateLimit, requireGoogleSession, postGmailImport);
 router.get("/calendar/events", integrationActionRateLimit, requireGoogleSession, getCalendarEvents);
