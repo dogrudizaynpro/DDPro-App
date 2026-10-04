@@ -4171,6 +4171,7 @@ textarea::placeholder {
   width: min(100vw, 150vh);
   max-height: 100vh;
   aspect-ratio: 3 / 2;
+  container-type: inline-size;
   overflow: hidden;
   flex: 0 0 auto;
 }
@@ -4179,6 +4180,26 @@ textarea::placeholder {
   display: block;
   width: 100%;
   height: 100%;
+  pointer-events: none;
+}
+
+.dashboard-reference-clock {
+  position: absolute;
+  z-index: 1;
+  top: 93.25%;
+  left: 79%;
+  display: flex;
+  width: 9.4%;
+  height: 2.8%;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 2px;
+  background: #101111;
+  color: #d5d6d2;
+  font-size: 0.9cqw;
+  font-weight: 500;
+  white-space: nowrap;
   pointer-events: none;
 }
 

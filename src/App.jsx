@@ -2546,6 +2546,12 @@ function App() {
               src={dashboardDesignReference}
               alt="DOĞRU DİZAYN PRO'nun grafit, metalik ve zümrüt operasyon merkezi Dashboard tasarımı"
             />
+            <span
+              className="dashboard-reference-clock"
+              aria-label={`Türkiye saati: ${footerDateFormatter.format(currentDate)}`}
+            >
+              {footerDateFormatter.format(currentDate)}
+            </span>
             <nav className="dashboard-reference-primary-nav" aria-label="Ana modüller">
               {dashboardReferenceNavigation.map((item) => (
                 <button
