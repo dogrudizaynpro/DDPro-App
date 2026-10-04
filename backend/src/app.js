@@ -19,6 +19,7 @@ import { getIntegrationAdmin } from "./config/integration-admin.js";
 
 const app = express();
 const isProduction = process.env.NODE_ENV === "production";
+if (isProduction) app.set("trust proxy", 1);
 const parseOrigin = (value) => {
   try {
     return new URL(value).origin;
