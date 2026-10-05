@@ -134,6 +134,18 @@ test("missing exchange session never overwrites a saved browser session", async 
   }
 });
 
+test("a callback with no verifier cannot block a valid saved session", async () => {
+  window.location.hash = "#/ayarlar?integration=google_connected&exchange_code=stale-code";
+  response = () => Response.json({ data: { gmail: { connected: true }, googleCalendar: { connected: true } } });
+  const status = await getIntegrationStatus();
+  assert.equal(status.gmail.connected, true);
+  assert.equal(status.googleCalendar.connected, true);
+  assert.equal(requests.length, 1);
+  assert.ok(requests[0].url.endsWith("/api/integrations/status"));
+  assert.doesNotMatch(window.location.hash, /exchange_code/);
+  assert.equal(storage.get("ddpro_browser_session"), "existing-browser-session");
+});
+
 after(() => {
   for (const [key, value] of Object.entries(originals)) {
     if (value === undefined) delete globalThis[key];

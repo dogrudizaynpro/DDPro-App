@@ -42,7 +42,10 @@ export const completeGoogleConnection = (code) => {
 
 const exchangeGoogleConnection = async (code) => {
   const verifier = sessionStorage.getItem("ddpro_oauth_verifier");
-  if (!verifier) throw new Error("OAuth başlatılan tarayıcı sekmesi bulunamadı; tekrar bağlanın.");
+  if (!verifier) {
+    clearGoogleExchange(code);
+    throw Object.assign(new Error("OAuth başlatılan tarayıcı sekmesi bulunamadı; tekrar bağlanın."), { status: 400 });
+  }
   let response;
   try {
     response = await fetchAPI("/api/integrations/google/exchange", {
