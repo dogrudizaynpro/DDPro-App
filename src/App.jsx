@@ -2398,7 +2398,7 @@ function App() {
     }
 
     if (activeModule === "crm") {
-      return <CRMModule projects={projects} />;
+      return <CRMModule projects={projects} onNavigate={handleModuleNavigation} setAiInput={setAiInput} />;
     }
 
     if (activeModule === "procurement") {

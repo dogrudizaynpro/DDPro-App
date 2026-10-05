@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  beginGoogleConnection,
   createCrmContact,
   deleteCrmContact,
   getCrmContacts,
+  importGmailToCrm,
+  sendWhatsAppText,
   updateCrmContact,
 } from "../services/operations-integrations.service.js";
 
@@ -19,7 +22,7 @@ const emptyContact = {
   notes: "",
 };
 
-function CRMModule({ projects = [] }) {
+function CRMModule({ projects = [], onNavigate, setAiInput }) {
   const [contacts, setContacts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -28,6 +31,7 @@ function CRMModule({ projects = [] }) {
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [editingId, setEditingId] = useState("");
+  const [importing, setImporting] = useState(false);
 
   const loadContacts = useCallback(async () => {
     setLoading(true);
@@ -115,6 +119,40 @@ function CRMModule({ projects = [] }) {
     }
   };
 
+  const connectGoogle = async () => {
+    try {
+      await beginGoogleConnection();
+    } catch (connectionError) {
+      setError(connectionError.message || "Google bağlantısı başlatılamadı.");
+    }
+  };
+
+  const importGmail = async () => {
+    setImporting(true);
+    setError("");
+    setNotice("");
+    try {
+      const response = await importGmailToCrm();
+      await loadContacts();
+      setNotice(`${response.data?.imported || 0} Gmail iletisi CRM'e aktarıldı.`);
+    } catch (importError) {
+      setError(importError.message || "Gmail aktarımı başarısız.");
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const sendWhatsApp = async (contact) => {
+    const message = window.prompt(`${contact.phone} numarasına gönderilecek mesajı yazın:`);
+    if (!message?.trim()) return;
+    try {
+      const response = await sendWhatsAppText(contact.phone, message.trim());
+      setNotice(`WhatsApp sağlayıcısı mesajı kabul etti (${response.data?.id || "message id yok"}).`);
+    } catch (sendError) {
+      setError(sendError.message || "WhatsApp mesajı gönderilemedi.");
+    }
+  };
+
   return (
     <div className="module-page">
       <form id="crm-contact-form" className="data-form" onSubmit={saveContact}>
@@ -147,8 +185,12 @@ function CRMModule({ projects = [] }) {
 
       {error ? <p className="status-banner warning" role="alert">{error}</p> : null}
       {notice ? <p className="status-banner info" role="status">{notice}</p> : null}
+      {error && !contacts.length ? <button type="button" onClick={connectGoogle}>Google hesabıyla güvenli CRM oturumu aç</button> : null}
 
       <div className="module-toolbar">
+        <button type="button" onClick={importGmail} disabled={importing || loading}>
+          {importing ? "Gmail aktarılıyor…" : "Gmail taleplerini CRM'e aktar"}
+        </button>
         <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Müşteri ara" aria-label="Müşteri ara" />
         <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} aria-label="Duruma göre filtrele">
           <option value="">Tüm durumlar</option>
@@ -173,6 +215,11 @@ function CRMModule({ projects = [] }) {
             </div>
             <div className="module-toolbar">
               <button type="button" onClick={() => beginEdit(contact)}>Düzenle</button>
+              <button type="button" onClick={() => {
+                setAiInput?.(`CRM kaydındaki müşteri talebini değerlendir; ihtiyaçları, belirsizlikleri ve önerilen sonraki adımları çıkar. CRM kaydında değişiklik yapma; önerileri onaya sun.\n\nMüşteri: ${contact.name}\nFirma: ${contact.company || "Belirtilmedi"}\nTalep: ${contact.request || "Talep metni yok"}\nProje: ${contact.project_id || "Belirtilmedi"}\nSistem: ${contact.system || "Belirtilmedi"}`);
+                onNavigate?.("ai-assistant");
+              }}>Talebi AI ile analiz et</button>
+              {contact.phone ? <button type="button" onClick={() => sendWhatsApp(contact)}>WhatsApp yanıtı gönder</button> : null}
               <button type="button" onClick={() => removeContact(contact.id)}>Sil</button>
             </div>
           </article>
