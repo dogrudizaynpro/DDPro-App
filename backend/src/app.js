@@ -131,6 +131,7 @@ app.get("/health", async (req, res) => {
     const coreTables = [
       ["projects", "id"],
       ["offers", "offer_snapshot"],
+      ["crm_contacts", "id"],
       ["research_items", "procurement_status"],
       ["crm_contacts", "id"],
       ["integration_tokens", "provider"],

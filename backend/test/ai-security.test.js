@@ -76,3 +76,17 @@ test("procurement CRUD endpoints require the Google session", async () => {
   });
   assert.equal(update.status, 401);
 });
+
+test("CRM CRUD endpoints require the Google session", async () => {
+  const list = await fetch(`${baseUrl}/api/crm`);
+  assert.equal(list.status, 401);
+  const update = await fetch(`${baseUrl}/api/crm/4bc6f5a6-0b6c-4ddb-b29b-208c84c344d0`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Origin: "https://dogrudizaynpro.github.io",
+    },
+    body: JSON.stringify({ name: "Updated" }),
+  });
+  assert.equal(update.status, 401);
+});

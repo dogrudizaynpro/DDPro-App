@@ -35,6 +35,7 @@ import {
 const ProjectsModule = lazy(() => import("./modules/ProjectsModule.jsx"));
 const ProcurementModule = lazy(() => import("./modules/ProcurementModule.jsx"));
 const OffersModule = lazy(() => import("./modules/OffersModule.jsx"));
+const CRMModule = lazy(() => import("./modules/CRMModule.jsx"));
 const SystemsModule = lazy(() => import("./modules/SystemsModule.jsx"));
 const AIModule = lazy(() => import("./modules/AIModule.jsx"));
 const SkeletonModule = lazy(() => import("./modules/SkeletonModule.jsx"));
@@ -2394,6 +2395,10 @@ function App() {
           projects={projects}
         />
       );
+    }
+
+    if (activeModule === "crm") {
+      return <CRMModule projects={projects} />;
     }
 
     if (activeModule === "procurement") {
