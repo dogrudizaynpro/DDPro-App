@@ -1,23 +1,35 @@
 import { getGoogleAccessToken } from "./google-integration.service.js";
 import { createCrmContact } from "./crm.service.js";
+import { GoogleApiError } from "./google-api-error.js";
 
 const googleRequest = async (account, endpoint, options = {}) => {
   const accessToken = await getGoogleAccessToken(account);
-  const response = await fetch(`https://www.googleapis.com${endpoint}`, {
-    ...options,
-    headers: {
-      Authorization: "Bearer " + accessToken,
-      "Content-Type": "application/json",
-      ...options.headers,
-    },
-    signal: AbortSignal.timeout(20_000),
-  });
-  const payload = await response.json();
+  let response;
+  try {
+    response = await fetch(`https://www.googleapis.com${endpoint}`, {
+      ...options,
+      headers: {
+        Authorization: "Bearer " + accessToken,
+        "Content-Type": "application/json",
+        ...options.headers,
+      },
+      signal: AbortSignal.timeout(20_000),
+    });
+  } catch (error) {
+    throw Object.assign(new Error(
+      error.name === "TimeoutError" ? "Google API request timed out." : "Google API is temporarily unreachable."
+    ), { statusCode: error.name === "TimeoutError" ? 504 : 502, expose: true });
+  }
+  let payload;
+  try {
+    payload = await response.json();
+  } catch {
+    if (response.ok) {
+      throw Object.assign(new Error("Google API returned an invalid response."), { statusCode: 502, expose: true });
+    }
+  }
   if (!response.ok) {
-    throw Object.assign(
-      new Error("Google Workspace request failed."),
-      { statusCode: response.status === 401 ? 401 : 502, expose: true }
-    );
+    throw new GoogleApiError(response.status, payload, [accessToken]);
   }
   return payload;
 };

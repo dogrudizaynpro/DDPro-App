@@ -9,7 +9,12 @@ export const errorHandler = (err, req, res, next) => {
   // Log error safely
   const isDevelopment = process.env.NODE_ENV === "development";
 
-  if (isDevelopment) {
+  if (err.googleApiError) {
+    console.error("Google API error:", {
+      statusCode: err.statusCode,
+      category: err.googleApiError.category,
+    });
+  } else if (isDevelopment) {
     console.error("Error:", {
       message: err.message,
       stack: err.stack,
@@ -39,6 +44,7 @@ export const errorHandler = (err, req, res, next) => {
   res.status(statusCode).json({
     status: "error",
     message: errorMessage,
+    ...(err.googleApiError && { googleApiError: err.googleApiError }),
     ...(isDevelopment && { details: err.message }),
   });
 };

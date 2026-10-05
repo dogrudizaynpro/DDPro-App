@@ -11,6 +11,7 @@ import {
   createCrmContact,
   deleteCrmContact,
   disconnectGoogle,
+  formatGoogleIntegrationError,
   getCrmContacts,
   getGoogleCalendarEvents,
   importGoogleCalendarToLocal,
@@ -262,8 +263,8 @@ function IntegrationSettings({ onNavigate, hubMode = false }) {
       setNotice(`${integrationCatalog.find((item) => item.id === provider)?.title || provider} bağlantı testi başarılı.`);
       await refresh();
     } catch (testError) {
-      setError(testError.message || "Bağlantı testi başarısız.");
       await refresh();
+      setError(formatGoogleIntegrationError(testError));
     } finally {
       setTesting("");
     }
@@ -309,7 +310,7 @@ function IntegrationSettings({ onNavigate, hubMode = false }) {
                 <small><strong>Gerekli backend yapılandırması</strong><br />{integration.variables.join(" · ")}<br />
                   {connection?.lastTest?.testedAt ? `Son test: ${new Date(connection.lastTest.testedAt).toLocaleString("tr-TR")}` : "Henüz bağlantı testi çalıştırılmadı."}
                   {connection?.checkedAt ? <span className="integration-check-time">Son kontrol: {new Date(connection.checkedAt).toLocaleString("tr-TR")}</span> : null}
-                  {connection?.lastTest?.error ? <span className="integration-error">{connection.lastTest.error}</span> : null}
+                  {connection?.lastTest?.error ? <span className="integration-error">{formatGoogleIntegrationError({ message: connection.lastTest.error, googleApiError: connection.lastTest.googleApiError })}</span> : null}
                   <div className="module-toolbar integration-actions">
                     {integration.requiresOAuth && !isGoogleConnected ? <button type="button" onClick={startGoogleOAuth}>Google hesabını bağla</button> : null}
                     <button type="button" disabled={!configured || testing === integration.id || (integration.requiresOAuth && !isGoogleConnected)} onClick={() => runConnectionTest(integration.id)}>{testing === integration.id ? "Test ediliyor…" : "Bağlantıyı test et"}</button>
