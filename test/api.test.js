@@ -110,6 +110,23 @@ test("google_connected URL alone does not authenticate Gmail or Calendar", async
   assert.equal(requests[0].options.headers.Authorization, undefined);
 });
 
+test("a consumed exchange cannot block backend status or discard an existing session", async () => {
+  storage.set("ddpro_oauth_verifier", "browser-verifier");
+  window.location.hash = "#/ayarlar?integration=google_connected&exchange_code=consumed-code";
+  response = () => requests.length === 1
+    ? Response.json({ message: "Authorization expired or already used." }, { status: 401 })
+    : Response.json({ data: { gmail: { connected: true }, googleCalendar: { connected: true } } });
+  const status = await getIntegrationStatus();
+  assert.equal(status.gmail.connected, true);
+  assert.equal(status.googleCalendar.connected, true);
+  assert.equal(storage.get("ddpro_browser_session"), "existing-browser-session");
+  assert.equal(storage.has("ddpro_oauth_verifier"), false);
+  assert.doesNotMatch(window.location.hash, /exchange_code/);
+  await getIntegrationStatus();
+  assert.equal(requests.length, 3);
+  assert.ok(requests.slice(1).every(({ url }) => url.endsWith("/api/integrations/status")));
+});
+
 test("missing exchange session never overwrites a saved browser session", async () => {
   for (const session of [undefined, null, "", "   ", {}]) {
     assert.throws(() => setBrowserSession(session), /oturumu alınamadı/);
