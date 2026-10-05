@@ -30,7 +30,7 @@ before(async () => {
   };
   globalThis.fetch = async (url, options) => {
     requests.push({ url, options });
-    return response();
+    return response(url, options);
   };
   ({ fetchAPI, setBrowserSession } = await import("../src/services/api.js"));
   ({ testIntegrationConnection, getIntegrationStatus } = await import("../src/services/integrations.service.js"));
@@ -42,6 +42,23 @@ beforeEach(() => {
   storage.clear();
   storage.set("ddpro_browser_session", "existing-browser-session");
   window.location.hash = "";
+});
+
+test("API requests abort on timeout and expose a stable timeout error", async () => {
+  response = (_url, options) => new Promise((_resolve, reject) => {
+    options.signal.addEventListener("abort", () => reject(options.signal.reason), {
+      once: true,
+    });
+  });
+
+  await assert.rejects(fetchAPI("/slow", { timeoutMs: 5 }), (error) => {
+    assert.equal(error.name, "TimeoutError");
+    assert.equal(error.code, "API_TIMEOUT_ERROR");
+    assert.match(error.message, /timed out after 5 ms/);
+    return true;
+  });
+  assert.equal(requests.length, 1);
+  assert.equal("timeoutMs" in requests[0].options, false);
 });
 
 test("OAuth exchange precedes concurrent Gmail and Calendar status reads and stores only the browser session", async () => {

@@ -5,6 +5,7 @@
 // ============================================================
 
 const DEFAULT_LOCAL_API_URL = "http://localhost:3001";
+const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
 
 const trimTrailingSlash = (value = "") => value.replace(/\/+$/, "");
 
@@ -74,6 +75,28 @@ export const fetchAPI = async (endpoint, options = {}) => {
     throw error;
   }
 
+  const {
+    timeoutMs = DEFAULT_REQUEST_TIMEOUT_MS,
+    signal: callerSignal,
+    ...fetchOptions
+  } = options;
+  const requestTimeoutMs =
+    Number.isFinite(timeoutMs) && timeoutMs > 0
+      ? timeoutMs
+      : DEFAULT_REQUEST_TIMEOUT_MS;
+  const controller = new AbortController();
+  let requestTimedOut = false;
+  const abortFromCaller = () => controller.abort(callerSignal?.reason);
+  if (callerSignal?.aborted) {
+    abortFromCaller();
+  } else {
+    callerSignal?.addEventListener("abort", abortFromCaller, { once: true });
+  }
+  const timeoutId = setTimeout(() => {
+    requestTimedOut = true;
+    controller.abort();
+  }, requestTimeoutMs);
+
   try {
     const normalizedEndpoint = endpoint.startsWith("/")
       ? endpoint
@@ -81,7 +104,7 @@ export const fetchAPI = async (endpoint, options = {}) => {
     const url = `${API_BASE_URL}${normalizedEndpoint}`;
 
     const response = await fetch(url, {
-      ...options,
+      ...fetchOptions,
       headers: {
         "Content-Type": "application/json",
         ...(sessionStorage.getItem(SESSION_KEY)
@@ -90,6 +113,7 @@ export const fetchAPI = async (endpoint, options = {}) => {
         ...options.headers,
       },
       credentials: "include",
+      signal: controller.signal,
     });
 
     // Handle non-JSON responses
@@ -122,9 +146,17 @@ export const fetchAPI = async (endpoint, options = {}) => {
 
     return data;
   } catch (error) {
+    if (requestTimedOut) {
+      error = new Error(`API request timed out after ${requestTimeoutMs} ms.`);
+      error.name = "TimeoutError";
+      error.code = "API_TIMEOUT_ERROR";
+    }
     // Re-throw with additional context
     console.warn("API request unavailable:", { status: error.status, code: error.code });
     throw error;
+  } finally {
+    clearTimeout(timeoutId);
+    callerSignal?.removeEventListener("abort", abortFromCaller);
   }
 };
 

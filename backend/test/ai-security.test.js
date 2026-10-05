@@ -1,0 +1,41 @@
+import assert from "node:assert/strict";
+import { after, before, test } from "node:test";
+
+let server;
+let baseUrl;
+const previousNodeEnv = process.env.NODE_ENV;
+const previousFrontendUrl = process.env.FRONTEND_URL;
+
+before(async () => {
+  process.env.NODE_ENV = "production";
+  process.env.FRONTEND_URL = "https://dogrudizaynpro.github.io/DDPro-App/";
+  const { default: app } = await import("../src/app.js");
+  server = app.listen(0);
+  await new Promise((resolve) => server.once("listening", resolve));
+  baseUrl = `http://127.0.0.1:${server.address().port}`;
+});
+
+after(async () => {
+  if (server) {
+    server.closeAllConnections();
+    await new Promise((resolve) => server.close(resolve));
+  }
+  if (previousNodeEnv === undefined) delete process.env.NODE_ENV;
+  else process.env.NODE_ENV = previousNodeEnv;
+  if (previousFrontendUrl === undefined) delete process.env.FRONTEND_URL;
+  else process.env.FRONTEND_URL = previousFrontendUrl;
+});
+
+test("AI chat requires an authenticated Google browser session", async () => {
+  const response = await fetch(`${baseUrl}/api/ai/chat`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Origin: "https://dogrudizaynpro.github.io",
+    },
+    body: JSON.stringify({ message: "Summarize the project." }),
+  });
+
+  assert.equal(response.status, 401);
+  assert.equal((await response.json()).message, "Google account connection is required.");
+});
