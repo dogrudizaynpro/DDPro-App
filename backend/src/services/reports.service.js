@@ -54,9 +54,10 @@ export const normalizeReportRequest = (body = {}) => {
   return { type, title, projectId, reportDate, siteReport };
 };
 
-const getRows = async (client, table, projectId, idColumn = "project_id") => {
+const getRows = async (client, table, projectId, idColumn = "project_id", ownerAccount = null) => {
   let query = client.from(table).select("*", { count: "exact" }).limit(250);
   if (projectId) query = query.eq(idColumn, projectId);
+  if (ownerAccount) query = query.eq("owner_account", ownerAccount);
   const { data, error, count } = await query;
   if (error) throw error;
   const rows = data || [];
@@ -65,12 +66,33 @@ const getRows = async (client, table, projectId, idColumn = "project_id") => {
 
 export const calculateVerifiedMaterialTotals = (records = []) => {
   const verifiedRows = records.filter((record) => record.verification_status === "VERIFIED");
+  const totalsByCurrency = verifiedRows.reduce((totals, record) => {
+    const currency = /^[A-Z]{3}$/.test(record.currency || "") ? record.currency : "UNKNOWN";
+    totals[currency] = (totals[currency] || 0) + Number(record.total_cost || 0);
+    return totals;
+  }, {});
   return {
-    total: verifiedRows.reduce((total, record) => total + Number(record.total_cost || 0), 0),
+    totalsByCurrency,
     unverifiedCount: records.filter((record) => record.verification_status === "UNVERIFIED").length,
     missingCount: records.filter((record) => record.verification_status === "MISSING").length,
   };
 };
+
+export const calculateProjectCostTotals = (records = []) =>
+  records.reduce((totals, record) => {
+    const currency = /^[A-Z]{3}$/.test(record.currency || "") ? record.currency : "UNKNOWN";
+    const costType = record.cost_type || "OTHER";
+    totals[costType] ||= { budgeted: {}, verifiedActual: {} };
+    if (record.budget_amount !== null && record.budget_amount !== undefined) {
+      totals[costType].budgeted[currency] =
+        (totals[costType].budgeted[currency] || 0) + Number(record.budget_amount);
+    }
+    if (record.verification_status === "VERIFIED") {
+      totals[costType].verifiedActual[currency] =
+        (totals[costType].verifiedActual[currency] || 0) + Number(record.actual_amount || 0);
+    }
+    return totals;
+  }, {});
 
 const loadProject = async (client, projectId) => {
   if (!projectId) return null;
@@ -84,26 +106,33 @@ const loadProject = async (client, projectId) => {
   return data;
 };
 
-const createSnapshot = async (client, normalized) => {
+const createSnapshot = async (client, normalized, ownerAccount) => {
   const project = await loadProject(client, normalized.projectId);
   const sources = {};
   const truncatedSources = [];
   const tablesByType = {
-    PROJECT: ["offers", "crm_contacts", "research_items", "material_analysis"],
+    PROJECT: ["offers", "crm_contacts", "research_items", "material_analysis", "project_costs"],
     OFFER: ["offers"],
-    COST: ["material_analysis"],
+    COST: ["material_analysis", "project_costs"],
     PROCUREMENT: ["research_items"],
   };
   await Promise.all((tablesByType[normalized.type] || []).map(async (table) => {
-    const result = await getRows(client, table, normalized.projectId);
+    const result = await getRows(
+      client,
+      table,
+      normalized.projectId,
+      "project_id",
+      table === "project_costs" ? ownerAccount : null
+    );
     sources[table] = result.records;
     if (result.truncated) truncatedSources.push(table);
   }));
   if (normalized.type === "COST") {
     const totals = calculateVerifiedMaterialTotals(sources.material_analysis || []);
-    sources.verifiedMaterialCostTotal = totals.total;
+    sources.verifiedMaterialCostsByCurrency = totals.totalsByCurrency;
     sources.unverifiedMaterialCount = totals.unverifiedCount;
     sources.missingMaterialCount = totals.missingCount;
+    sources.projectCostsByType = calculateProjectCostTotals(sources.project_costs || []);
     sources.calculationBasis = "Verified material records only; labor, VAT, and transport excluded.";
   }
   return {
@@ -143,7 +172,7 @@ export const listReports = async (ownerAccount) => {
 export const createReport = async (ownerAccount, body) => {
   const client = requireDatabase();
   const normalized = normalizeReportRequest(body);
-  const snapshot = await createSnapshot(client, normalized);
+  const snapshot = await createSnapshot(client, normalized, ownerAccount);
   const { data, error } = await client
     .from("report_records")
     .insert({

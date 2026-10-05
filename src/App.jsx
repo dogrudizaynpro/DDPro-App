@@ -24,6 +24,7 @@ import {
 import { requestAiCompletion } from "./services/ai.service.js";
 import { getCatalogRecords } from "./services/catalog.service.js";
 import { getReports } from "./services/reports.service.js";
+import { getFinanceCosts } from "./services/finance.service.js";
 import { getCrmContacts } from "./services/operations-integrations.service.js";
 import { getIntegrationStatus } from "./services/integrations.service.js";
 import {
@@ -54,7 +55,6 @@ const STORAGE_KEYS = {
   materialAnalysis: "ddpro_material_analysis_v1",
   customers: "ddpro_customers_v1",
   documents: "ddpro_documents_v1",
-  finance: "ddpro_finance_v1",
   reports: "ddpro_reports_v1",
 };
 
@@ -564,7 +564,7 @@ function App() {
   const materialAnalysisItems = useCatalogDataState("material-analysis");
   const [customerItems] = useStoredDataState(STORAGE_KEYS.customers);
   const [documentItems] = useStoredDataState(STORAGE_KEYS.documents);
-  const [financeItems] = useStoredDataState(STORAGE_KEYS.finance);
+  const [financeItems, setFinanceItems] = useState([]);
   const [reportItems, setReportItems] = useState([]);
 
   const [showProjectForm, setShowProjectForm] = useState(false);
@@ -608,11 +608,15 @@ function App() {
     let active = true;
     if (!integrationState?.google?.connected) {
       setReportItems([]);
+      setFinanceItems([]);
       return () => { active = false; };
     }
     getReports()
       .then((reports) => { if (active) setReportItems(reports); })
       .catch(() => { if (active) setReportItems([]); });
+    getFinanceCosts()
+      .then((costs) => { if (active) setFinanceItems(costs); })
+      .catch(() => { if (active) setFinanceItems([]); });
     return () => { active = false; };
   }, [integrationState?.google?.connected]);
 
@@ -2486,6 +2490,7 @@ function App() {
           research={procurementItems}
           aiMessages={aiMessages}
           onReportsChanged={setReportItems}
+          onFinanceChanged={setFinanceItems}
         />
       );
     }

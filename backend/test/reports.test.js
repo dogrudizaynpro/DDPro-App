@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  calculateProjectCostTotals,
   calculateVerifiedMaterialTotals,
   normalizeReportRequest,
 } from "../src/services/reports.service.js";
@@ -33,12 +34,20 @@ test("report request validates type, project linkage, and daily site report fiel
 
 test("cost reports sum verified material only and keep missing/unverified counts separate", () => {
   assert.deepEqual(calculateVerifiedMaterialTotals([
-    { verification_status: "VERIFIED", total_cost: "120.50" },
+    { verification_status: "VERIFIED", total_cost: "120.50", currency: "TRY" },
     { verification_status: "UNVERIFIED", total_cost: null },
     { verification_status: "MISSING", total_cost: null },
   ]), {
-    total: 120.5,
+    totalsByCurrency: { TRY: 120.5 },
     unverifiedCount: 1,
     missingCount: 1,
+  });
+  assert.deepEqual(calculateProjectCostTotals([
+    { cost_type: "MATERIAL", currency: "TRY", budget_amount: "150", actual_amount: "125", verification_status: "VERIFIED" },
+    { cost_type: "MATERIAL", currency: "TRY", budget_amount: "40", actual_amount: "30", verification_status: "UNVERIFIED" },
+    { cost_type: "LABOR", currency: "EUR", budget_amount: "100", actual_amount: "90", verification_status: "VERIFIED" },
+  ]), {
+    MATERIAL: { budgeted: { TRY: 190 }, verifiedActual: { TRY: 125 } },
+    LABOR: { budgeted: { EUR: 100 }, verifiedActual: { EUR: 90 } },
   });
 });

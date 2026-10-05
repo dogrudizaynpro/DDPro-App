@@ -104,3 +104,17 @@ test("report CRUD endpoints require the Google session", async () => {
   });
   assert.equal(create.status, 401);
 });
+
+test("finance cost CRUD endpoints require the Google session", async () => {
+  const list = await fetch(`${baseUrl}/api/finance/costs`);
+  assert.equal(list.status, 401);
+  const create = await fetch(`${baseUrl}/api/finance/costs`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Origin: "https://dogrudizaynpro.github.io",
+    },
+    body: JSON.stringify({ name: "Unauthorized cost" }),
+  });
+  assert.equal(create.status, 401);
+});

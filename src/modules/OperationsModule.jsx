@@ -13,6 +13,12 @@ import {
 import { getProjects } from "../services/projects.service.js";
 import { createReport, deleteReport, getReports } from "../services/reports.service.js";
 import {
+  createFinanceCost,
+  deleteFinanceCost,
+  getFinanceCosts,
+  updateFinanceCost,
+} from "../services/finance.service.js";
+import {
   beginGoogleConnection,
   createGoogleCalendarEvent,
   deleteGoogleCalendarEvent,
@@ -195,9 +201,8 @@ const moduleDefinitions = {
   },
   finance: {
     title: "Finans / Maliyet",
-    storageKey: "ddpro_finance_v1",
-    notice: "Yalnızca manuel girilen kayıtlar saklanır. Kur dönüşümü veya maliyet tahmini yapılmaz.",
-    fields: [field("name", "Kayıt adı", "text", true), field("amount", "Girilen tutar"), field("currency", "Para birimi"), field("project", "İlgili proje"), field("sourceUrl", "Kaynak / belge bağlantısı", "url"), field("notes", "Notlar", "textarea")],
+    notice: "Proje maliyetleri authenticated backend API üzerinden saklanır.",
+    fields: [],
   },
   calendar: {
     title: "Takvim",
@@ -791,6 +796,216 @@ function CrmWorkspace({ onNavigate, setAiInput }) {
   );
 }
 
+function FinanceWorkspace({ projects = [], onCostsChanged }) {
+  const [records, setRecords] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [verificationStatus, setVerificationStatus] = useState("UNVERIFIED");
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+
+  const loadCosts = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const data = await getFinanceCosts();
+      setRecords(data);
+      onCostsChanged?.(data);
+    } catch (loadError) {
+      setRecords([]);
+      onCostsChanged?.([]);
+      setError(loadError.message || "Maliyet kayıtları backend'den alınamadı.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    let active = true;
+    getFinanceCosts()
+      .then((data) => {
+        if (active) {
+          setRecords(data);
+          onCostsChanged?.(data);
+        }
+      })
+      .catch((loadError) => {
+        if (active) {
+          setError(loadError.message || "Maliyet kayıtları backend'den alınamadı.");
+          onCostsChanged?.([]);
+        }
+      })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, []);
+
+  const totalsByCurrency = useMemo(() => records.reduce((totals, record) => {
+    const currency = record.currency;
+    const costType = record.cost_type;
+    totals[currency] ||= {};
+    totals[currency][costType] ||= { budget: 0, verifiedActual: 0 };
+    if (record.budget_amount !== null && record.budget_amount !== undefined) {
+      totals[currency][costType].budget += Number(record.budget_amount);
+    }
+    if (record.verification_status === "VERIFIED") {
+      totals[currency][costType].verifiedActual += Number(record.actual_amount || 0);
+    }
+    return totals;
+  }, {}), [records]);
+
+  const saveCost = async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const values = Object.fromEntries(new FormData(form).entries());
+    const actualAmount = values.actualAmount === undefined || values.actualAmount === ""
+      ? null
+      : Number(values.actualAmount);
+    const budgetAmount = values.budgetAmount === "" ? null : Number(values.budgetAmount);
+    const verifiedAt = values.verifiedAt ? new Date(values.verifiedAt).toISOString() : null;
+    const payload = {
+      name: values.name,
+      projectId: values.projectId,
+      systemId: values.systemId || null,
+      productId: values.productId || null,
+      materialAnalysisId: values.materialAnalysisId || null,
+      costType: values.costType,
+      currency: values.currency,
+      budgetAmount,
+      actualAmount,
+      source: values.source,
+      verificationStatus,
+      verifiedAt,
+      occurredOn: values.occurredOn || null,
+      notes: values.notes,
+    };
+    setSaving(true);
+    setError("");
+    setNotice("");
+    try {
+      const saved = editing
+        ? await updateFinanceCost(editing.id, payload)
+        : await createFinanceCost(payload);
+      if (!saved) throw new Error("Finance API did not return the saved cost record.");
+      const next = editing
+        ? records.map((record) => record.id === saved.id ? saved : record)
+        : [saved, ...records];
+      setRecords(next);
+      onCostsChanged?.(next);
+      setNotice(editing ? "Maliyet kaydı güncellendi." : "Maliyet kaydı kaydedildi.");
+      setEditing(null);
+      setVerificationStatus("UNVERIFIED");
+      form.reset();
+    } catch (saveError) {
+      setError(saveError.message || "Maliyet kaydı kaydedilemedi.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const beginEdit = (record) => {
+    setEditing(record);
+    setVerificationStatus(record.verification_status);
+  };
+
+  const removeCost = async (id) => {
+    setError("");
+    setNotice("");
+    try {
+      await deleteFinanceCost(id);
+      const next = records.filter((record) => record.id !== id);
+      setRecords(next);
+      onCostsChanged?.(next);
+      if (editing?.id === id) {
+        setEditing(null);
+        setVerificationStatus("UNVERIFIED");
+      }
+      setNotice("Maliyet kaydı silindi.");
+    } catch (deleteError) {
+      setError(deleteError.message || "Maliyet kaydı silinemedi.");
+    }
+  };
+
+  const projectRequired = projects.length > 0;
+
+  return (
+    <div className="operations-module">
+      <p className="status-banner info">Gerçekleşen maliyetler yalnızca doğrulanmış kaynaklı kayıtlarla toplanır. Para birimleri ayrı tutulur; işçilik, malzeme ve diğer giderler karıştırılmaz.</p>
+      {error ? <p className="status-banner warning" role="alert">{error}</p> : null}
+      {notice ? <p className="status-banner info" role="status">{notice}</p> : null}
+      <form key={editing?.id || "new-project-cost"} className="data-form" onSubmit={saveCost}>
+        <h2>{editing ? "Maliyet kaydını düzenle" : "Proje maliyet kaydı"}</h2>
+        <label>Proje<select name="projectId" defaultValue={editing?.project_id || ""} required>
+          <option value="">Proje seçin</option>
+          {projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
+        </select></label>
+        {!projects.length ? <small>Proje listesi API'den yüklenene kadar maliyet kaydı oluşturulamaz.</small> : null}
+        <label>Kayıt adı<input name="name" defaultValue={editing?.name || ""} maxLength={200} required /></label>
+        <label>Maliyet türü<select name="costType" defaultValue={editing?.cost_type || "MATERIAL"}>
+          <option value="MATERIAL">Malzeme</option><option value="LABOR">İşçilik</option><option value="OTHER">Diğer</option>
+        </select></label>
+        <label>Para birimi<input name="currency" defaultValue={editing?.currency || "TRY"} maxLength={3} pattern="[A-Za-z]{3}" required /></label>
+        <label>Bütçe tutarı (opsiyonel)<input name="budgetAmount" type="number" min="0" step="0.01" defaultValue={editing?.budget_amount ?? ""} /></label>
+        <label>Gerçekleşen tutar<input name="actualAmount" type="number" min="0.01" step="0.01" defaultValue={editing?.actual_amount ?? ""} disabled={verificationStatus === "MISSING"} /></label>
+        <label>Doğrulama durumu<select name="verificationStatus" value={verificationStatus} onChange={(event) => {
+          setVerificationStatus(event.target.value);
+          if (event.target.value === "MISSING") {
+            const form = event.currentTarget.form;
+            form.elements.actualAmount.value = "";
+            form.elements.source.value = "";
+            form.elements.verifiedAt.value = "";
+          }
+        }}>
+          <option value="UNVERIFIED">Doğrulanmadı</option><option value="VERIFIED">Doğrulandı</option><option value="MISSING">Eksik</option>
+        </select></label>
+        <label>Kaynak / belge<input name="source" defaultValue={editing?.source || ""} maxLength={2000} /></label>
+        {verificationStatus === "VERIFIED" ? <label>Doğrulama tarihi<input name="verifiedAt" type="datetime-local" defaultValue={editing?.verified_at ? new Date(new Date(editing.verified_at).getTime() - new Date(editing.verified_at).getTimezoneOffset() * 60_000).toISOString().slice(0, 16) : ""} required /></label> : <input name="verifiedAt" type="hidden" defaultValue="" />}
+        <label>Gerçekleşme tarihi<input name="occurredOn" type="date" defaultValue={editing?.occurred_on || ""} /></label>
+        <input name="systemId" defaultValue={editing?.system_id || ""} placeholder="Sistem UUID (isteğe bağlı)" />
+        <input name="productId" defaultValue={editing?.product_id || ""} placeholder="Ürün UUID (isteğe bağlı)" />
+        <input name="materialAnalysisId" defaultValue={editing?.material_analysis_id || ""} placeholder="Malzeme analizi UUID (isteğe bağlı)" />
+        <textarea name="notes" defaultValue={editing?.notes || ""} placeholder="Notlar" maxLength={10000} />
+        <div className="module-toolbar">
+          <button type="submit" disabled={saving || !projectRequired}>{saving ? "Kaydediliyor…" : editing ? "Güncelle" : "Maliyet ekle"}</button>
+          {editing ? <button type="button" onClick={() => { setEditing(null); setVerificationStatus("UNVERIFIED"); }}>İptal et</button> : null}
+        </div>
+      </form>
+      {Object.keys(totalsByCurrency).map((currency) => (
+        <section className="panel" key={currency}>
+          <h2>{currency} · Bütçe / doğrulanmış gerçekleşen</h2>
+          {Object.entries(totalsByCurrency[currency]).map(([type, totals]) => (
+            <p key={type}>{type}: bütçe {totals.budget.toLocaleString("tr-TR")} · gerçekleşen {totals.verifiedActual.toLocaleString("tr-TR")}</p>
+          ))}
+        </section>
+      ))}
+      <div className="module-toolbar"><button type="button" disabled={loading} onClick={loadCosts}>{loading ? "Yükleniyor…" : "Maliyetleri yenile"}</button></div>
+      <div className="data-list">
+        {loading ? <p className="empty-state">Maliyet kayıtları yükleniyor…</p> : null}
+        {!loading && records.length === 0 ? <p className="empty-state">{error ? "Maliyet verileri backend'den alınamadı." : "Henüz maliyet kaydı yok."}</p> : null}
+        {!loading && records.map((record) => (
+          <article className="data-card" key={record.id}>
+            <div>
+              <h3>{record.name}</h3>
+              <p>{projects.find((project) => project.id === record.project_id)?.name || "Bağlı proje"} · {record.cost_type} · {record.currency}</p>
+              <p>Bütçe: {record.budget_amount ?? "Belirtilmedi"} · {record.verification_status === "VERIFIED"
+                ? `Doğrulanmış gerçekleşen: ${record.actual_amount}`
+                : record.verification_status === "MISSING"
+                  ? "Gerçekleşen tutar eksik"
+                  : `Doğrulanmamış tutar: ${record.actual_amount ?? "Belirtilmedi"}`}</p>
+              <small>{record.verification_status}{record.source ? ` · ${record.source}` : ""}{record.occurred_on ? ` · ${record.occurred_on}` : ""}</small>
+              {record.notes ? <p>{record.notes}</p> : null}
+            </div>
+            <div className="module-toolbar">
+              <button type="button" onClick={() => beginEdit(record)}>Düzenle</button>
+              <button type="button" onClick={() => removeCost(record.id)}>Sil</button>
+            </div>
+          </article>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function ReportsWorkspace({ projects = [], onReportsChanged }) {
   const [reportType, setReportType] = useState("PROJECT");
   const [reports, setReports] = useState([]);
@@ -1162,23 +1377,26 @@ export default function OperationsModule({
   research = [],
   aiMessages = [],
   onReportsChanged,
+  onFinanceChanged,
 }) {
   const definition = moduleDefinitions[moduleId];
   const isPersistentCatalog = CATALOG_MODULES.has(moduleId);
   const [records, setRecords] = useState(() =>
-    definition && moduleId !== "crm" && !isPersistentCatalog ? readRecords(definition.storageKey) : []
+    definition && !["crm", "finance", "reports"].includes(moduleId) && !isPersistentCatalog
+      ? readRecords(definition.storageKey)
+      : []
   );
   const [formOpen, setFormOpen] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (definition && moduleId !== "crm" && !isPersistentCatalog) {
+    if (definition && !["crm", "finance", "reports"].includes(moduleId) && !isPersistentCatalog) {
       setRecords(readRecords(definition.storageKey));
     }
   }, [definition]);
 
   useEffect(() => {
-    if (!definition || moduleId === "reports" || moduleId === "crm" || isPersistentCatalog) return;
+    if (!definition || ["reports", "crm", "finance"].includes(moduleId) || isPersistentCatalog) return;
     try {
       localStorage.setItem(definition.storageKey, JSON.stringify(records));
     } catch {
@@ -1191,18 +1409,12 @@ export default function OperationsModule({
   if (moduleId === "website") return <WebsiteWorkspace onNavigate={onNavigate} setAiInput={setAiInput} />;
   if (moduleId === "crm") return <CrmWorkspace onNavigate={onNavigate} setAiInput={setAiInput} />;
   if (moduleId === "calendar") return <CalendarWorkspace />;
+  if (moduleId === "finance") return <FinanceWorkspace projects={projects} onCostsChanged={onFinanceChanged} />;
   if (moduleId === "reports") {
     return (
       <ReportsWorkspace
         onReportsChanged={onReportsChanged}
-        records={{
-          crm: CAN_USE_LOCAL_FALLBACK ? readRecords("ddpro_crm_contacts_v1") : [],
-          calendar: readRecords("ddpro_calendar_events_v1"),
-        }}
         projects={projects}
-        offers={offers}
-        research={research}
-        aiMessages={aiMessages}
       />
     );
   }
