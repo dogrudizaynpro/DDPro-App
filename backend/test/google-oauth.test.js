@@ -17,6 +17,7 @@ let workspaceResponse;
 let refreshedAccessToken;
 let refreshResponse;
 let googleTokenDeletes = 0;
+let browserSession;
 
 before(async () => {
   Object.assign(process.env, {
@@ -180,6 +181,7 @@ test("one-time exchange authenticates browser status and real provider test rout
   });
   assert.equal(exchange.status, 200);
   const session = (await exchange.json()).data.session;
+  browserSession = session;
   assert.equal((await originalFetch(`${baseUrl}/api/integrations/google/exchange`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Origin: "https://dogrudizaynpro.github.io" },
@@ -370,5 +372,53 @@ test("one-time exchange authenticates browser status and real provider test rout
     workspaceResponse = null;
     refreshedAccessToken = null;
     refreshResponse = null;
+  }
+});
+
+test("exchanged browser session keeps Gmail and Calendar connected on cookie-free reload", async () => {
+  const headers = {
+    Origin: "https://dogrudizaynpro.github.io",
+    Authorization: ["Bearer", browserSession].join(" "),
+  };
+  const response = await originalFetch(`${baseUrl}/api/integrations/status`, { headers });
+  assert.equal(response.status, 200);
+  const { data } = await response.json();
+  assert.equal(data.gmail.connected, true);
+  assert.equal(data.googleCalendar.connected, true);
+  const anonymous = await originalFetch(`${baseUrl}/api/integrations/status`);
+  const anonymousData = (await anonymous.json()).data;
+  assert.equal(anonymousData.gmail.connected, false);
+  assert.equal(anonymousData.googleCalendar.connected, false);
+});
+
+test("failed Gmail 401 preserves the exchanged session, encrypted token and Calendar OAuth connection", async () => {
+  const headers = {
+    Origin: "https://dogrudizaynpro.github.io",
+    Authorization: ["Bearer", browserSession].join(" "),
+  };
+  const encryptedBefore = structuredClone(savedToken.encrypted_token);
+  const deletesBefore = googleTokenDeletes;
+  const { decryptIntegrationToken } = await import("../src/services/integration-vault.service.js");
+  refreshedAccessToken = decryptIntegrationToken(encryptedBefore).accessToken;
+  workspaceResponse = () => Response.json({
+    error: { message: "Gmail authorization failed", errors: [{ reason: "authError" }] },
+  }, { status: 401 });
+  try {
+    const failed = await originalFetch(`${baseUrl}/api/integrations/test/gmail`, { method: "POST", headers });
+    assert.equal(failed.status, 502);
+    assert.equal(failed.headers.get("set-cookie"), null);
+    const failure = await failed.json();
+    assert.equal(failure.code, "GOOGLE_API_AUTH_ERROR");
+    assert.equal(failure.data.connected, true);
+    const status = await originalFetch(`${baseUrl}/api/integrations/status`, { headers });
+    const { data } = await status.json();
+    assert.equal(data.gmail.connected, true);
+    assert.equal(data.googleCalendar.connected, true);
+    assert.equal(data.gmail.lastTest.testSucceeded, false);
+    assert.equal(googleTokenDeletes, deletesBefore);
+    assert.deepEqual(savedToken.encrypted_token, encryptedBefore);
+  } finally {
+    workspaceResponse = null;
+    refreshedAccessToken = null;
   }
 });

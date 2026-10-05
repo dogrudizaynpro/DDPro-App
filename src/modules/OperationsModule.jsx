@@ -6,7 +6,6 @@ import {
 import { CAN_USE_LOCAL_FALLBACK } from "../services/api.js";
 import {
   beginGoogleConnection,
-  completeGoogleConnection,
   createGoogleCalendarEvent,
   createCrmContact,
   deleteCrmContact,
@@ -193,14 +192,7 @@ function IntegrationSettings({ onNavigate, hubMode = false }) {
     let active = true;
     const queryString = window.location.hash.split("?")[1] || "";
     const oauthResult = new URLSearchParams(queryString);
-    const exchangeCode = oauthResult.get("exchange_code");
-    if (exchangeCode) {
-      oauthResult.delete("exchange_code");
-      window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}#${window.location.hash.split("?")[0].slice(1)}?${oauthResult}`);
-    }
-    if (oauthResult.get("integration") === "google_connected") {
-      setNotice("Google hesabı güvenli OAuth akışıyla bağlandı. Gmail ve Google Calendar durumları backend'den doğrulanıyor.");
-    } else if (oauthResult.get("integration") === "google_error") {
+    if (oauthResult.get("integration") === "google_error") {
       const reasons = {
         configuration_required: "Google OAuth backend yapılandırması eksik.",
         state_invalid: "Google OAuth güvenlik kontrolü başarısız; tekrar deneyin.",
@@ -211,13 +203,15 @@ function IntegrationSettings({ onNavigate, hubMode = false }) {
       };
       setError(reasons[oauthResult.get("reason")] || "Google OAuth bağlantısı tamamlanamadı.");
     }
-    const loadStatus = async () => {
-      await completeGoogleConnection(exchangeCode);
-      return getIntegrationStatus();
-    };
-    loadStatus()
+    getIntegrationStatus()
       .then((value) => {
-        if (active) setStatus(value);
+        if (active) {
+          setStatus(value);
+          if (oauthResult.get("integration") === "google_connected" &&
+              value.gmail?.connected && value.googleCalendar?.connected) {
+            setNotice("Google hesabı güvenli OAuth akışıyla bağlandı. Gmail ve Google Calendar durumları backend'den doğrulandı.");
+          }
+        }
       })
       .catch((loadError) => {
         if (active) setError(loadError.message || "Entegrasyon durumu backend'den alınamadı.");

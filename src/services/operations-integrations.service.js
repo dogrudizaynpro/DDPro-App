@@ -27,7 +27,10 @@ export const beginGoogleConnection = async () => {
 
 let pendingGoogleConnection;
 export const completeGoogleConnection = (code) => {
-  if (!code) return pendingGoogleConnection || Promise.resolve();
+  if (pendingGoogleConnection) return pendingGoogleConnection;
+  const oauthResult = new URLSearchParams(window.location.hash?.split("?")[1] || "");
+  code ||= oauthResult.get("exchange_code");
+  if (!code) return Promise.resolve();
   const pending = exchangeGoogleConnection(code);
   pendingGoogleConnection = pending;
   pending.then(
@@ -39,13 +42,19 @@ export const completeGoogleConnection = (code) => {
 
 const exchangeGoogleConnection = async (code) => {
   const verifier = sessionStorage.getItem("ddpro_oauth_verifier");
-  sessionStorage.removeItem("ddpro_oauth_verifier");
   if (!verifier) throw new Error("OAuth başlatılan tarayıcı sekmesi bulunamadı; tekrar bağlanın.");
   const response = await fetchAPI("/api/integrations/google/exchange", {
     method: "POST",
     body: JSON.stringify({ code, verifier }),
   });
   setBrowserSession(response.data.session);
+  sessionStorage.removeItem("ddpro_oauth_verifier");
+  const [path, query = ""] = window.location.hash.split("?");
+  const oauthResult = new URLSearchParams(query);
+  if (oauthResult.get("exchange_code") === code) {
+    oauthResult.delete("exchange_code");
+    window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}${path}${oauthResult.size ? `?${oauthResult}` : ""}`);
+  }
 };
 
 export const disconnectGoogle = async () => {

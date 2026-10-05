@@ -1,6 +1,8 @@
 import { fetchAPI } from "./api.js";
+import { completeGoogleConnection } from "./operations-integrations.service.js";
 
 export const getIntegrationStatus = async () => {
+  await completeGoogleConnection();
   const response = await fetchAPI("/api/integrations/status");
   return response.data;
 };

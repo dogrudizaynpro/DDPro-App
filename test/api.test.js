@@ -13,9 +13,16 @@ let fetchAPI;
 let testIntegrationConnection;
 let getIntegrationStatus;
 let formatGoogleIntegrationError;
+let completeGoogleConnection;
+let setBrowserSession;
 
 before(async () => {
-  globalThis.window = { location: { hostname: "localhost" } };
+  globalThis.window = {
+    location: { hostname: "localhost", pathname: "/DDPro-App/", search: "", hash: "" },
+    history: { replaceState: (_state, _title, url) => {
+      window.location.hash = new URL(url, "http://localhost").hash;
+    } },
+  };
   globalThis.sessionStorage = {
     getItem: (key) => storage.get(key) ?? null,
     setItem: (key, value) => storage.set(key, value),
@@ -25,15 +32,89 @@ before(async () => {
     requests.push({ url, options });
     return response();
   };
-  ({ fetchAPI } = await import("../src/services/api.js"));
+  ({ fetchAPI, setBrowserSession } = await import("../src/services/api.js"));
   ({ testIntegrationConnection, getIntegrationStatus } = await import("../src/services/integrations.service.js"));
-  ({ formatGoogleIntegrationError } = await import("../src/services/operations-integrations.service.js"));
+  ({ formatGoogleIntegrationError, completeGoogleConnection } = await import("../src/services/operations-integrations.service.js"));
 });
 
 beforeEach(() => {
   requests = [];
   storage.clear();
   storage.set("ddpro_browser_session", "existing-browser-session");
+  window.location.hash = "";
+});
+
+test("OAuth exchange precedes concurrent Gmail and Calendar status reads and stores only the browser session", async () => {
+  storage.delete("ddpro_browser_session");
+  storage.set("ddpro_oauth_verifier", "browser-verifier");
+  window.location.hash = "#/ayarlar?integration=google_connected&exchange_code=one-time-code";
+  let resolveExchange;
+  response = () => new Promise((resolve) => { resolveExchange = resolve; });
+  const first = getIntegrationStatus();
+  const second = getIntegrationStatus();
+  const replay = completeGoogleConnection("one-time-code");
+  assert.equal(requests.length, 1);
+  assert.match(requests[0].url, /google\/exchange$/);
+  assert.equal(storage.get("ddpro_oauth_verifier"), "browser-verifier");
+  assert.match(window.location.hash, /exchange_code=/);
+  response = () => Response.json({ data: { gmail: { connected: true }, googleCalendar: { connected: true } } });
+  resolveExchange(Response.json({ data: { session: "exchanged-browser-session" } }));
+  const [gmailStatus, calendarStatus] = await Promise.all([first, second, replay]);
+  assert.equal(gmailStatus.gmail.connected, true);
+  assert.equal(calendarStatus.googleCalendar.connected, true);
+  assert.equal(requests.length, 3);
+  assert.ok(requests.slice(1).every(({ options }) =>
+    options.headers.Authorization === ["Bearer", "exchanged-browser-session"].join(" ")));
+  assert.equal(storage.get("ddpro_browser_session"), "exchanged-browser-session");
+  assert.equal(storage.has("ddpro_oauth_verifier"), false);
+  assert.doesNotMatch(window.location.hash, /exchange_code/);
+  assert.deepEqual([...storage.keys()], ["ddpro_browser_session"]);
+});
+
+test("a fresh API module after page reload uses the exchanged session without another exchange", async () => {
+  storage.set("ddpro_oauth_verifier", "browser-verifier");
+  window.location.hash = "#/ayarlar?integration=google_connected&exchange_code=reload-code";
+  response = () => Response.json({ data: { session: "reload-browser-session" } });
+  await completeGoogleConnection();
+  const { fetchAPI: reloadedFetchAPI } = await import("../src/services/api.js?reload");
+  response = () => Response.json({ data: { gmail: { connected: true }, googleCalendar: { connected: true } } });
+  const status = await reloadedFetchAPI("/api/integrations/status");
+  assert.equal(status.data.gmail.connected, true);
+  assert.equal(status.data.googleCalendar.connected, true);
+  assert.equal(requests.length, 2);
+  assert.equal(requests[1].options.headers.Authorization, ["Bearer", "reload-browser-session"].join(" "));
+});
+
+test("failed exchange retains callback and verifier for retry without claiming a connection", async () => {
+  storage.set("ddpro_oauth_verifier", "browser-verifier");
+  window.location.hash = "#/ayarlar?integration=google_connected&exchange_code=retry-code";
+  response = () => { throw new Error("Backend temporarily unreachable"); };
+  await assert.rejects(getIntegrationStatus(), /temporarily unreachable/);
+  assert.equal(requests.length, 1);
+  assert.match(window.location.hash, /exchange_code=retry-code/);
+  assert.equal(storage.get("ddpro_oauth_verifier"), "browser-verifier");
+  assert.equal(storage.get("ddpro_browser_session"), "existing-browser-session");
+  response = () => Response.json({ data: { session: "retry-browser-session" } });
+  await completeGoogleConnection();
+  assert.equal(storage.get("ddpro_browser_session"), "retry-browser-session");
+});
+
+test("google_connected URL alone does not authenticate Gmail or Calendar", async () => {
+  storage.clear();
+  window.location.hash = "#/ayarlar?integration=google_connected";
+  response = () => Response.json({ data: { gmail: { connected: false }, googleCalendar: { connected: false } } });
+  const status = await getIntegrationStatus();
+  assert.equal(status.gmail.connected, false);
+  assert.equal(status.googleCalendar.connected, false);
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].options.headers.Authorization, undefined);
+});
+
+test("missing exchange session never overwrites a saved browser session", async () => {
+  for (const session of [undefined, null, "", "   ", {}]) {
+    assert.throws(() => setBrowserSession(session), /oturumu alınamadı/);
+    assert.equal(storage.get("ddpro_browser_session"), "existing-browser-session");
+  }
 });
 
 after(() => {

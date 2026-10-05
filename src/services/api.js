@@ -39,7 +39,12 @@ const resolveApiBaseUrl = () => {
 const API_BASE_URL = resolveApiBaseUrl();
 const SESSION_KEY = "ddpro_browser_session";
 export const clearBrowserSession = () => sessionStorage.removeItem(SESSION_KEY);
-export const setBrowserSession = (session) => sessionStorage.setItem(SESSION_KEY, session);
+export const setBrowserSession = (session) => {
+  if (typeof session !== "string" || !session.trim()) {
+    throw new Error("Google OAuth tarayıcı oturumu alınamadı; tekrar bağlanın.");
+  }
+  sessionStorage.setItem(SESSION_KEY, session);
+};
 
 const API_CONFIGURATION_ERROR = (() => {
   if (!API_BASE_URL) {
