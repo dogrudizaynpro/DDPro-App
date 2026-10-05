@@ -53,14 +53,11 @@ export const getIntegrationStatus = async (req, res, next) => {
     const testIsFresh =
       result && Date.now() - Date.parse(result.testedAt) < 5 * 60 * 1000;
     if (!configured) return { connected: false, status: "credentials_required", lastTest: result, checkedAt };
-    if (provider === "gmail" && sessionReady) {
+    if (sessionReady && ["gmail", "googleCalendar", "google"].includes(provider)) {
       return { connected: true, status: "connected", lastTest: result, checkedAt };
     }
     if (result && !result.connected && testIsFresh) {
       return { connected: false, status: "test_failed", lastTest: result, checkedAt };
-    }
-    if (sessionReady && ["gmail", "googleCalendar", "google"].includes(provider)) {
-      return { connected: true, status: "connected", lastTest: result, checkedAt };
     }
     const requiresGoogleSession = ["gmail", "googleCalendar", "crm"].includes(provider);
     if (result?.connected && testIsFresh && (!requiresGoogleSession || sessionReady)) {
@@ -165,8 +162,13 @@ export const postIntegrationTest = async (req, res, next) => {
       return res.status(error.statusCode || 502).json({
         status: "error",
         message: error.message,
-        ...(error.googleApiError && { googleApiError: error.googleApiError }),
-        data: { provider, connected: provider === "gmail" && Boolean(account), testSucceeded: false },
+        ...(error.googleApiError && {
+          code: error.code,
+          provider,
+          upstreamStatus: error.upstreamStatus,
+          googleApiError: error.googleApiError,
+        }),
+        data: { provider, connected: ["gmail", "googleCalendar"].includes(provider) && Boolean(account), testSucceeded: false },
       });
     }
     return next(error);

@@ -22,12 +22,17 @@ const safeGoogleText = (value, credentials = []) => {
 };
 
 export class GoogleApiError extends Error {
-  constructor(httpStatus, payload, credentials = []) {
+  constructor(httpStatus, payload, credentials = [], provider = "google") {
     const message = safeGoogleText(payload?.error?.message, credentials) ||
       `Google API request failed (HTTP ${httpStatus}).`;
     super(message);
     this.name = "GoogleApiError";
-    this.statusCode = httpStatus;
+    this.statusCode = httpStatus === 401 ? 502 : httpStatus;
+    this.code = httpStatus === 401 ? "GOOGLE_API_AUTH_ERROR"
+      : httpStatus === 403 ? "GOOGLE_API_ACCESS_DENIED"
+        : httpStatus === 429 ? "GOOGLE_API_RATE_LIMIT" : "GOOGLE_API_ERROR";
+    this.provider = provider;
+    this.upstreamStatus = httpStatus;
     this.expose = true;
     this.googleApiError = {
       httpStatus,

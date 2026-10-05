@@ -19,7 +19,7 @@ const CAN_USE_LOCAL_FALLBACK = !IS_PRODUCTION_RUNTIME;
 
 const resolveApiBaseUrl = () => {
   const envUrl = trimTrailingSlash(
-    String(import.meta.env.VITE_API_URL || "").trim()
+    String(import.meta.env?.VITE_API_URL || "").trim()
   );
 
   if (envUrl) {
@@ -102,8 +102,14 @@ export const fetchAPI = async (endpoint, options = {}) => {
       const error = new Error(
         data.message || `HTTP Error: ${response.status}`
       );
-      error.status = response.status;
-      error.statusCode = response.status;
+      // Older backends may still return a Google upstream 401 as HTTP 401.
+      const isGoogleApiError = Boolean(data.googleApiError) ||
+        String(data.code || "").startsWith("GOOGLE_API_");
+      error.status = response.status === 401 && isGoogleApiError ? 502 : response.status;
+      error.statusCode = error.status;
+      error.code = data.code;
+      error.provider = data.provider;
+      error.upstreamStatus = data.upstreamStatus ?? data.googleApiError?.httpStatus;
       error.data = data;
       error.googleApiError = data.googleApiError;
       throw error;

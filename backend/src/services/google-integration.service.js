@@ -15,6 +15,7 @@ import {
   decryptIntegrationToken,
 } from "./integration-vault.service.js";
 import { getIntegrationAdmin } from "../config/integration-admin.js";
+import { GoogleApiError } from "./google-api-error.js";
 
 const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
@@ -391,22 +392,38 @@ export const getGoogleAccessToken = async (account) => {
   const token = await readIntegrationToken({ provider: "google", account });
   if (!token) throw Object.assign(new Error("Google account is not connected."), { statusCode: 401, expose: true });
   if (token.expiresAt > Date.now() + 60_000) return token.accessToken;
-  if (!token.refreshToken) throw Object.assign(new Error("Google access expired; reconnect the account."), { statusCode: 401, expose: true });
+  if (!token.refreshToken) {
+    throw new GoogleApiError(401, {
+      error: { message: "Google access expired and cannot be refreshed. The saved connection was kept." },
+    });
+  }
 
-  const response = await fetch(GOOGLE_TOKEN_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      client_id: process.env.GOOGLE_CLIENT_ID,
-      client_secret: process.env.GOOGLE_CLIENT_SECRET,
-      refresh_token: token.refreshToken,
-      grant_type: "refresh_token",
-    }),
-    signal: AbortSignal.timeout(15_000),
-  });
-  const refreshed = await response.json();
+  let response;
+  try {
+    response = await fetch(GOOGLE_TOKEN_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_id: process.env.GOOGLE_CLIENT_ID,
+        client_secret: process.env.GOOGLE_CLIENT_SECRET,
+        refresh_token: token.refreshToken,
+        grant_type: "refresh_token",
+      }),
+      signal: AbortSignal.timeout(15_000),
+    });
+  } catch (error) {
+    throw Object.assign(new Error(
+      error.name === "TimeoutError" ? "Google token refresh timed out." : "Google token refresh is temporarily unreachable."
+    ), { statusCode: error.name === "TimeoutError" ? 504 : 502, expose: true });
+  }
+  const refreshed = await response.json().catch(() => ({}));
   if (!response.ok || !refreshed.access_token) {
-    throw Object.assign(new Error("Google access refresh failed; reconnect the account."), { statusCode: 401, expose: true });
+    throw new GoogleApiError(response.ok ? 502 : response.status, {
+      error: {
+        message: refreshed.error_description || "Google access refresh failed. The saved connection was kept.",
+        errors: typeof refreshed.error === "string" ? [{ reason: refreshed.error }] : [],
+      },
+    }, [token.accessToken, token.refreshToken]);
   }
   const updated = {
     ...token,

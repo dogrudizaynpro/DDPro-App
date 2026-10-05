@@ -29,7 +29,8 @@ const googleRequest = async (account, endpoint, options = {}) => {
     }
   }
   if (!response.ok) {
-    throw new GoogleApiError(response.status, payload, [accessToken]);
+    throw new GoogleApiError(response.status, payload, [accessToken],
+      endpoint.startsWith("/gmail/") ? "gmail" : "googleCalendar");
   }
   return payload;
 };

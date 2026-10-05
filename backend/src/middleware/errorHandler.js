@@ -11,7 +11,7 @@ export const errorHandler = (err, req, res, next) => {
 
   if (err.googleApiError) {
     console.error("Google API error:", {
-      statusCode: err.statusCode,
+      upstreamStatus: err.googleApiError.httpStatus,
       category: err.googleApiError.category,
     });
   } else if (isDevelopment) {
@@ -44,7 +44,12 @@ export const errorHandler = (err, req, res, next) => {
   res.status(statusCode).json({
     status: "error",
     message: errorMessage,
-    ...(err.googleApiError && { googleApiError: err.googleApiError }),
+    ...(err.googleApiError && {
+      code: err.code,
+      provider: err.provider,
+      upstreamStatus: err.upstreamStatus,
+      googleApiError: err.googleApiError,
+    }),
     ...(isDevelopment && { details: err.message }),
   });
 };

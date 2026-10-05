@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, createHmac, randomBytes } from "node:crypto";
 import { after, before, test } from "node:test";
 
 const keys = [
@@ -15,6 +15,8 @@ let server;
 let baseUrl;
 let workspaceResponse;
 let refreshedAccessToken;
+let refreshResponse;
+let googleTokenDeletes = 0;
 
 before(async () => {
   Object.assign(process.env, {
@@ -40,6 +42,10 @@ before(async () => {
         return new Response("", { status: 201 });
       }
       if (options.method === "DELETE") {
+        if (new URL(url).searchParams.get("provider") === "eq.google") {
+          googleTokenDeletes += 1;
+          savedToken = null;
+        }
         const record = exchangeGrant && url.includes(encodeURIComponent(exchangeGrant.account))
           ? exchangeGrant : null;
         exchangeGrant = null;
@@ -56,6 +62,7 @@ before(async () => {
     if (url === "https://oauth2.googleapis.com/token") {
       if (new URLSearchParams(options.body).get("grant_type") === "refresh_token") {
         assert.equal(new URLSearchParams(options.body).get("refresh_token"), "test-refresh");
+        if (refreshResponse) return refreshResponse();
         return Response.json({ access_token: refreshedAccessToken || "test-access", expires_in: 3600 });
       }
       return Response.json({ access_token: "test-access", refresh_token: "test-refresh", expires_in: 3600 });
@@ -64,7 +71,8 @@ before(async () => {
       return Response.json({ email: "owner@example.com", verified_email: true });
     }
     if (url === "https://www.googleapis.com/gmail/v1/users/me/profile" ||
-        url.startsWith("https://www.googleapis.com/calendar/v3/users/me/calendarList")) {
+        url.startsWith("https://www.googleapis.com/calendar/v3/users/me/calendarList") ||
+        url.startsWith("https://www.googleapis.com/calendar/v3/calendars/primary/events")) {
       assert.equal(options.headers.Authorization, ["Bearer", refreshedAccessToken || "test-access"].join(" "));
       if (workspaceResponse) return workspaceResponse();
       return Response.json({});
@@ -188,7 +196,29 @@ test("one-time exchange authenticates browser status and real provider test rout
     });
     assert.equal(tested.status, 200);
     assert.equal((await tested.json()).data.connected, true);
+    const afterSuccess = (await (await originalFetch(`${baseUrl}/api/integrations/status`, { headers })).json()).data;
+    assert.equal(afterSuccess.gmail.connected, true);
+    assert.equal(afterSuccess.googleCalendar.connected, true);
   }
+  const unauthenticated = await originalFetch(`${baseUrl}/api/integrations/calendar/events`, {
+    method: "POST", headers: { Origin: "https://dogrudizaynpro.github.io" },
+  });
+  assert.equal(unauthenticated.status, 401);
+  assert.equal((await unauthenticated.json()).googleApiError, undefined);
+  const invalidSession = await originalFetch(`${baseUrl}/api/integrations/calendar/events`, {
+    method: "POST", headers: { ...headers, Authorization: ["Bearer", "invalid-session"].join(" ") },
+  });
+  assert.equal(invalidSession.status, 401);
+  const expiredPayload = Buffer.from(JSON.stringify({
+    email: "owner@example.com", expiresAt: Date.now() - 1,
+  })).toString("base64url");
+  const expiredSignature = createHmac("sha256", process.env.INTEGRATION_SESSION_SECRET)
+    .update(`browser:${expiredPayload}`).digest("base64url");
+  const expiredSession = await originalFetch(`${baseUrl}/api/integrations/calendar/events`, {
+    headers: { ...headers, Authorization: ["Bearer", `${expiredPayload}.${expiredSignature}`].join(" ") },
+  });
+  assert.equal(expiredSession.status, 401);
+  assert.equal((await expiredSession.json()).googleApiError, undefined);
   assert.equal((await originalFetch(`${baseUrl}/api/integrations/calendar/events`, {
     headers: { Authorization: ["Bearer", session].join(" "), Origin: "https://evil.example" },
   })).status, 403);
@@ -216,8 +246,14 @@ test("one-time exchange authenticates browser status and real provider test rout
         },
       }, { status: httpStatus });
       const failure = await testProvider();
-      assert.equal(failure.status, httpStatus);
+      assert.equal(failure.status, httpStatus === 401 ? 502 : httpStatus);
+      assert.equal(failure.headers.get("set-cookie"), null);
       const failureBody = await failure.json();
+      assert.equal(failureBody.upstreamStatus, httpStatus);
+      assert.equal(failureBody.provider, "gmail");
+      assert.equal(failureBody.code, httpStatus === 401 ? "GOOGLE_API_AUTH_ERROR"
+        : httpStatus === 403 ? "GOOGLE_API_ACCESS_DENIED"
+          : httpStatus === 429 ? "GOOGLE_API_RATE_LIMIT" : "GOOGLE_API_ERROR");
       assert.equal(failureBody.message, `Google failure: ${reason}`);
       assert.deepEqual(failureBody.googleApiError, {
         httpStatus, category, message: `Google failure: ${reason}`, reasons: [reason],
@@ -232,7 +268,14 @@ test("one-time exchange authenticates browser status and real provider test rout
       assert.equal(current.gmail.lastTest.googleApiError.httpStatus, httpStatus);
       assert.equal(current.google.connected, true);
       assert.equal(current.googleCalendar.connected, true);
+      assert.equal(current.googleCalendar.lastTest.testSucceeded, true);
+      assert.equal(googleTokenDeletes, 0);
       assert.deepEqual(savedToken.encrypted_token, encryptedBefore);
+      const workspaceFailure = await originalFetch(`${baseUrl}/api/integrations/calendar/events`, { headers });
+      assert.equal(workspaceFailure.status, httpStatus === 401 ? 502 : httpStatus);
+      const workspaceBody = await workspaceFailure.json();
+      assert.equal(workspaceBody.provider, "googleCalendar");
+      assert.equal(workspaceBody.upstreamStatus, httpStatus);
     }
 
     const anonymousStatus = (await (await originalFetch(`${baseUrl}/api/integrations/status`)).json()).data;
@@ -250,10 +293,13 @@ test("one-time exchange authenticates browser status and real provider test rout
     assert.doesNotMatch(JSON.stringify(await unavailable.json()), /test-access/);
 
     workspaceResponse = () => Response.json({ error: { message: "Calendar access denied", errors: [{ reason: "forbidden" }] } }, { status: 403 });
-    assert.equal((await testProvider("googleCalendar")).status, 403);
+    const failedCalendar = await testProvider("googleCalendar");
+    assert.equal(failedCalendar.status, 403);
+    assert.equal((await failedCalendar.json()).data.connected, true);
     const calendarFailure = await getStatus();
-    assert.equal(calendarFailure.googleCalendar.status, "test_failed");
-    assert.equal(calendarFailure.googleCalendar.connected, false);
+    assert.equal(calendarFailure.googleCalendar.status, "connected");
+    assert.equal(calendarFailure.googleCalendar.connected, true);
+    assert.equal(calendarFailure.googleCalendar.lastTest.testSucceeded, false);
     assert.equal(calendarFailure.gmail.connected, true);
     assert.equal(calendarFailure.google.connected, true);
 
@@ -262,6 +308,50 @@ test("one-time exchange authenticates browser status and real provider test rout
     savedToken.encrypted_token = encryptIntegrationToken({
       ...decryptIntegrationToken(savedToken.encrypted_token), expiresAt: Date.now() - 1,
     });
+    const expiredToken = structuredClone(savedToken.encrypted_token);
+    for (const httpStatus of [400, 401, 403, 429]) {
+      refreshResponse = () => Response.json({
+        error: "invalid_grant",
+        error_description: "Refresh denied test-refresh test-access test-secret",
+      }, { status: httpStatus });
+      const refreshFailure = await originalFetch(`${baseUrl}/api/integrations/calendar/events`, { headers });
+      assert.equal(refreshFailure.status, httpStatus === 401 ? 502 : httpStatus);
+      const body = await refreshFailure.json();
+      assert.equal(body.upstreamStatus, httpStatus);
+      assert.ok(body.googleApiError);
+      assert.doesNotMatch(JSON.stringify(body), /test-refresh|test-access|test-secret/);
+      assert.deepEqual(savedToken.encrypted_token, expiredToken);
+      assert.equal(googleTokenDeletes, 0);
+      const current = await getStatus();
+      assert.equal(current.gmail.connected, true);
+      assert.equal(current.googleCalendar.connected, true);
+    }
+    const { getGoogleAccessToken } = await import("../src/services/google-integration.service.js");
+    refreshResponse = () => new Response("<html>test-refresh</html>", { status: 401 });
+    await assert.rejects(getGoogleAccessToken("owner@example.com"), (error) => {
+      assert.equal(error.statusCode, 502);
+      assert.equal(error.code, "GOOGLE_API_AUTH_ERROR");
+      assert.equal(error.upstreamStatus, 401);
+      assert.doesNotMatch(error.message, /test-refresh/);
+      return true;
+    });
+    refreshResponse = () => { throw new Error("Network failure test-refresh test-secret"); };
+    await assert.rejects(getGoogleAccessToken("owner@example.com"), (error) => {
+      assert.equal(error.statusCode, 502);
+      assert.doesNotMatch(error.message, /test-refresh|test-secret/);
+      return true;
+    });
+    savedToken.encrypted_token = encryptIntegrationToken({
+      ...decryptIntegrationToken(expiredToken), refreshToken: "",
+    });
+    await assert.rejects(getGoogleAccessToken("owner@example.com"), (error) => {
+      assert.equal(error.statusCode, 502);
+      assert.equal(error.code, "GOOGLE_API_AUTH_ERROR");
+      return true;
+    });
+    assert.equal(googleTokenDeletes, 0);
+    savedToken.encrypted_token = expiredToken;
+    refreshResponse = null;
     refreshedAccessToken = "test-refreshed-access";
     const recovered = await testProvider();
     assert.equal(recovered.status, 200);
@@ -274,8 +364,11 @@ test("one-time exchange authenticates browser status and real provider test rout
     assert.equal(current.gmail.status, "connected");
     assert.equal(current.gmail.lastTest.error, "");
     assert.equal(current.gmail.lastTest.testSucceeded, true);
+    assert.equal((await testProvider("googleCalendar")).status, 200);
+    assert.equal((await getStatus()).googleCalendar.connected, true);
   } finally {
     workspaceResponse = null;
     refreshedAccessToken = null;
+    refreshResponse = null;
   }
 });
