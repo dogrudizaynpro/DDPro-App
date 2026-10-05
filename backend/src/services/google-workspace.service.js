@@ -20,6 +20,7 @@ const googleRequest = async (account, endpoint, options = {}) => {
       error.name === "TimeoutError" ? "Google API request timed out." : "Google API is temporarily unreachable."
     ), { statusCode: error.name === "TimeoutError" ? 504 : 502, expose: true });
   }
+  if (response.status === 204) return null;
   let payload;
   try {
     payload = await response.json();
@@ -151,5 +152,79 @@ export const createGoogleCalendarEvent = async (account, body = {}) => {
       start: { dateTime: startDate.toISOString() },
       end: { dateTime: endDate.toISOString() },
     }),
+  });
+};
+
+const normalizeCalendarEventUpdate = (body = {}) => {
+  const payload = {};
+  if (Object.hasOwn(body, "summary")) {
+    const summary = typeof body.summary === "string" ? body.summary.trim() : "";
+    if (!summary || summary.length > 500) {
+      throw Object.assign(new Error("Calendar event summary must be between 1 and 500 characters."), {
+        statusCode: 400,
+        expose: true,
+      });
+    }
+    payload.summary = summary;
+  }
+  if (Object.hasOwn(body, "description")) {
+    if (typeof body.description !== "string" || body.description.length > 5_000) {
+      throw Object.assign(new Error("Calendar event description must be at most 5000 characters."), {
+        statusCode: 400,
+        expose: true,
+      });
+    }
+    payload.description = body.description;
+  }
+  if (Object.hasOwn(body, "start") || Object.hasOwn(body, "end")) {
+    if (typeof body.start !== "string" || typeof body.end !== "string") {
+      throw Object.assign(new Error("Calendar event start and end must be updated together."), {
+        statusCode: 400,
+        expose: true,
+      });
+    }
+    const start = new Date(body.start);
+    const end = new Date(body.end);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) {
+      throw Object.assign(new Error("Calendar event dates are invalid."), {
+        statusCode: 400,
+        expose: true,
+      });
+    }
+    payload.start = { dateTime: start.toISOString() };
+    payload.end = { dateTime: end.toISOString() };
+  }
+  if (Object.keys(payload).length === 0) {
+    throw Object.assign(new Error("At least one supported calendar event field is required."), {
+      statusCode: 400,
+      expose: true,
+    });
+  }
+  return payload;
+};
+
+const validateCalendarEventId = (id) => {
+  if (typeof id !== "string" || !/^[A-Za-z0-9_-]{5,1024}$/.test(id)) {
+    throw Object.assign(new Error("Calendar event id is invalid."), {
+      statusCode: 400,
+      expose: true,
+    });
+  }
+  return encodeURIComponent(id);
+};
+
+export const updateGoogleCalendarEvent = async (account, id, body = {}) => {
+  const eventId = validateCalendarEventId(id);
+  const payload = normalizeCalendarEventUpdate(body);
+  return googleRequest(account, `/calendar/v3/calendars/primary/events/${eventId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+};
+
+export const deleteGoogleCalendarEvent = async (account, id) => {
+  const eventId = validateCalendarEventId(id);
+  return googleRequest(account, `/calendar/v3/calendars/primary/events/${eventId}`, {
+    method: "DELETE",
   });
 };

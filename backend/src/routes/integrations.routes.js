@@ -14,7 +14,9 @@ import {
 import {
   getCalendarEvents,
   getWebsiteContent,
+  deleteCalendarEvent,
   patchWebsiteContent,
+  patchCalendarEvent,
   postCalendarEvent,
   postGmailImport,
   postWebsiteContent,
@@ -57,6 +59,8 @@ router.post("/google/logout", integrationActionRateLimit, requireGoogleSession, 
 router.post("/gmail/import", integrationActionRateLimit, requireGoogleSession, postGmailImport);
 router.get("/calendar/events", integrationActionRateLimit, requireGoogleSession, getCalendarEvents);
 router.post("/calendar/events", integrationActionRateLimit, requireGoogleSession, postCalendarEvent);
+router.patch("/calendar/events/:id", integrationActionRateLimit, requireGoogleSession, patchCalendarEvent);
+router.delete("/calendar/events/:id", integrationActionRateLimit, requireGoogleSession, deleteCalendarEvent);
 router.post("/whatsapp/send", integrationActionRateLimit, requireGoogleSession, postWhatsAppMessage);
 router.get("/website/content/:contentType/:id?", integrationActionRateLimit, requireGoogleSession, getWebsiteContent);
 router.post("/website/content/:contentType", integrationActionRateLimit, requireGoogleSession, postWebsiteContent);

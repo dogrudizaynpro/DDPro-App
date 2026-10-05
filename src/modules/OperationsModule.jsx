@@ -14,6 +14,7 @@ import { getProjects } from "../services/projects.service.js";
 import {
   beginGoogleConnection,
   createGoogleCalendarEvent,
+  deleteGoogleCalendarEvent,
   createCrmContact,
   deleteCrmContact,
   disconnectGoogle,
@@ -24,6 +25,7 @@ import {
   importGmailToCrm,
   sendWhatsAppText,
   updateCrmContact,
+  updateGoogleCalendarEvent,
 } from "../services/operations-integrations.service.js";
 
 const WEBSITE_URL = "https://www.ddizaynpro.com/";
@@ -391,7 +393,9 @@ function WebsiteWorkspace({ onNavigate, setAiInput }) {
 }
 
 function CalendarWorkspace() {
-  const [events, setEvents] = useState(() => readRecords("ddpro_calendar_events_v1"));
+  const [events, setEvents] = useState([]);
+  const [localDrafts, setLocalDrafts] = useState(() => readRecords("ddpro_calendar_events_v1"));
+  const [editingEvent, setEditingEvent] = useState(null);
   const [remote, setRemote] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -435,32 +439,36 @@ function CalendarWorkspace() {
       if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) {
         throw new Error("Etkinlik başlangıç/bitiş zamanı geçersiz.");
       }
-      if (remote) {
-        await createGoogleCalendarEvent({
+      if (remote && !editingEvent?.local) {
+        const eventPayload = {
           summary: values.summary,
           description: values.description,
           start: start.toISOString(),
           end: end.toISOString(),
-        });
+        };
+        if (editingEvent) await updateGoogleCalendarEvent(editingEvent.id, eventPayload);
+        else await createGoogleCalendarEvent(eventPayload);
         await loadEvents();
-        setNotice("Google Calendar etkinliği kaydedildi.");
+        setNotice(editingEvent ? "Google Calendar etkinliği güncellendi." : "Google Calendar etkinliği kaydedildi.");
       } else {
-        const next = [
-          {
-            id: globalThis.crypto?.randomUUID?.() || `${Date.now()}`,
-            title: values.summary,
-            type: "Yerel görev",
-            date: start.toISOString(),
-            end: end.toISOString(),
-            notes: values.description,
-            source: "local",
-          },
-          ...readRecords("ddpro_calendar_events_v1"),
-        ];
+        const record = {
+          ...(editingEvent || {}),
+          id: editingEvent?.id || globalThis.crypto?.randomUUID?.() || `${Date.now()}`,
+          title: values.summary,
+          type: "Yerel taslak",
+          date: start.toISOString(),
+          end: end.toISOString(),
+          notes: values.description,
+          source: editingEvent?.source === "google_calendar" ? "google_calendar" : "local",
+        };
+        const next = editingEvent
+          ? localDrafts.map((draft) => draft.id === editingEvent.id ? record : draft)
+          : [record, ...localDrafts];
         localStorage.setItem("ddpro_calendar_events_v1", JSON.stringify(next));
-        setEvents(next);
-        setNotice("Etkinlik yalnızca bu tarayıcıda saklandı; Google Calendar'a gönderilmedi.");
+        setLocalDrafts(next);
+        setNotice(editingEvent ? "Taslak yerel olarak güncellendi; Google Calendar değiştirilmedi." : "Etkinlik yalnızca bu tarayıcıda saklandı; Google Calendar'a gönderilmedi.");
       }
+      setEditingEvent(null);
       form.reset();
     } catch (createError) {
       setError(createError.message);
@@ -472,12 +480,54 @@ function CalendarWorkspace() {
   const importLocalEvents = async () => {
     try {
       const imported = await importGoogleCalendarToLocal();
-      const next = [...imported, ...readRecords("ddpro_calendar_events_v1")];
+      const existingIds = new Set(localDrafts.map((event) => event.externalId).filter(Boolean));
+      const next = [
+        ...imported.filter((event) => !existingIds.has(event.externalId)),
+        ...localDrafts,
+      ];
       localStorage.setItem("ddpro_calendar_events_v1", JSON.stringify(next));
-      setNotice(`${imported.length} etkinlik yerel takvim görünümüne aktarıldı; Google kayıtları değişmedi.`);
+      setLocalDrafts(next);
+      setNotice(`${next.length - localDrafts.length} etkinlik yerel takvim görünümüne aktarıldı; Google kayıtları değişmedi.`);
     } catch (importError) {
       setError(importError.message);
     }
+  };
+
+  const removeCalendarEvent = async (event, isLocal) => {
+    setBusy(true);
+    setError("");
+    setNotice("");
+    try {
+      if (isLocal) {
+        const next = localDrafts.filter((draft) => draft.id !== event.id);
+        localStorage.setItem("ddpro_calendar_events_v1", JSON.stringify(next));
+        setLocalDrafts(next);
+        if (editingEvent?.id === event.id) setEditingEvent(null);
+        setNotice("Yerel kayıt silindi; Google Calendar kaydı etkilenmedi.");
+      } else {
+        await deleteGoogleCalendarEvent(event.id);
+        await loadEvents();
+        setNotice("Google Calendar etkinliği silindi.");
+      }
+    } catch (deleteError) {
+      setError(deleteError.message || "Takvim kaydı silinemedi.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const beginEditEvent = (event, isLocal) => {
+    const start = isLocal ? event.date : event.start?.dateTime;
+    const end = isLocal ? event.end : event.end?.dateTime;
+    setEditingEvent({
+      ...event,
+      id: event.id,
+      summary: event.summary || event.title || "",
+      description: event.description || event.notes || "",
+      startValue: start ? new Date(new Date(start).getTime() - new Date(start).getTimezoneOffset() * 60_000).toISOString().slice(0, 16) : "",
+      endValue: end ? new Date(new Date(end).getTime() - new Date(end).getTimezoneOffset() * 60_000).toISOString().slice(0, 16) : "",
+      local: isLocal,
+    });
   };
 
   return (
@@ -489,24 +539,44 @@ function CalendarWorkspace() {
       {notice ? <p className="status-banner info">{notice}</p> : null}
       {!remote ? <button type="button" onClick={() => { try { beginGoogleConnection(); } catch (e) { setError(e.message); } }}>Google hesabını bağla</button> : (
         <div className="module-toolbar">
-          <button type="button" onClick={loadEvents}>Google Calendar'ı yenile</button>
+          <button type="button" onClick={() => loadEvents().catch((loadError) => setError(loadError.message || "Google Calendar yüklenemedi."))}>Google Calendar'ı yenile</button>
           <button type="button" onClick={importLocalEvents}>Yerel görünüme kopyala</button>
         </div>
       )}
-      <form className="data-form" onSubmit={createEvent}>
-        <h2>{remote ? "Google Calendar etkinliği oluştur" : "Yerel etkinlik taslağı"}</h2>
-        <label>Başlık<input name="summary" required maxLength={500} /></label>
-        <label>Başlangıç<input name="start" type="datetime-local" required /></label>
-        <label>Bitiş<input name="end" type="datetime-local" required /></label>
-        <label>Açıklama<textarea name="description" rows={3} maxLength={5000} /></label>
-        <button type="submit" disabled={busy}>{busy ? "Kaydediliyor…" : remote ? "Google Calendar'a kaydet" : "Yerel taslak kaydet"}</button>
+      <form key={editingEvent?.id || "new-calendar-event"} className="data-form" onSubmit={createEvent}>
+        <h2>{editingEvent ? "Takvim kaydını düzenle" : remote ? "Google Calendar etkinliği oluştur" : "Yerel etkinlik taslağı"}</h2>
+        {editingEvent ? <p className="status-banner info">{editingEvent.local ? "Yerel taslak · Google Calendar ile senkronize değil." : "Google Calendar'daki canlı etkinlik düzenleniyor."}</p> : null}
+        <label>Başlık<input name="summary" defaultValue={editingEvent?.summary || ""} required maxLength={500} /></label>
+        <label>Başlangıç<input name="start" type="datetime-local" defaultValue={editingEvent?.startValue || ""} required /></label>
+        <label>Bitiş<input name="end" type="datetime-local" defaultValue={editingEvent?.endValue || ""} required /></label>
+        <label>Açıklama<textarea name="description" rows={3} defaultValue={editingEvent?.description || ""} maxLength={5000} /></label>
+        <div className="module-toolbar">
+          <button type="submit" disabled={busy}>{busy ? "Kaydediliyor…" : editingEvent ? "Güncelle" : remote ? "Google Calendar'a kaydet" : "Yerel taslak kaydet"}</button>
+          {editingEvent ? <button type="button" disabled={busy} onClick={() => setEditingEvent(null)}>Düzenlemeyi iptal et</button> : null}
+        </div>
       </form>
       <div className="data-list">
         {events.length ? events.map((event) => (
           <article className="data-card" key={event.id || `${event.title}-${event.date}`}>
-            <div><h3>{event.summary || event.title || "Takvim etkinliği"}</h3><p>{event.start?.dateTime || event.start?.date || event.date}</p><small>{event.status || event.type || "Google Calendar"}</small></div>
+            <div><h3>{event.summary || event.title || "Takvim etkinliği"}</h3><p>{event.start?.dateTime || event.start?.date || event.date}</p><small>Google Calendar · {event.status || "Canlı etkinlik"}</small></div>
+            <div className="module-toolbar">
+              {event.start?.dateTime && event.end?.dateTime ? <button type="button" disabled={busy} onClick={() => beginEditEvent(event, false)}>Düzenle</button> : null}
+              <button type="button" disabled={busy} onClick={() => removeCalendarEvent(event, false)}>Sil</button>
+            </div>
           </article>
-        )) : <p className="empty-state">Google Calendar bağlantısı kurulduğunda gerçek etkinlikler burada görünür.</p>}
+        )) : <p className="empty-state">{remote ? "Google Calendar'da etkinlik yok." : "Google Calendar bağlantısı kurulduğunda gerçek etkinlikler burada görünür."}</p>}
+        {localDrafts.length ? <>
+          <h2>Yerel taslaklar ve kopyalar</h2>
+          {localDrafts.map((event) => (
+            <article className="data-card" key={event.id}>
+              <div><h3>{event.title || "Yerel etkinlik"}</h3><p>{event.date}</p><small>{event.source === "google_calendar" ? "Google Calendar'dan yerel kopya · provider kaydını değiştirmez" : "Yalnızca bu tarayıcıda saklanan taslak"}</small></div>
+              <div className="module-toolbar">
+                <button type="button" disabled={busy} onClick={() => beginEditEvent(event, true)}>Düzenle</button>
+                <button type="button" disabled={busy} onClick={() => removeCalendarEvent(event, true)}>Sil</button>
+              </div>
+            </article>
+          ))}
+        </> : null}
       </div>
     </div>
   );
