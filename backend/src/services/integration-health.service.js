@@ -7,11 +7,15 @@ import { searchResearchProvider } from "./research-provider.service.js";
 
 const recentTests = new Map();
 
-export const getIntegrationTestResult = (provider) => recentTests.get(provider) || null;
+const resultKey = (provider, account) =>
+  ["gmail", "googleCalendar"].includes(provider) ? `${provider}:${account}` : provider;
 
-const recordResult = (provider, result) => {
+export const getIntegrationTestResult = (provider, account = "") =>
+  recentTests.get(resultKey(provider, account)) || null;
+
+const recordResult = (provider, account, result) => {
   const value = { ...result, testedAt: new Date().toISOString() };
-  recentTests.set(provider, value);
+  recentTests.set(resultKey(provider, account), value);
   return value;
 };
 
@@ -144,11 +148,13 @@ export const testIntegrationConnection = async (provider, account = "") => {
   }
   try {
     await test(account);
-    return recordResult(provider, { connected: true, error: "" });
+    return recordResult(provider, account, { connected: true, testSucceeded: true, error: "" });
   } catch (error) {
-    recordResult(provider, {
+    recordResult(provider, account, {
       connected: false,
+      testSucceeded: false,
       error: error.expose ? error.message : "Provider connection test failed.",
+      ...(error.googleApiError && { googleApiError: error.googleApiError }),
     });
     throw error;
   }

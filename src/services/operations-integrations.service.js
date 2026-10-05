@@ -1,5 +1,18 @@
 import { API_BASE_URL, clearBrowserSession, fetchAPI, setBrowserSession } from "./api.js";
 
+export const formatGoogleIntegrationError = (error) => {
+  const details = error.googleApiError;
+  if (!details) return error.message || "Bağlantı testi başarısız.";
+  const explanations = {
+    authorization: "Google API yetkilendirme/token hatası. Kayıtlı Google bağlantısı korunuyor.",
+    access_denied: "Google API erişimi reddetti (izin, politika veya kota kısıtlaması). Google OAuth bağlantısı korunuyor.",
+    rate_limit: "Google API hız/kota sınırına ulaşıldı. Daha sonra tekrar deneyin; Google bağlantısı korunuyor.",
+    api_error: "Google API isteği başarısız. Google bağlantısı korunuyor.",
+  };
+  const reasons = details.reasons?.length ? ` · ${details.reasons.join(", ")}` : "";
+  return `${explanations[details.category] || explanations.api_error} HTTP ${details.httpStatus}${reasons}: ${details.message}`;
+};
+
 export const beginGoogleConnection = async () => {
   if (!API_BASE_URL) throw new Error("Backend API address is not configured.");
   const verifier = Array.from(crypto.getRandomValues(new Uint8Array(32)),

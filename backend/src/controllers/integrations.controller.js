@@ -46,13 +46,16 @@ export const getIntegrationStatus = async (req, res, next) => {
   }
   const googleConfigured = google.configured;
   const googleOAuthAvailable = google.oauthFlowAvailable;
-  const last = (provider) => getIntegrationTestResult(provider);
+  const last = (provider) => getIntegrationTestResult(provider, googleAccount);
   const statusAfterTest = (provider, configured, sessionReady = false) => {
     const result = last(provider);
     const checkedAt = new Date().toISOString();
     const testIsFresh =
       result && Date.now() - Date.parse(result.testedAt) < 5 * 60 * 1000;
     if (!configured) return { connected: false, status: "credentials_required", lastTest: result, checkedAt };
+    if (provider === "gmail" && sessionReady) {
+      return { connected: true, status: "connected", lastTest: result, checkedAt };
+    }
     if (result && !result.connected && testIsFresh) {
       return { connected: false, status: "test_failed", lastTest: result, checkedAt };
     }
@@ -162,7 +165,8 @@ export const postIntegrationTest = async (req, res, next) => {
       return res.status(error.statusCode || 502).json({
         status: "error",
         message: error.message,
-        data: { provider, connected: false },
+        ...(error.googleApiError && { googleApiError: error.googleApiError }),
+        data: { provider, connected: provider === "gmail" && Boolean(account), testSucceeded: false },
       });
     }
     return next(error);

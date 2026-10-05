@@ -105,13 +105,14 @@ export const fetchAPI = async (endpoint, options = {}) => {
       error.status = response.status;
       error.statusCode = response.status;
       error.data = data;
+      error.googleApiError = data.googleApiError;
       throw error;
     }
 
     return data;
   } catch (error) {
     // Re-throw with additional context
-    console.warn("API request unavailable:", error.message);
+    console.warn("API request unavailable:", { status: error.status, code: error.code });
     throw error;
   }
 };
