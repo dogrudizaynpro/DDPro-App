@@ -39,3 +39,25 @@ test("AI chat requires an authenticated Google browser session", async () => {
   assert.equal(response.status, 401);
   assert.equal((await response.json()).message, "Google account connection is required.");
 });
+
+test("catalog CRUD and material calculation endpoints require the Google session", async () => {
+  for (const path of [
+    "/api/products",
+    "/api/systems",
+    "/api/price-analysis",
+    "/api/material-analysis",
+  ]) {
+    const response = await fetch(`${baseUrl}${path}`);
+    assert.equal(response.status, 401, `${path} must require authentication`);
+  }
+
+  const calculation = await fetch(`${baseUrl}/api/material-analysis/calculate`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Origin: "https://dogrudizaynpro.github.io",
+    },
+    body: JSON.stringify({ name: "Material", quantity: 1, unit: "m2" }),
+  });
+  assert.equal(calculation.status, 401);
+});

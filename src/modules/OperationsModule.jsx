@@ -5,6 +5,13 @@ import {
 } from "../services/integrations.service.js";
 import { CAN_USE_LOCAL_FALLBACK } from "../services/api.js";
 import {
+  createCatalogRecord,
+  deleteCatalogRecord,
+  getCatalogRecords,
+  updateCatalogRecord,
+} from "../services/catalog.service.js";
+import { getProjects } from "../services/projects.service.js";
+import {
   beginGoogleConnection,
   createGoogleCalendarEvent,
   createCrmContact,
@@ -99,23 +106,65 @@ const field = (name, label, type = "text", required = false) => ({
 });
 
 const moduleDefinitions = {
+  systems: {
+    title: "Sistemler",
+    storageKey: "ddpro_system_inventory_v1",
+    notice: "Altı DDPro ana sistemi merkezi veritabanında başlangıç referansı olarak bulunur ve düzenlenebilir.",
+    fields: [
+      field("name", "Sistem adı", "text", true),
+      field("code", "Sistem kodu", "text", true),
+      field("description", "Açıklama", "textarea"),
+      { ...field("status", "Durum"), options: [["ACTIVE", "Aktif"], ["ARCHIVED", "Arşiv"]] },
+    ],
+  },
   products: {
     title: "Ürünler",
     storageKey: "ddpro_products_v1",
-    notice: "Kayıtlar bu tarayıcıda saklanır; merkezi ürün API bağlantısı yoktur.",
-    fields: [field("name", "Ürün / sistem adı", "text", true), field("detail", "Teknik bilgi", "textarea"), field("sourceUrl", "Kaynak bağlantısı", "url")],
+    notice: "Ürün kayıtları oturum korumalı backend ve Supabase üzerinden saklanır.",
+    fields: [
+      field("name", "Ürün adı", "text", true),
+      field("product_code", "Ürün kodu"),
+      { ...field("system_id", "Sistem"), optionsKey: "systems" },
+      field("manufacturer", "Üretici"),
+      field("unit", "Birim", "text", true),
+      field("description", "Teknik bilgi", "textarea"),
+      field("source_url", "Kaynak bağlantısı", "url"),
+      { ...field("status", "Durum"), options: [["ACTIVE", "Aktif"], ["DRAFT", "Taslak"], ["ARCHIVED", "Arşiv"]] },
+    ],
   },
   "price-analysis": {
     title: "Fiyat Analizi",
     storageKey: "ddpro_price_analysis_v1",
-    notice: "Yalnızca kullanıcı tarafından girilen fiyatlar kaydedilir; fiyat önerilmez veya doğrulanmış gibi gösterilmez.",
-    fields: [field("name", "Kalem", "text", true), field("amount", "Kaynakta görünen fiyat", "text"), field("sourceUrl", "Kaynak bağlantısı", "url", true), field("verification", "Doğrulama notu", "textarea")],
+    notice: "Yalnızca kaynak ve doğrulama zamanı kaydedilmiş fiyatlar VERIFIED olur; sistem fiyat tahmini üretmez.",
+    fields: [
+      field("name", "Kalem", "text", true),
+      { ...field("product_id", "Ürün"), optionsKey: "products" },
+      { ...field("system_id", "Sistem"), optionsKey: "systems" },
+      { ...field("project_id", "Proje"), optionsKey: "projects" },
+      field("unit_price", "Birim fiyat", "number"),
+      field("currency", "Para birimi", "text", true),
+      field("unit", "Birim", "text", true),
+      field("source", "Kaynak"),
+      field("source_url", "Kaynak bağlantısı", "url"),
+      { ...field("verification_status", "Doğrulama"), options: [["UNVERIFIED", "UNVERIFIED"], ["VERIFIED", "VERIFIED"], ["MISSING", "MISSING"]] },
+      field("verified_at", "Doğrulama tarihi", "datetime-local"),
+      field("notes", "Notlar", "textarea"),
+    ],
   },
   "material-analysis": {
     title: "Malzeme Analizi",
     storageKey: "ddpro_material_analysis_v1",
-    notice: "Malzeme notları yerel kayıttır; doğrulanmamış maliyet hesaplanmaz.",
-    fields: [field("name", "Malzeme", "text", true), field("project", "İlgili proje"), field("detail", "Teknik bilgi / analiz notu", "textarea"), field("sourceUrl", "Kaynak bağlantısı", "url")],
+    notice: "Maliyetler yalnızca VERIFIED fiyat kaydından hesaplanır. İşçilik, KDV ve nakliye dahil değildir.",
+    fields: [
+      field("name", "Malzeme", "text", true),
+      { ...field("project_id", "Proje"), optionsKey: "projects" },
+      { ...field("system_id", "Sistem"), optionsKey: "systems" },
+      { ...field("product_id", "Ürün"), optionsKey: "products" },
+      { ...field("price_analysis_id", "Fiyat kaydı"), optionsKey: "prices" },
+      field("quantity", "Miktar", "number", true),
+      field("unit", "Birim", "text", true),
+      field("notes", "Notlar", "textarea"),
+    ],
   },
   crm: {
     title: "Müşteriler / CRM",
@@ -762,6 +811,228 @@ function ReportsWorkspace({ records, projects, offers, research, aiMessages }) {
   );
 }
 
+const CATALOG_MODULES = new Set([
+  "products",
+  "systems",
+  "price-analysis",
+  "material-analysis",
+]);
+
+export function CatalogWorkspace({ moduleId, definition = moduleDefinitions[moduleId] }) {
+  const [records, setRecords] = useState([]);
+  const [choices, setChoices] = useState({ systems: [], products: [], projects: [], prices: [] });
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [formOpen, setFormOpen] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+
+  const refresh = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const data = await getCatalogRecords(moduleId);
+      setRecords(data);
+    } catch (loadError) {
+      setRecords([]);
+      setError(loadError.message || "Kayıtlar backend'den alınamadı.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    let active = true;
+    getCatalogRecords(moduleId)
+      .then((data) => { if (active) setRecords(data); })
+      .catch((loadError) => {
+        if (active) {
+          setRecords([]);
+          setError(loadError.message || "Kayıtlar backend'den alınamadı.");
+        }
+      })
+      .finally(() => { if (active) setLoading(false); });
+
+    const loadChoices = async () => {
+      const [systems, products, projects, prices] = await Promise.allSettled([
+        getCatalogRecords("systems"),
+        getCatalogRecords("products"),
+        getProjects(),
+        getCatalogRecords("price-analysis"),
+      ]);
+      if (!active) return;
+      setChoices({
+        systems: systems.status === "fulfilled" ? systems.value : [],
+        products: products.status === "fulfilled" ? products.value : [],
+        projects: projects.status === "fulfilled" ? projects.value : [],
+        prices: prices.status === "fulfilled" ? prices.value : [],
+      });
+    };
+    loadChoices();
+    return () => { active = false; };
+  }, [moduleId]);
+
+  const save = async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const values = Object.fromEntries(new FormData(form).entries());
+    for (const key of ["unit_price", "quantity"]) {
+      if (values[key] !== undefined && values[key] !== "") values[key] = Number(values[key]);
+    }
+    if (values.verified_at) values.verified_at = new Date(values.verified_at).toISOString();
+    for (const key of ["system_id", "product_id", "project_id", "price_analysis_id"]) {
+      if (values[key] === "") values[key] = null;
+    }
+    setBusy(true);
+    setError("");
+    setNotice("");
+    try {
+      if (editing) await updateCatalogRecord(moduleId, editing.id, values);
+      else await createCatalogRecord(moduleId, values);
+      await refresh();
+      setEditing(null);
+      setFormOpen(false);
+      form.reset();
+      setNotice(editing ? "Kayıt güncellendi." : "Kayıt güvenli backend'e kaydedildi.");
+    } catch (saveError) {
+      setError(saveError.message || "Kayıt kaydedilemedi.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const remove = async (record) => {
+    setBusy(true);
+    setError("");
+    setNotice("");
+    try {
+      await deleteCatalogRecord(moduleId, record.id);
+      setRecords((current) => current.filter((item) => item.id !== record.id));
+      setNotice("Kayıt silindi.");
+    } catch (removeError) {
+      setError(removeError.message || "Kayıt silinemedi.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const optionLabel = (key, option) => {
+    if (key === "prices") {
+      return `${option.name} · ${option.verification_status}${option.unit_price ? ` · ${option.currency} ${option.unit_price}/${option.unit}` : ""}`;
+    }
+    return option.name || option.title || option.code || option.id;
+  };
+
+  const displayValue = (record, name) => {
+    if (name === "unit_price") {
+      if (record.verification_status !== "VERIFIED") return record.verification_status || "MISSING";
+      return `${record.currency} ${record.unit_price} / ${record.unit}`;
+    }
+    if (name === "total_cost") {
+      return record.total_cost == null
+        ? (record.verification_status || "MISSING")
+        : `${record.currency} ${record.total_cost}`;
+    }
+    return record[name];
+  };
+
+  const inputValue = (fieldType, value) => {
+    if (fieldType !== "datetime-local" || !value) return value ?? "";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "";
+    const offset = date.getTimezoneOffset() * 60_000;
+    return new Date(date.getTime() - offset).toISOString().slice(0, 16);
+  };
+
+  const displayFields = definition.fields.filter(({ name }) =>
+    !["name", "code", "verification_status"].includes(name)
+  );
+
+  return (
+    <div className="operations-module">
+      <p className="status-banner info">{definition.notice}</p>
+      <div className="module-toolbar">
+        <button type="button" disabled={busy} onClick={() => { setEditing(null); setFormOpen((open) => !open); }}>
+          {formOpen ? "Formu kapat" : `+ ${definition.title} kaydı ekle`}
+        </button>
+        <button type="button" disabled={loading || busy} onClick={refresh}>Yenile</button>
+      </div>
+      {error ? <p className="status-banner warning" role="alert">{error}</p> : null}
+      {notice ? <p className="status-banner success" role="status">{notice}</p> : null}
+      {formOpen ? (
+        <form key={editing?.id || "new-catalog-record"} className="data-form" onSubmit={save}>
+          <h2>{editing ? `${definition.title} kaydını düzenle` : `${definition.title} kaydı oluştur`}</h2>
+          {definition.fields.map((item) => {
+            const value = inputValue(item.type, editing?.[item.name]) || (
+              item.name === "currency" ? "TRY" :
+                item.name === "unit" ? "adet" :
+                  item.name === "verification_status" ? "UNVERIFIED" :
+                    item.name === "status" ? "ACTIVE" : ""
+            );
+            const fieldChoices = item.optionsKey ? choices[item.optionsKey] : null;
+            return (
+              <label key={item.name}>
+                {item.label}
+                {item.options ? (
+                  <select name={item.name} required={item.required} defaultValue={value}>
+                    {item.options.map(([option, label]) => <option key={option} value={option}>{label}</option>)}
+                  </select>
+                ) : fieldChoices ? (
+                  <select name={item.name} required={item.required} defaultValue={value}>
+                    <option value="">Seçiniz</option>
+                    {fieldChoices.map((option) => <option key={option.id} value={option.id}>{optionLabel(item.optionsKey, option)}</option>)}
+                  </select>
+                ) : item.type === "textarea" ? (
+                  <textarea name={item.name} required={item.required} rows={3} defaultValue={value} />
+                ) : (
+                  <input
+                    name={item.name}
+                    type={item.type}
+                    required={item.required}
+                    min={item.type === "number" ? "0" : undefined}
+                    step={item.type === "number" ? "any" : undefined}
+                    defaultValue={value}
+                  />
+                )}
+              </label>
+            );
+          })}
+          <div className="module-toolbar">
+            <button type="submit" disabled={busy}>{busy ? "Kaydediliyor…" : "Kaydı sakla"}</button>
+            {editing ? <button type="button" disabled={busy} onClick={() => { setEditing(null); setFormOpen(false); }}>Düzenlemeyi iptal et</button> : null}
+          </div>
+        </form>
+      ) : null}
+      {loading ? <p className="empty-state" role="status">Kayıtlar yükleniyor…</p> : (
+        <div className="data-list">
+          {records.length ? records.map((record) => (
+            <article className="data-card" key={record.id}>
+              <div>
+                <h3>{record.name || definition.title}</h3>
+                {record.code ? <p><strong>Kod:</strong> {record.code}</p> : null}
+                {record.verification_status ? <p><strong>Doğrulama:</strong> {record.verification_status}</p> : null}
+                {displayFields.map((item) => {
+                  const value = displayValue(record, item.name);
+                  return value !== undefined && value !== null && value !== ""
+                    ? <p key={item.name}><strong>{item.label}:</strong> {value}</p>
+                    : null;
+                })}
+                {moduleId === "material-analysis" ? <p><strong>Toplam malzeme maliyeti:</strong> {record.total_cost == null ? record.verification_status : `${record.currency} ${record.total_cost}`}</p> : null}
+                <small>{record.created_at ? new Date(record.created_at).toLocaleString("tr-TR") : ""}</small>
+              </div>
+              <div className="module-toolbar">
+                <button type="button" disabled={busy} onClick={() => { setEditing(record); setFormOpen(true); }}>Düzenle</button>
+                <button type="button" disabled={busy} onClick={() => remove(record)}>Sil</button>
+              </div>
+            </article>
+          )) : <p className="empty-state">Bu modülde henüz kayıt yok.</p>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function OperationsModule({
   moduleId,
   onNavigate,
@@ -772,20 +1043,21 @@ export default function OperationsModule({
   aiMessages = [],
 }) {
   const definition = moduleDefinitions[moduleId];
+  const isPersistentCatalog = CATALOG_MODULES.has(moduleId);
   const [records, setRecords] = useState(() =>
-    definition && moduleId !== "crm" ? readRecords(definition.storageKey) : []
+    definition && moduleId !== "crm" && !isPersistentCatalog ? readRecords(definition.storageKey) : []
   );
   const [formOpen, setFormOpen] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (definition && moduleId !== "crm") {
+    if (definition && moduleId !== "crm" && !isPersistentCatalog) {
       setRecords(readRecords(definition.storageKey));
     }
   }, [definition]);
 
   useEffect(() => {
-    if (!definition || moduleId === "reports" || moduleId === "crm") return;
+    if (!definition || moduleId === "reports" || moduleId === "crm" || isPersistentCatalog) return;
     try {
       localStorage.setItem(definition.storageKey, JSON.stringify(records));
     } catch {
@@ -813,6 +1085,9 @@ export default function OperationsModule({
     );
   }
   if (!definition) return null;
+  if (isPersistentCatalog) {
+    return <CatalogWorkspace moduleId={moduleId} definition={definition} />;
+  }
 
   const addRecord = (event) => {
     event.preventDefault();

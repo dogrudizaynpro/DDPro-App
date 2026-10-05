@@ -21,6 +21,7 @@ import {
   getApiHealth,
 } from "./services/api.js";
 import { requestAiCompletion } from "./services/ai.service.js";
+import { getCatalogRecords } from "./services/catalog.service.js";
 import { getCrmContacts } from "./services/operations-integrations.service.js";
 import { getIntegrationStatus } from "./services/integrations.service.js";
 import {
@@ -51,6 +52,18 @@ const STORAGE_KEYS = {
   documents: "ddpro_documents_v1",
   finance: "ddpro_finance_v1",
   reports: "ddpro_reports_v1",
+};
+
+const useCatalogDataState = (resource) => {
+  const [value, setValue] = useState(EMPTY_ITEMS);
+  useEffect(() => {
+    let active = true;
+    getCatalogRecords(resource)
+      .then((records) => { if (active) setValue(records); })
+      .catch(() => { if (active) setValue(EMPTY_ITEMS); });
+    return () => { active = false; };
+  }, [resource]);
+  return value;
 };
 
 const modules = [
@@ -541,10 +554,10 @@ function App() {
     getStoredData(STORAGE_KEYS.logs)
   );
 
-  const [products] = useStoredDataState(STORAGE_KEYS.products);
-  const [systemInventory] = useStoredDataState(STORAGE_KEYS.systems);
-  const [priceAnalysisItems] = useStoredDataState(STORAGE_KEYS.priceAnalysis);
-  const [materialAnalysisItems] = useStoredDataState(STORAGE_KEYS.materialAnalysis);
+  const products = useCatalogDataState("products");
+  const systemInventory = useCatalogDataState("systems");
+  const priceAnalysisItems = useCatalogDataState("price-analysis");
+  const materialAnalysisItems = useCatalogDataState("material-analysis");
   const [customerItems] = useStoredDataState(STORAGE_KEYS.customers);
   const [documentItems] = useStoredDataState(STORAGE_KEYS.documents);
   const [financeItems] = useStoredDataState(STORAGE_KEYS.finance);
@@ -1724,16 +1737,16 @@ function App() {
         status,
         source,
       })),
-      products: getStoredData("ddpro_products_v1").slice(0, 30).map(({ id, name, detail }) => ({
+      products: products.slice(0, 30).map(({ id, name, description }) => ({
         id,
         name,
-        detail,
+        description,
       })),
-      systems: getStoredData("ddpro_system_inventory_v1").slice(0, 30).map(({ id, name, status, detail }) => ({
+      systems: systemInventory.slice(0, 30).map(({ id, name, status, description }) => ({
         id,
         name,
         status,
-        detail,
+        description,
       })),
       research: procurementItems.slice(0, 30).map(({
         id,
@@ -2066,7 +2079,7 @@ function App() {
         ],
         statusNote: {
           tone: "info",
-          message: LOCAL_ONLY_MODULE_MESSAGE,
+          message: "Sistem kayıtları oturum korumalı backend ve Supabase üzerinden yüklenir.",
         },
       },
       "price-analysis": {

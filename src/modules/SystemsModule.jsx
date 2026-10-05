@@ -1,5 +1,6 @@
+import { CatalogWorkspace } from "./OperationsModule.jsx";
+
 function SystemsModule({
-  systemInventory,
   showMemoryForm,
   setShowMemoryForm,
   createMemory,
@@ -14,37 +15,12 @@ function SystemsModule({
 }) {
   return (
     <div className="module-page">
-      <div className="panel">
-        <div className="panel-header">
-          <h2>Sistem Envanteri</h2>
-        </div>
-
-        <div className="panel-content">
-          {statusNote ? (
-            <p className={`status-banner ${statusNote.tone || "info"}`}>
-              {statusNote.message}
-            </p>
-          ) : null}
-          {systemInventory.length === 0 ? (
-            <p className="empty-state">Henüz veri bulunmuyor.</p>
-          ) : (
-            <div className="systems-grid">
-              {systemInventory.map((item) => (
-                <div
-                  className="system-card"
-                  key={
-                    item.id ||
-                    `${item.name || "system"}::${item.description || "description-missing"}`
-                  }
-                >
-                  <h3>{item.name || "Sistem Kaydı"}</h3>
-                  <p>{item.description || "Sistem detay açıklaması bulunmuyor."}</p>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
+      {statusNote ? (
+        <p className={`status-banner ${statusNote.tone || "info"}`}>
+          {statusNote.message}
+        </p>
+      ) : null}
+      <CatalogWorkspace moduleId="systems" />
 
       <div className="panel memory-panel">
         <div className="panel-header">

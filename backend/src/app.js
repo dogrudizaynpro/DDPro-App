@@ -10,6 +10,7 @@ import offersRouter from "./routes/offers.routes.js";
 import aiRouter from "./routes/ai.routes.js";
 import integrationsRouter from "./routes/integrations.routes.js";
 import crmRouter from "./routes/crm.routes.js";
+import catalogRouter from "./routes/catalog.routes.js";
 import {
   getWhatsAppWebhookChallenge,
   postWebsiteLead,
@@ -73,6 +74,7 @@ app.use("/api/offers", offersRouter);
 app.use("/api/ai", aiRouter);
 app.use("/api/integrations", integrationsRouter);
 app.use("/api/crm", crmRouter);
+app.use("/api", catalogRouter);
 app.get(
   "/webhooks/whatsapp",
   rateLimit({
@@ -132,6 +134,10 @@ app.get("/health", async (req, res) => {
       ["research_items", "id"],
       ["crm_contacts", "id"],
       ["integration_tokens", "provider"],
+      ["products", "id"],
+      ["systems", "id"],
+      ["price_analysis", "id"],
+      ["material_analysis", "id"],
     ];
     const results = await Promise.all(
       coreTables.map(([table, column]) =>
