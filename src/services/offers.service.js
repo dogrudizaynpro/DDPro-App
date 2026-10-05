@@ -200,6 +200,10 @@ export const mapOfferToViewModel = (offer = {}) => {
     updatedAt,
     projectId: offer.project_id || offer.projectId || null,
     crmContactId: offer.crm_contact_id || offer.crmContactId || null,
+    systemId: offer.system_id || offer.systemId || null,
+    productId: offer.product_id || offer.productId || null,
+    materialAnalysisId: offer.material_analysis_id || offer.materialAnalysisId || null,
+    snapshot: offer.offer_snapshot || offer.snapshot || null,
     notes: offer.notes || "",
     source,
     raw: offer,
@@ -245,6 +249,9 @@ const toOfferPayload = (offer) => {
       typeof offer?.crmContactId === "string" && offer.crmContactId.trim()
         ? offer.crmContactId.trim()
         : null,
+    system_id: offer?.systemId || offer?.system_id || null,
+    product_id: offer?.productId || offer?.product_id || null,
+    material_analysis_id: offer?.materialAnalysisId || offer?.material_analysis_id || null,
   };
 };
 
@@ -307,6 +314,16 @@ export const createOffer = async (offer) => {
     console.warn("Offer creation API unavailable:", error.message);
     throw error;
   }
+};
+
+export const updateOffer = async (id, offer) => {
+  if (!id) throw new Error("Offer ID is required");
+  const payload = toOfferPayload(offer);
+  const response = await fetchAPI(`/api/offers/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+  return response.data ? mapOfferToViewModel(response.data) : null;
 };
 
 // ============================================================

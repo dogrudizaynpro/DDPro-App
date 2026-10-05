@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { getCrmContacts } from "../services/operations-integrations.service.js";
+import { getCatalogRecords } from "../services/catalog.service.js";
 
 function OffersModule({
   offersFetchState,
@@ -27,6 +28,14 @@ function OffersModule({
   projects = [],
 }) {
   const [crmContacts, setCrmContacts] = useState([]);
+  const [catalogOptions, setCatalogOptions] = useState({ systems: [], products: [], material: [] });
+  const [editingOfferId, setEditingOfferId] = useState("");
+  const [projectId, setProjectId] = useState("");
+  const [crmContactId, setCrmContactId] = useState("");
+  const [systemId, setSystemId] = useState("");
+  const [productId, setProductId] = useState("");
+  const [materialAnalysisId, setMaterialAnalysisId] = useState("");
+  const [saving, setSaving] = useState(false);
   useEffect(() => {
     let active = true;
     getCrmContacts()
@@ -36,10 +45,46 @@ function OffersModule({
       .catch(() => {
         if (active) setCrmContacts([]);
       });
+    Promise.allSettled([
+      getCatalogRecords("systems"),
+      getCatalogRecords("products"),
+      getCatalogRecords("material-analysis"),
+    ]).then(([systems, products, material]) => {
+      if (active) {
+        setCatalogOptions({
+          systems: systems.status === "fulfilled" ? systems.value : [],
+          products: products.status === "fulfilled" ? products.value : [],
+          material: material.status === "fulfilled" ? material.value : [],
+        });
+      }
+    });
     return () => {
       active = false;
     };
   }, []);
+
+  const startEditing = (offer) => {
+    if (!offer || offer.source !== "api") return;
+    setEditingOfferId(offer.id);
+    setOfferName(offer.title || "");
+    setOfferAmount(offer.amount === "Tutar belirtilmedi" ? "" : String(offer.amount ?? ""));
+    setOfferStatus(offer.statusRaw || offer.status || "Hazırlanıyor");
+    setProjectId(offer.projectId || "");
+    setCrmContactId(offer.crmContactId || "");
+    setSystemId(offer.systemId || "");
+    setProductId(offer.productId || "");
+    setMaterialAnalysisId(offer.materialAnalysisId || "");
+    setShowOfferForm(true);
+  };
+  const handleOfferSubmit = async (event) => {
+    setSaving(true);
+    try {
+      await createOffer(event);
+      setEditingOfferId("");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <div className="module-page">
@@ -64,7 +109,18 @@ function OffersModule({
 
           <button
             type="button"
-            onClick={() => setShowOfferForm((value) => !value)}
+            onClick={() => {
+              setEditingOfferId("");
+              setOfferName("");
+              setOfferAmount("");
+              setOfferStatus("Hazırlanıyor");
+              setProjectId("");
+              setCrmContactId("");
+              setSystemId("");
+              setProductId("");
+              setMaterialAnalysisId("");
+              setShowOfferForm((value) => !value);
+            }}
           >
             {showOfferForm ? "Formu Kapat" : "+ Yeni Teklif"}
           </button>
@@ -87,7 +143,9 @@ function OffersModule({
       )}
 
       {showOfferForm && (
-        <form className="data-form" onSubmit={createOffer}>
+        <form className="data-form" onSubmit={handleOfferSubmit}>
+          {editingOfferId ? <input type="hidden" name="offerId" value={editingOfferId} readOnly /> : null}
+          <h2>{editingOfferId ? "Teklifi düzenle" : "Yeni teklif"}</h2>
           <input
             type="text"
             placeholder="Teklif adı"
@@ -102,15 +160,37 @@ function OffersModule({
             onChange={(event) => setOfferAmount(event.target.value)}
           />
           <label>İlgili proje
-            <select name="projectId" defaultValue="">
+            <select name="projectId" value={projectId} onChange={(event) => setProjectId(event.target.value)}>
               <option value="">Proje seçin</option>
               {projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
             </select>
           </label>
           <label>İlgili CRM müşterisi
-            <select name="crmContactId" defaultValue="">
+            <select name="crmContactId" value={crmContactId} onChange={(event) => setCrmContactId(event.target.value)}>
               <option value="">Müşteri seçin</option>
               {crmContacts.map((contact) => <option key={contact.id} value={contact.id}>{contact.name}</option>)}
+            </select>
+          </label>
+          <label>Sistem
+            <select name="systemId" value={systemId} onChange={(event) => setSystemId(event.target.value)}>
+              <option value="">Sistem seçin</option>
+              {catalogOptions.systems.map((system) => <option key={system.id} value={system.id}>{system.name}</option>)}
+            </select>
+          </label>
+          <label>Ürün
+            <select name="productId" value={productId} onChange={(event) => setProductId(event.target.value)}>
+              <option value="">Ürün seçin</option>
+              {catalogOptions.products.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}
+            </select>
+          </label>
+          <label>Malzeme maliyet snapshot'ı
+            <select name="materialAnalysisId" value={materialAnalysisId} onChange={(event) => setMaterialAnalysisId(event.target.value)}>
+              <option value="">Malzeme analizi seçin</option>
+              {catalogOptions.material.map((record) => (
+                <option key={record.id} value={record.id}>
+                  {record.name} · {record.verification_status}{record.total_cost == null ? "" : ` · ${record.currency} ${record.total_cost}`}
+                </option>
+              ))}
             </select>
           </label>
           {!crmContacts.length ? <small>CRM müşteri seçimi için Google yetkili oturumu gerekir.</small> : null}
@@ -118,6 +198,7 @@ function OffersModule({
           <select
             value={offerStatus}
             onChange={(event) => setOfferStatus(event.target.value)}
+            disabled={!editingOfferId}
           >
             <option>Hazırlanıyor</option>
             <option>Gönderildi</option>
@@ -125,7 +206,7 @@ function OffersModule({
             <option>Reddedildi</option>
           </select>
 
-          <button type="submit">Teklifi Kaydet</button>
+          <button type="submit" disabled={saving}>{saving ? "Kaydediliyor…" : editingOfferId ? "Teklif değişikliklerini kaydet" : "Teklifi Kaydet"}</button>
 
           {canUseLocalFallback ? (
             <p className="form-hint">
@@ -314,6 +395,9 @@ function OffersModule({
                     panelde yönetilir.
                   </p>
                 </div>
+                {selectedOfferDetail.source === "api" ? (
+                  <button type="button" onClick={() => startEditing(selectedOfferDetail)}>Teklifi düzenle</button>
+                ) : null}
               </div>
             )}
           </div>

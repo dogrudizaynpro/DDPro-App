@@ -15,6 +15,7 @@ import {
   getOffers,
   mapOfferToViewModel,
   mapOffersToViewModel,
+  updateOffer as updateOfferRequest,
 } from "./services/offers.service.js";
 import {
   CAN_USE_LOCAL_FALLBACK,
@@ -28,6 +29,7 @@ import {
   createResearchItem as createProcurementRequest,
   deleteResearchItem as deleteProcurementRequest,
   getResearchItems as getProcurementItems,
+  updateResearchItem as updateProcurementRequest,
 } from "./services/research.service.js";
 
 const ProjectsModule = lazy(() => import("./modules/ProjectsModule.jsx"));
@@ -1474,12 +1476,32 @@ function App() {
     }
   };
 
+  const updateProcurement = async (id, updates) => {
+    procurementTouchedRef.current = true;
+    setProcurementError(null);
+    try {
+      const updated = await updateProcurementRequest(id, updates);
+      if (!updated) throw new Error("Research API did not return the updated record.");
+      setProcurementItems((items) => items.map((item) => item.id === id ? updated : item));
+      addLog(`Tedarik kaydı API üzerinden güncellendi: ${updated.name}`);
+    } catch (error) {
+      if (CAN_USE_LOCAL_FALLBACK) {
+        setProcurementItems((items) => items.map((item) => item.id === id ? { ...item, ...updates } : item));
+        setProcurementError("Tedarik kaydı API'ye güncellenemedi; yalnızca bu geliştirme oturumunda yerel olarak güncellendi.");
+      } else {
+        setProcurementError(`Tedarik kaydı güncellenemedi (${getApiFailureReason(error)}).`);
+      }
+    }
+  };
+
   const createOffer = async (event) => {
     event.preventDefault();
 
-    if (!offerName.trim()) return;
+    if (!offerName.trim()) return false;
     offersTouchedRef.current = true;
     let shouldResetForm = false;
+    const formValues = new FormData(event.currentTarget);
+    const editingOfferId = String(formValues.get("offerId") || "");
 
     const newOffer = mapOfferToViewModel({
       id: createId(),
@@ -1488,12 +1510,40 @@ function App() {
       status: offerStatus,
       statusRaw: offerStatus,
       date: formatDate(),
-      projectId: new FormData(event.currentTarget).get("projectId") || null,
-      crmContactId: new FormData(event.currentTarget).get("crmContactId") || null,
+      projectId: formValues.get("projectId") || null,
+      crmContactId: formValues.get("crmContactId") || null,
+      systemId: formValues.get("systemId") || null,
+      productId: formValues.get("productId") || null,
+      materialAnalysisId: formValues.get("materialAnalysisId") || null,
       source: "local",
     });
 
     setOffersError(null);
+
+    if (editingOfferId) {
+      try {
+        const updatedOffer = await updateOfferRequest(editingOfferId, {
+          ...newOffer,
+          source: "api",
+        });
+        if (!updatedOffer) throw new Error("Offers API did not return the updated offer.");
+        setOffers((current) => current.map((offer) =>
+          offer.id === editingOfferId ? updatedOffer : offer
+        ));
+        setSelectedOfferId(editingOfferId);
+        setSelectedOfferDetail(updatedOffer);
+        setShowOfferForm(false);
+        setOfferName("");
+        setOfferAmount("");
+        setOfferStatus("Hazırlanıyor");
+        addLog(`Teklif API üzerinden güncellendi: ${updatedOffer.title}`);
+        return true;
+      } catch (error) {
+        setOffersError(`Teklif güncellenemedi: ${getApiFailureReason(error)}.`);
+        addLog(`Teklif güncelleme hatası: ${getApiFailureReason(error)}.`);
+        return false;
+      }
+    }
 
     try {
       const createdOffer = await createOfferRequest(newOffer);
@@ -1536,6 +1586,7 @@ function App() {
       setOfferStatus("Hazırlanıyor");
       setShowOfferForm(false);
     }
+    return shouldResetForm;
   };
 
   const deleteOffer = async (id) => {
@@ -2359,6 +2410,7 @@ function App() {
           procurementLoading={procurementLoading}
           procurementItems={procurementItems}
           deleteProcurement={deleteProcurement}
+          updateProcurement={updateProcurement}
           saveResearchResult={saveResearchResult}
           projects={projects}
         />

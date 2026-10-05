@@ -59,5 +59,16 @@ test("catalog CRUD and material calculation endpoints require the Google session
     },
     body: JSON.stringify({ name: "Material", quantity: 1, unit: "m2" }),
   });
+
+  test("procurement CRUD endpoints require the Google session", async () => {
+    const list = await fetch(`${baseUrl}/api/research`);
+    assert.equal(list.status, 401);
+    const update = await fetch(`${baseUrl}/api/research/4bc6f5a6-0b6c-4ddb-b29b-208c84c344d0`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: "Updated" }),
+    });
+    assert.equal(update.status, 401);
+  });
   assert.equal(calculation.status, 401);
 });

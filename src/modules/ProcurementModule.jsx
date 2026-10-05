@@ -13,6 +13,7 @@ function ProcurementModule({
   procurementLoading,
   procurementItems,
   deleteProcurement,
+  updateProcurement,
   saveResearchResult,
   projects = [],
 }) {
@@ -97,6 +98,7 @@ function ProcurementModule({
           />
 
           <input name="source" type="text" placeholder="Kaynak" />
+          <input name="supplier" type="text" placeholder="Tedarikçi" />
           <input name="product" type="text" placeholder="Ürün" />
           <input name="manufacturer" type="text" placeholder="Üretici" />
           <textarea name="technicalInfo" placeholder="Teknik bilgi" />
@@ -108,10 +110,18 @@ function ProcurementModule({
           <input name="url" type="url" placeholder="Kaynak bağlantısı (https://...)" />
           <label>İlgili proje<select name="projectId" defaultValue=""><option value="">Proje seçin</option>{projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label>
           <input name="productId" type="text" placeholder="Ürün UUID (varsa)" />
+          <input name="systemId" type="text" placeholder="Sistem UUID (varsa)" />
           <select name="status" defaultValue="Taslak">
             <option>Taslak</option>
             <option>Araştırılıyor</option>
             <option>Tamamlandı</option>
+          </select>
+          <select name="procurementStatus" defaultValue="RESEARCH">
+            <option value="RESEARCH">Araştırma</option>
+            <option value="QUOTE_RECEIVED">Teklif alındı</option>
+            <option value="ORDERED">Sipariş verildi</option>
+            <option value="RECEIVED">Teslim alındı</option>
+            <option value="CANCELLED">İptal</option>
           </select>
 
           <button type="submit">Kaydet</button>
@@ -137,8 +147,61 @@ function ProcurementModule({
                 {item.technicalInfo ? <p>{item.technicalInfo}</p> : null}
                 {item.price ? <p>Kaynak fiyatı: {item.price} · {item.priceVerification || "Doğrulama durumu bilinmiyor"}</p> : null}
                 {/^https?:\/\//i.test(item.url || "") ? <p><a href={item.url} target="_blank" rel="noopener noreferrer">Kaynağı aç ↗</a></p> : null}
-                <small>{item.date} · {item.status || "Durum belirtilmedi"}</small>
+                <small>{item.date} · {item.status || "Durum belirtilmedi"} · {item.procurementStatus || "RESEARCH"}</small>
               </div>
+
+              <details>
+                <summary>Kaydı güncelle</summary>
+                <form className="data-form" onSubmit={(event) => {
+                  event.preventDefault();
+                  const values = Object.fromEntries(new FormData(event.currentTarget).entries());
+                  updateProcurement(item.id, {
+                    name: values.title,
+                    note: values.description,
+                    supplier: values.supplier,
+                    source: values.source,
+                    product: values.product,
+                    manufacturer: values.manufacturer,
+                    technicalInfo: values.technicalInfo,
+                    price: values.price,
+                    priceVerification: values.priceVerification,
+                    url: values.url,
+                    projectId: values.projectId,
+                    productId: values.productId,
+                    systemId: values.systemId,
+                    status: values.status,
+                    procurementStatus: values.procurementStatus,
+                  });
+                }}>
+                  <input name="title" defaultValue={item.name} maxLength={200} required aria-label="Tedarik başlığı" />
+                  <textarea name="description" defaultValue={item.note} aria-label="Tedarik notu" />
+                  <input name="supplier" defaultValue={item.supplier} placeholder="Tedarikçi" />
+                  <input name="source" defaultValue={item.source} placeholder="Kaynak" />
+                  <input name="product" defaultValue={item.product} placeholder="Ürün" />
+                  <input name="manufacturer" defaultValue={item.manufacturer} placeholder="Üretici" />
+                  <textarea name="technicalInfo" defaultValue={item.technicalInfo} placeholder="Teknik bilgi" />
+                  <input name="price" defaultValue={item.price} placeholder="Kaynak fiyatı" />
+                  <select name="priceVerification" defaultValue={item.priceVerification || "Doğrulanmadı"}>
+                    <option>Doğrulanmadı</option>
+                    <option>Kullanıcı kaynağı kontrol etti</option>
+                  </select>
+                  <input name="url" type="url" defaultValue={item.url} placeholder="Kaynak URL" />
+                  <label>Proje<select name="projectId" defaultValue={item.projectId || ""}><option value="">Proje seçin</option>{projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label>
+                  <input name="productId" defaultValue={item.productId || ""} placeholder="Ürün UUID" />
+                  <input name="systemId" defaultValue={item.systemId || ""} placeholder="Sistem UUID" />
+                  <select name="status" defaultValue={item.status || "Taslak"}>
+                    <option>Taslak</option><option>Araştırılıyor</option><option>Tamamlandı</option>
+                  </select>
+                  <select name="procurementStatus" defaultValue={item.procurementStatus || "RESEARCH"}>
+                    <option value="RESEARCH">Araştırma</option>
+                    <option value="QUOTE_RECEIVED">Teklif alındı</option>
+                    <option value="ORDERED">Sipariş verildi</option>
+                    <option value="RECEIVED">Teslim alındı</option>
+                    <option value="CANCELLED">İptal</option>
+                  </select>
+                  <button type="submit">Güncelle</button>
+                </form>
+              </details>
 
               <button
                 type="button"
