@@ -11,6 +11,7 @@ import {
   updateCatalogRecord,
 } from "../services/catalog.service.js";
 import { getProjects } from "../services/projects.service.js";
+import { createReport, deleteReport, getReports } from "../services/reports.service.js";
 import {
   beginGoogleConnection,
   createGoogleCalendarEvent,
@@ -790,92 +791,141 @@ function CrmWorkspace({ onNavigate, setAiInput }) {
   );
 }
 
-function ReportsWorkspace({ records, projects, offers, research, aiMessages }) {
-  const [reportType, setReportType] = useState("Proje raporu");
-  const [reports, setReports] = useState(() => readRecords("ddpro_generated_reports_v1"));
+function ReportsWorkspace({ projects = [], onReportsChanged }) {
+  const [reportType, setReportType] = useState("PROJECT");
+  const [reports, setReports] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [crmRecords, setCrmRecords] = useState(records.crm);
-  const [googleEvents, setGoogleEvents] = useState([]);
-  useEffect(() => {
-    let active = true;
-    getCrmContacts()
-      .then((response) => {
-        if (active) setCrmRecords(response.data || []);
-      })
-      .catch(() => {});
-    getGoogleCalendarEvents()
-      .then((response) => {
-        if (active) setGoogleEvents(response.data || []);
-      })
-      .catch(() => {});
-    return () => {
-      active = false;
-    };
-  }, []);
-  const reportSnapshot = useMemo(
-    () => ({
-      generatedAt: timestamp(),
-      type: reportType,
-      sources: {
-        projects: projects.map(({ id, name, type, status }) => ({ id, name, type, status })),
-        offers: offers.map(({ id, title, amountDisplay, status, source }) => ({ id, title, amountDisplay, status, source })),
-        research: research.map(({ id, name, note, status }) => ({ id, name, note, status })),
-        crm: crmRecords.map(({ id, name, company, status, source, project_id }) => ({
-          id,
-          name,
-          company,
-          status,
-          source,
-          projectId: project_id,
-        })),
-        calendarEvents: records.calendar.length,
-        googleCalendarEvents: googleEvents.map(({ id, summary, start, status }) => ({
-          id,
-          summary,
-          start: start?.dateTime || start?.date || "",
-          status,
-        })),
-      },
-      aiResponses: aiMessages
-        .filter((message) => message.role === "assistant" && !message.status)
-        .slice(-10)
-        .map(({ text, date }) => ({ text, date })),
-    }),
-    [reportType, projects, offers, research, crmRecords, records.calendar.length, googleEvents]
-  );
+  const [notice, setNotice] = useState("");
 
-  const saveReport = (event) => {
-    event.preventDefault();
-    const report = {
-      id: globalThis.crypto?.randomUUID?.() || `${Date.now()}`,
-      type: reportType,
-      createdAt: timestamp(),
-      snapshot: reportSnapshot,
-    };
-    const next = [report, ...reports];
+  const loadReports = async () => {
+    setLoading(true);
+    setError("");
     try {
-      localStorage.setItem("ddpro_generated_reports_v1", JSON.stringify(next));
-      setReports(next);
-      setError("");
-    } catch {
-      setError("Rapor tarayıcıda saklanamadı. Depolama alanını kontrol edin.");
+      const data = await getReports();
+      setReports(data);
+      onReportsChanged?.(data);
+    } catch (loadError) {
+      setReports([]);
+      setError(loadError.message || "Kalıcı rapor kayıtları yüklenemedi.");
+    } finally {
+      setLoading(false);
     }
   };
 
+  useEffect(() => {
+    let active = true;
+    getReports()
+      .then((data) => {
+        if (active) {
+          setReports(data);
+          onReportsChanged?.(data);
+        }
+      })
+      .catch((loadError) => {
+        if (active) setError(loadError.message || "Kalıcı rapor kayıtları yüklenemedi.");
+      })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, []);
+
+  const saveReport = async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const values = Object.fromEntries(new FormData(form).entries());
+    setSaving(true);
+    setError("");
+    setNotice("");
+    try {
+      const report = await createReport({
+        type: reportType,
+        projectId: values.projectId || null,
+        title: values.title.trim() || undefined,
+        reportDate: values.reportDate || undefined,
+        summary: values.summary || undefined,
+        workCompleted: values.workCompleted || "",
+        issues: values.issues || "",
+        nextSteps: values.nextSteps || "",
+      });
+      if (!report) throw new Error("Reports API did not return the saved report.");
+      setReports((current) => [report, ...current]);
+      onReportsChanged?.((current) => [report, ...current]);
+      setNotice("Rapor gerçek backend verilerinden oluşturuldu ve kalıcı olarak kaydedildi.");
+      form.reset();
+    } catch (saveError) {
+      setError(saveError.message || "Rapor oluşturulamadı.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const removeReport = async (id) => {
+    setError("");
+    setNotice("");
+    try {
+      await deleteReport(id);
+      setReports((current) => current.filter((report) => report.id !== id));
+      onReportsChanged?.((current) => current.filter((report) => report.id !== id));
+      setNotice("Rapor kaydı silindi.");
+    } catch (deleteError) {
+      setError(deleteError.message || "Rapor silinemedi.");
+    }
+  };
+
+  const reportTitles = {
+    PROJECT: "Proje raporu",
+    DAILY_SITE: "Günlük saha raporu",
+    OFFER: "Teklif raporu",
+    COST: "Malzeme maliyet raporu",
+    PROCUREMENT: "Tedarik raporu",
+  };
+  const projectRequired = ["PROJECT", "DAILY_SITE"].includes(reportType);
+
   return (
     <div className="operations-module">
-      <p className="status-banner info">Rapor, mevcut uygulama verilerinin zaman damgalı yerel anlık görüntüsüdür; eksik veriler tamamlanmış gibi gösterilmez.</p>
+      <p className="status-banner info">Raporlar Supabase'de saklanır. Maliyet raporu yalnızca VERIFIED malzeme maliyetlerini toplar; işçilik, KDV ve nakliye dahil değildir.</p>
       <form className="data-form" onSubmit={saveReport}>
-        <label>Rapor türü<select value={reportType} onChange={(event) => setReportType(event.target.value)}>{["Proje raporu", "AI analiz raporu", "Tedarik raporu", "Maliyet raporu", "Teklif raporu"].map((type) => <option key={type}>{type}</option>)}</select></label>
-        <button type="submit">Mevcut verilerden rapor anlık görüntüsü oluştur</button>
+        <label>Rapor türü
+          <select value={reportType} onChange={(event) => setReportType(event.target.value)}>
+            {Object.entries(reportTitles).map(([value, title]) => <option key={value} value={value}>{title}</option>)}
+          </select>
+        </label>
+        <label>İlgili proje
+          <select name="projectId" required={projectRequired} defaultValue="">
+            <option value="">{projectRequired ? "Proje seçin" : "Tüm projeler"}</option>
+            {projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
+          </select>
+        </label>
+        <label>Rapor başlığı<input name="title" maxLength={200} placeholder={reportTitles[reportType]} /></label>
+        {reportType === "DAILY_SITE" ? <>
+          <label>Rapor tarihi<input type="date" name="reportDate" required /></label>
+          <label>Gün özeti<textarea name="summary" maxLength={10000} required /></label>
+          <label>Tamamlanan işler<textarea name="workCompleted" maxLength={10000} /></label>
+          <label>Sorunlar / güvenlik notları<textarea name="issues" maxLength={10000} /></label>
+          <label>Sonraki adımlar<textarea name="nextSteps" maxLength={10000} /></label>
+        </> : null}
+        <button type="submit" disabled={saving}>{saving ? "Rapor hazırlanıyor…" : "Backend verilerinden rapor oluştur"}</button>
       </form>
-      {error ? <p className="status-banner warning">{error}</p> : null}
+      {error ? <p className="status-banner warning" role="alert">{error}</p> : null}
+      {notice ? <p className="status-banner info" role="status">{notice}</p> : null}
+      <div className="module-toolbar">
+        <button type="button" onClick={loadReports} disabled={loading}>{loading ? "Yükleniyor…" : "Raporları yenile"}</button>
+      </div>
       <div className="data-list">
-        {reports.length ? reports.map((report) => (
+        {loading ? <p className="empty-state">Kalıcı rapor kayıtları yükleniyor…</p> : null}
+        {!loading && reports.length === 0 ? <p className="empty-state">{error ? "Raporlar backend'den alınamadı." : "Henüz kalıcı rapor kaydı yok."}</p> : null}
+        {!loading && reports.map((report) => (
           <article className="data-card" key={report.id}>
-            <div><h3>{report.type}</h3><p>{new Date(report.createdAt).toLocaleString("tr-TR")}</p><small>{report.snapshot.sources.projects.length} proje · {report.snapshot.sources.offers.length} teklif · {report.snapshot.sources.research.length} araştırma · {(report.snapshot.sources.crm || []).length} CRM kişi</small><pre>{JSON.stringify(report.snapshot, null, 2)}</pre></div>
+            <div>
+              <h3>{report.title || reportTitles[report.report_type] || "Rapor"}</h3>
+              <p>{report.report_date || new Date(report.created_at).toLocaleString("tr-TR")}</p>
+              <small>{reportTitles[report.report_type]} · {report.snapshot?.project?.name || "Tüm projeler"}</small>
+              <details><summary>Kalıcı rapor snapshot'ını görüntüle</summary><pre>{JSON.stringify(report.snapshot, null, 2)}</pre></details>
+            </div>
+            <button type="button" onClick={() => removeReport(report.id)}>Sil</button>
           </article>
-        )) : <p className="empty-state">Henüz rapor kaydı yok.</p>}
+        ))}
       </div>
     </div>
   );
@@ -1111,6 +1161,7 @@ export default function OperationsModule({
   offers = [],
   research = [],
   aiMessages = [],
+  onReportsChanged,
 }) {
   const definition = moduleDefinitions[moduleId];
   const isPersistentCatalog = CATALOG_MODULES.has(moduleId);
@@ -1143,6 +1194,7 @@ export default function OperationsModule({
   if (moduleId === "reports") {
     return (
       <ReportsWorkspace
+        onReportsChanged={onReportsChanged}
         records={{
           crm: CAN_USE_LOCAL_FALLBACK ? readRecords("ddpro_crm_contacts_v1") : [],
           calendar: readRecords("ddpro_calendar_events_v1"),

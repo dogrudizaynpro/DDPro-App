@@ -90,3 +90,17 @@ test("CRM CRUD endpoints require the Google session", async () => {
   });
   assert.equal(update.status, 401);
 });
+
+test("report CRUD endpoints require the Google session", async () => {
+  const list = await fetch(`${baseUrl}/api/reports`);
+  assert.equal(list.status, 401);
+  const create = await fetch(`${baseUrl}/api/reports`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Origin: "https://dogrudizaynpro.github.io",
+    },
+    body: JSON.stringify({ type: "PROJECT" }),
+  });
+  assert.equal(create.status, 401);
+});

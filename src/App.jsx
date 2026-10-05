@@ -23,6 +23,7 @@ import {
 } from "./services/api.js";
 import { requestAiCompletion } from "./services/ai.service.js";
 import { getCatalogRecords } from "./services/catalog.service.js";
+import { getReports } from "./services/reports.service.js";
 import { getCrmContacts } from "./services/operations-integrations.service.js";
 import { getIntegrationStatus } from "./services/integrations.service.js";
 import {
@@ -564,7 +565,7 @@ function App() {
   const [customerItems] = useStoredDataState(STORAGE_KEYS.customers);
   const [documentItems] = useStoredDataState(STORAGE_KEYS.documents);
   const [financeItems] = useStoredDataState(STORAGE_KEYS.finance);
-  const [reportItems] = useStoredDataState(STORAGE_KEYS.reports);
+  const [reportItems, setReportItems] = useState([]);
 
   const [showProjectForm, setShowProjectForm] = useState(false);
   const [showProcurementForm, setShowProcurementForm] = useState(false);
@@ -602,6 +603,18 @@ function App() {
     const intervalId = window.setInterval(() => setCurrentDate(new Date()), 60_000);
     return () => window.clearInterval(intervalId);
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    if (!integrationState?.google?.connected) {
+      setReportItems([]);
+      return () => { active = false; };
+    }
+    getReports()
+      .then((reports) => { if (active) setReportItems(reports); })
+      .catch(() => { if (active) setReportItems([]); });
+    return () => { active = false; };
+  }, [integrationState?.google?.connected]);
 
   useEffect(() => {
     let active = true;
@@ -1846,10 +1859,10 @@ function App() {
           project,
           notes,
         })),
-        reports: getStoredData("ddpro_generated_reports_v1").slice(0, 5).map(({ id, type, createdAt }) => ({
+        reports: reportItems.slice(0, 5).map(({ id, report_type, created_at }) => ({
           id,
-          type,
-          createdAt,
+          type: report_type,
+          createdAt: created_at,
         })),
     };
 
@@ -2472,6 +2485,7 @@ function App() {
           offers={offers}
           research={procurementItems}
           aiMessages={aiMessages}
+          onReportsChanged={setReportItems}
         />
       );
     }
