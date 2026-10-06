@@ -4,6 +4,8 @@
 // Centralized backend API configuration and utilities
 // ============================================================
 
+import { completeGoogleConnection } from "./operations-integrations.service.js";
+
 const DEFAULT_LOCAL_API_URL = "http://localhost:3001";
 const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
 
@@ -39,12 +41,70 @@ const resolveApiBaseUrl = () => {
 
 const API_BASE_URL = resolveApiBaseUrl();
 const SESSION_KEY = "ddpro_browser_session";
-export const clearBrowserSession = () => sessionStorage.removeItem(SESSION_KEY);
+let pendingSessionRestore;
+let sessionRestoreError;
+export const clearBrowserSession = () => {
+  sessionStorage.removeItem(SESSION_KEY);
+  sessionRestoreError = undefined;
+};
 export const setBrowserSession = (session) => {
   if (typeof session !== "string" || !session.trim()) {
     throw new Error("Google OAuth tarayıcı oturumu alınamadı; tekrar bağlanın.");
   }
   sessionStorage.setItem(SESSION_KEY, session);
+  sessionRestoreError = undefined;
+};
+
+export const restoreBrowserSession = () => {
+  if (pendingSessionRestore) return pendingSessionRestore;
+  const pending = fetchAPI("/api/integrations/google/restore", {
+    method: "POST",
+    body: JSON.stringify({}),
+  }).then((response) => {
+    setBrowserSession(response.data?.session);
+  }).catch((error) => {
+    if (error.status === 401) sessionRestoreError = error;
+    throw error;
+  });
+  pendingSessionRestore = pending;
+  pending.finally(() => {
+    if (pendingSessionRestore === pending) pendingSessionRestore = undefined;
+  }).catch(() => {});
+  return pending;
+};
+
+const requiresBrowserSession = (endpoint) => {
+  if (endpoint === "/api/integrations/status") return false;
+  const providerTest = endpoint.match(/^\/api\/integrations\/test\/([^/?]+)$/);
+  return !providerTest || ["gmail", "googleCalendar", "crm"].includes(providerTest[1]);
+};
+
+const prepareBrowserSession = async (endpoint) => {
+  try {
+    await completeGoogleConnection();
+  } catch (error) {
+    if (![400, 401].includes(error.status)) throw error;
+  }
+  if (!requiresBrowserSession(endpoint) && endpoint !== "/api/integrations/status") return;
+  const session = sessionStorage.getItem(SESSION_KEY);
+  if (session) {
+    let expired = false;
+    try {
+      const encoded = session.split(".")[0].replaceAll("-", "+").replaceAll("_", "/");
+      const payload = JSON.parse(atob(encoded));
+      expired = !Number.isFinite(payload.expiresAt) || payload.expiresAt <= Date.now();
+    } catch {
+      // The backend remains authoritative for unrecognized/legacy session formats.
+    }
+    if (!expired) return;
+    clearBrowserSession();
+  }
+  try {
+    if (sessionRestoreError) throw sessionRestoreError;
+    await restoreBrowserSession();
+  } catch (error) {
+    if (error.status !== 401 || endpoint !== "/api/integrations/status") throw error;
+  }
 };
 
 const API_CONFIGURATION_ERROR = (() => {
@@ -75,6 +135,31 @@ export const fetchAPI = async (endpoint, options = {}) => {
     throw error;
   }
 
+  const normalizedEndpoint = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
+  const sessionControl = [
+    "/api/integrations/google/exchange",
+    "/api/integrations/google/restore",
+  ].includes(normalizedEndpoint);
+  const needsSession = normalizedEndpoint.startsWith("/api/") && !sessionControl;
+  if (needsSession) await prepareBrowserSession(normalizedEndpoint);
+  const attemptedSession = sessionStorage.getItem(SESSION_KEY);
+  try {
+    return await requestAPI(normalizedEndpoint, options, sessionControl);
+  } catch (error) {
+    if (!needsSession || !requiresBrowserSession(normalizedEndpoint) || error.status !== 401) throw error;
+    // Only DDPro authentication failures may restore/retry, never Google API failures.
+    const currentSession = sessionStorage.getItem(SESSION_KEY);
+    if (currentSession && currentSession !== attemptedSession) {
+      return requestAPI(normalizedEndpoint, options);
+    }
+    if (!currentSession && sessionRestoreError) throw sessionRestoreError;
+    clearBrowserSession();
+    await restoreBrowserSession();
+    return requestAPI(normalizedEndpoint, options);
+  }
+};
+
+const requestAPI = async (endpoint, options, sessionControl = false) => {
   const {
     timeoutMs = DEFAULT_REQUEST_TIMEOUT_MS,
     signal: callerSignal,
@@ -107,7 +192,7 @@ export const fetchAPI = async (endpoint, options = {}) => {
       ...fetchOptions,
       headers: {
         "Content-Type": "application/json",
-        ...(sessionStorage.getItem(SESSION_KEY)
+        ...(!sessionControl && sessionStorage.getItem(SESSION_KEY)
           ? { Authorization: ["Bearer", sessionStorage.getItem(SESSION_KEY)].join(" ") }
           : {}),
         ...options.headers,

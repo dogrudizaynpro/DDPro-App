@@ -18,6 +18,9 @@ let refreshedAccessToken;
 let refreshResponse;
 let googleTokenDeletes = 0;
 let browserSession;
+let restoreCookie;
+let callbackCookie;
+let providerRequests = 0;
 const calendarRequests = [];
 
 before(async () => {
@@ -40,7 +43,10 @@ before(async () => {
         const payload = JSON.parse(options.body);
         const record = Array.isArray(payload) ? payload[0] : payload;
         if (record.provider === "google_session_exchange") exchangeGrant = record;
-        else savedToken = record;
+        else {
+          assert.equal(record.provider, "google");
+          savedToken = record;
+        }
         return new Response("", { status: 201 });
       }
       if (options.method === "DELETE") {
@@ -60,6 +66,10 @@ before(async () => {
         return Response.json(savedToken ? [{ provider: "google" }] : []);
       }
       return Response.json([]);
+    }
+    providerRequests += 1;
+    if (url === "https://oauth2.googleapis.com/revoke") {
+      return new Response(null, { status: 200 });
     }
     if (url === "https://oauth2.googleapis.com/token") {
       if (new URLSearchParams(options.body).get("grant_type") === "refresh_token") {
@@ -155,6 +165,7 @@ test("OAuth start redirects to Google and callback stores encrypted token and se
   assert.equal(result.status, 302);
   assert.match(result.headers.get("location"), /integration=google_connected/);
   assert.match(result.headers.get("set-cookie"), /ddpro_integration_session=/);
+  assert.doesNotMatch(result.headers.get("set-cookie"), /ddpro_session_restore|Partitioned/);
   const exchangeCode = new URL(result.headers.get("location").replace("#", "?")).searchParams.get("exchange_code");
   assert.ok(exchangeCode);
   const exchange = async (providedCode, providedVerifier, origin = "https://dogrudizaynpro.github.io") =>
@@ -178,6 +189,7 @@ test("one-time exchange authenticates browser status and real provider test rout
   const state = new URL(start.headers.get("location")).searchParams.get("state");
   const callback = `${baseUrl}/api/integrations/google/callback?state=${encodeURIComponent(state)}&code=test-code`;
   const result = await originalFetch(callback, { redirect: "manual", headers: { cookie: stateCookie } });
+  callbackCookie = result.headers.getSetCookie().find((value) => value.startsWith("ddpro_integration_session=")).split(";")[0];
   const code = new URLSearchParams(result.headers.get("location").split("?")[1]).get("exchange_code");
   assert.ok(code);
   const exchange = await originalFetch(`${baseUrl}/api/integrations/google/exchange`, {
@@ -186,6 +198,10 @@ test("one-time exchange authenticates browser status and real provider test rout
     body: JSON.stringify({ code, verifier }),
   });
   assert.equal(exchange.status, 200);
+  const persistent = exchange.headers.getSetCookie().find((value) => value.startsWith("ddpro_session_restore="));
+  assert.match(persistent, /HttpOnly; Path=\/api\/integrations\/google; Max-Age=2592000; Secure; SameSite=None; Partitioned$/);
+  restoreCookie = persistent.split(";")[0];
+  assert.equal(exchange.headers.get("cache-control"), "no-store");
   const session = (await exchange.json()).data.session;
   browserSession = session;
   assert.equal((await originalFetch(`${baseUrl}/api/integrations/google/exchange`, {
@@ -461,4 +477,249 @@ test("failed Gmail 401 preserves the exchanged session, encrypted token and Cale
     workspaceResponse = null;
     refreshedAccessToken = null;
   }
+});
+
+const frontendOrigin = "https://dogrudizaynpro.github.io";
+const signedPayload = (payload, prefix = "") => {
+  const encoded = Buffer.from(JSON.stringify(payload)).toString("base64url");
+  return `${encoded}.${createHmac("sha256", process.env.INTEGRATION_SESSION_SECRET)
+    .update(`${prefix}${encoded}`).digest("base64url")}`;
+};
+const restore = (cookie = restoreCookie, headers = {}) =>
+  originalFetch(`${baseUrl}/api/integrations/google/restore`, {
+    method: "POST",
+    headers: {
+      Origin: frontendOrigin, "Content-Type": "application/json",
+      ...(cookie ? { Cookie: cookie } : {}), ...headers,
+    },
+    body: "{}",
+  });
+const restorePayload = () => JSON.parse(Buffer.from(
+  decodeURIComponent(restoreCookie.split("=")[1]).split(".")[0], "base64url",
+).toString("utf8"));
+
+test("restoration survives backend restart, issues only a short private bearer and never slides expiry", async () => {
+  const beforePayload = restorePayload();
+  const tokenBefore = structuredClone(savedToken);
+  const { default: app } = await import("../src/app.js");
+  await new Promise((resolve) => server.close(resolve));
+  server = app.listen(0);
+  await new Promise((resolve) => server.once("listening", resolve));
+  baseUrl = `http://127.0.0.1:${server.address().port}`;
+  const requestsBefore = providerRequests;
+  const response = await restore(restoreCookie, { Authorization: ["Bearer", "invalid"].join(" ") });
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("cache-control"), "no-store");
+  assert.equal(response.headers.get("access-control-allow-origin"), frontendOrigin);
+  assert.equal(response.headers.get("access-control-allow-credentials"), "true");
+  assert.equal(response.headers.get("set-cookie"), null);
+  const body = await response.json();
+  assert.deepEqual(Object.keys(body.data), ["session"]);
+  assert.doesNotMatch(JSON.stringify(body), /test-access|test-refresh|test-refreshed-access|clientSecret/);
+  const [encoded, signature] = body.data.session.split(".");
+  assert.equal(signature, createHmac("sha256", process.env.INTEGRATION_SESSION_SECRET)
+    .update(`browser:${encoded}`).digest("base64url"));
+  const payload = JSON.parse(Buffer.from(encoded, "base64url").toString("utf8"));
+  assert.equal(payload.email, "owner@example.com");
+  assert.equal(payload.sessionVersion, beforePayload.sessionVersion);
+  assert.ok(payload.expiresAt <= Date.now() + 8 * 60 * 60 * 1000);
+  assert.ok(payload.expiresAt <= beforePayload.expiresAt);
+  assert.ok(beforePayload.expiresAt > Date.now() + 29 * 24 * 60 * 60 * 1000);
+  assert.equal(providerRequests, requestsBefore);
+  assert.deepEqual(savedToken, tokenBefore);
+  assert.equal((await restore()).headers.get("set-cookie"), null);
+  const status = await originalFetch(`${baseUrl}/api/integrations/status`, {
+    headers: { Origin: frontendOrigin, Authorization: ["Bearer", body.data.session].join(" ") },
+  });
+  assert.equal((await status.json()).data.gmail.connected, true);
+});
+
+test("restoration requires exact frontend origin and JSON, with credentialed CORS preflight", async () => {
+  for (const Origin of ["", "null", "https://evil.example", `${frontendOrigin}.evil.example`]) {
+    const response = await restore(restoreCookie, { Origin });
+    assert.equal(response.status, 403);
+    assert.equal(response.headers.get("cache-control"), "no-store");
+    assert.equal(response.headers.get("set-cookie"), null);
+    if (Origin) assert.equal(response.headers.get("access-control-allow-origin"), null);
+  }
+  for (const type of ["text/plain", "application/x-www-form-urlencoded", "multipart/form-data"]) {
+    const response = await restore(restoreCookie, { "Content-Type": type });
+    assert.equal(response.status, 415);
+    assert.equal(response.headers.get("cache-control"), "no-store");
+    assert.equal(response.headers.get("set-cookie"), null);
+  }
+  const preflight = await originalFetch(`${baseUrl}/api/integrations/google/restore`, {
+    method: "OPTIONS",
+    headers: { Origin: frontendOrigin, "Access-Control-Request-Method": "POST",
+      "Access-Control-Request-Headers": "content-type" },
+  });
+  assert.equal(preflight.status, 204);
+  assert.equal(preflight.headers.get("access-control-allow-origin"), frontendOrigin);
+  assert.equal(preflight.headers.get("access-control-allow-credentials"), "true");
+  assert.match(preflight.headers.get("access-control-allow-headers"), /content-type/);
+});
+
+test("missing, expired, tampered and malformed restoration proof require browser authorization", async () => {
+  const payload = restorePayload();
+  const cookies = [
+    "", `${restoreCookie}tampered`, "ddpro_session_restore=%ZZ",
+    ...[Date.now() - 1, null, "9999999999999"].map((expiresAt) =>
+      `ddpro_session_restore=${signedPayload({ ...payload, expiresAt }, "restore:")}`),
+    `ddpro_session_restore=${signedPayload({ ...payload, email: "other@example.com" }, "restore:")}`,
+    `ddpro_session_restore=${signedPayload({ ...payload, sessionVersion: undefined }, "restore:")}`,
+  ];
+  for (const Cookie of cookies) {
+    const response = await restore(Cookie, { Authorization: ["Bearer", browserSession].join(" ") });
+    assert.equal(response.status, 401);
+    const body = await response.json();
+    assert.equal(body.code, "BROWSER_SESSION_REQUIRED");
+    assert.match(body.message, /Browser authorization/);
+    assert.doesNotMatch(body.message, /connection is required/);
+    assert.match(response.headers.get("set-cookie"),
+      /ddpro_session_restore=; HttpOnly; Path=\/api\/integrations\/google; Max-Age=0; Secure; SameSite=None; Partitioned/);
+  }
+  const invalidWithFallback = await restore(`ddpro_session_restore=invalid; ${callbackCookie}`);
+  assert.equal((await invalidWithFallback.json()).code, "BROWSER_SESSION_REQUIRED");
+});
+
+test("valid callback cookie bootstraps restoration only from browser-origin JSON", async () => {
+  const response = await restore(callbackCookie);
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get("set-cookie"), /ddpro_session_restore=.*Partitioned/);
+  assert.equal(response.headers.get("cache-control"), "no-store");
+  const bearer = (await response.json()).data.session;
+  assert.ok(bearer);
+  const invalid = await restore("ddpro_integration_session=invalid");
+  assert.equal((await invalid.json()).code, "BROWSER_SESSION_REQUIRED");
+});
+
+test("legacy callback upgrade stores a version only in the encrypted Google token", async () => {
+  const { encryptIntegrationToken, decryptIntegrationToken } = await import("../src/services/integration-vault.service.js");
+  const previousToken = structuredClone(savedToken);
+  const { sessionVersion: _version, ...legacyToken } = decryptIntegrationToken(savedToken.encrypted_token);
+  savedToken.encrypted_token = encryptIntegrationToken(legacyToken);
+  const legacyCookie = `ddpro_integration_session=${signedPayload({
+    email: "owner@example.com", expiresAt: Date.now() + 60_000,
+  })}`;
+  try {
+    const response = await restore(legacyCookie);
+    assert.equal(response.status, 200);
+    assert.equal(savedToken.provider, "google");
+    const token = decryptIntegrationToken(savedToken.encrypted_token);
+    assert.match(token.sessionVersion, /^[A-Za-z0-9_-]{43}$/);
+    assert.equal(savedToken.sessionVersion, undefined);
+    assert.equal(token.accessToken, legacyToken.accessToken);
+    const cookie = response.headers.getSetCookie().find((value) => value.startsWith("ddpro_session_restore=")).split(";")[0];
+    assert.equal((await restore(cookie)).status, 200);
+    assert.doesNotMatch(JSON.stringify(await response.json()), /test-refresh|test-access|test-refreshed-access/);
+  } finally {
+    savedToken = previousToken;
+  }
+});
+
+test("restoration bearer cannot extend the absolute cookie expiry", async () => {
+  const expiresAt = Date.now() + 60_000;
+  const cookie = `ddpro_session_restore=${signedPayload({ ...restorePayload(), expiresAt }, "restore:")}`;
+  const expiredBearer = signedPayload({ email: "owner@example.com", expiresAt: Date.now() - 1 }, "browser:");
+  const response = await restore(cookie, { Authorization: ["Bearer", expiredBearer].join(" ") });
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("set-cookie"), null);
+  const bearer = (await response.json()).data.session;
+  const payload = JSON.parse(Buffer.from(bearer.split(".")[0], "base64url").toString("utf8"));
+  assert.equal(payload.expiresAt, expiresAt);
+});
+
+test("proven browser without stored Google token gets connection-required, including cookie middleware", async () => {
+  const previousToken = savedToken;
+  savedToken = null;
+  try {
+    const response = await restore();
+    assert.equal(response.status, 401);
+    assert.equal((await response.json()).code, "GOOGLE_CONNECTION_REQUIRED");
+    assert.match(response.headers.get("set-cookie"), /Max-Age=0.*Partitioned/);
+    const protectedResponse = await originalFetch(`${baseUrl}/api/integrations/calendar/events`, {
+      headers: { Cookie: callbackCookie, "X-Forwarded-For": "192.0.2.30" },
+    });
+    assert.equal(protectedResponse.status, 401);
+    assert.equal((await protectedResponse.json()).code, "GOOGLE_CONNECTION_REQUIRED");
+  } finally {
+    savedToken = previousToken;
+  }
+});
+
+test("session parsing rejects non-finite expiry while legacy signed bearers still authenticate", async () => {
+  for (const expiresAt of [null, "9999999999999", undefined]) {
+    const session = signedPayload({ email: "owner@example.com", expiresAt }, "browser:");
+    const response = await originalFetch(`${baseUrl}/api/integrations/status`, {
+      headers: { Origin: frontendOrigin, Authorization: ["Bearer", session].join(" ") },
+    });
+    assert.equal((await response.json()).data.gmail.connected, false);
+  }
+  const legacy = signedPayload({ email: "owner@example.com", expiresAt: Date.now() + 60_000 }, "browser:");
+  const response = await originalFetch(`${baseUrl}/api/integrations/status`, {
+    headers: { Origin: frontendOrigin, Authorization: ["Bearer", legacy].join(" ") },
+  });
+  assert.equal((await response.json()).data.gmail.connected, true);
+});
+
+test("restoration rate limit returns no-store without changing cookies or contacting Google", async () => {
+  const requestsBefore = providerRequests;
+  for (let index = 0; index < 30; index += 1) {
+    assert.equal((await restore(restoreCookie, { "X-Forwarded-For": "192.0.2.40" })).status, 200);
+  }
+  const blocked = await restore(restoreCookie, { "X-Forwarded-For": "192.0.2.40" });
+  assert.equal(blocked.status, 429);
+  assert.equal(blocked.headers.get("cache-control"), "no-store");
+  assert.equal(blocked.headers.get("set-cookie"), null);
+  assert.equal(providerRequests, requestsBefore);
+});
+
+test("disconnect clears matching cookies and reconnect cannot revive old restore cookies or versioned sessions", async () => {
+  const { decryptIntegrationToken } = await import("../src/services/integration-vault.service.js");
+  const oldVersion = decryptIntegrationToken(savedToken.encrypted_token).sessionVersion;
+  const disconnected = await originalFetch(`${baseUrl}/api/integrations/google/logout`, {
+    method: "POST",
+    headers: { Origin: frontendOrigin, Authorization: ["Bearer", browserSession].join(" "),
+      "X-Forwarded-For": "192.0.2.50" },
+  });
+  assert.equal(disconnected.status, 200);
+  assert.equal(savedToken, null);
+  assert.deepEqual((await disconnected.json()).data, { disconnected: true, providerRevoked: true });
+  const cleared = disconnected.headers.getSetCookie();
+  assert.ok(cleared.some((cookie) => /ddpro_integration_session=; HttpOnly; Path=\/api; Max-Age=0; Secure; SameSite=None$/.test(cookie)));
+  assert.ok(cleared.some((cookie) => /ddpro_session_restore=; HttpOnly; Path=\/api\/integrations\/google; Max-Age=0; Secure; SameSite=None; Partitioned$/.test(cookie)));
+  assert.equal((await (await restore(restoreCookie, { "X-Forwarded-For": "192.0.2.50" })).json()).code, "GOOGLE_CONNECTION_REQUIRED");
+  const verifier = randomBytes(32).toString("base64url");
+  const challenge = createHash("sha256").update(verifier).digest("base64url");
+  const headers = { "X-Forwarded-For": "192.0.2.60" };
+  const start = await originalFetch(`${baseUrl}/api/integrations/google/start?challenge=${challenge}`, {
+    redirect: "manual", headers,
+  });
+  const state = new URL(start.headers.get("location")).searchParams.get("state");
+  const callback = await originalFetch(`${baseUrl}/api/integrations/google/callback?state=${encodeURIComponent(state)}&code=reconnect`, {
+    redirect: "manual", headers: { ...headers, Cookie: start.headers.get("set-cookie").split(";")[0] },
+  });
+  assert.equal(callback.status, 302);
+  assert.doesNotMatch(callback.headers.get("set-cookie"), /ddpro_session_restore/);
+  assert.notEqual(decryptIntegrationToken(savedToken.encrypted_token).sessionVersion, oldVersion);
+  assert.equal((await (await restore(restoreCookie, { "X-Forwarded-For": "192.0.2.60" })).json()).code, "BROWSER_SESSION_REQUIRED");
+  for (const proof of [{ Authorization: ["Bearer", browserSession].join(" ") }, { Cookie: callbackCookie }]) {
+    const response = await originalFetch(`${baseUrl}/api/integrations/calendar/events`, {
+      headers: { ...headers, Origin: frontendOrigin, ...proof },
+    });
+    assert.equal(response.status, 401);
+    assert.equal((await response.json()).code, "BROWSER_SESSION_REQUIRED");
+  }
+  const staleStatus = await originalFetch(`${baseUrl}/api/integrations/status`, {
+    headers: { Origin: frontendOrigin, Authorization: ["Bearer", browserSession].join(" ") },
+  });
+  assert.equal((await staleStatus.json()).data.gmail.connected, false);
+  const code = new URLSearchParams(callback.headers.get("location").split("?")[1]).get("exchange_code");
+  const exchanged = await originalFetch(`${baseUrl}/api/integrations/google/exchange`, {
+    method: "POST", headers: { ...headers, Origin: frontendOrigin, "Content-Type": "application/json" },
+    body: JSON.stringify({ code, verifier }),
+  });
+  assert.equal(exchanged.status, 200);
+  const newCookie = exchanged.headers.getSetCookie().find((value) => value.startsWith("ddpro_session_restore=")).split(";")[0];
+  assert.equal((await restore(newCookie, headers)).status, 200);
 });
