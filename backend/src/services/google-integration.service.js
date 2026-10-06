@@ -407,7 +407,7 @@ export const restoreGoogleSession = async (req, res, next) => {
       clearRestoreCookie(res);
       return googleConnectionRequired(res);
     }
-    if (payload.sessionVersion && payload.sessionVersion !== token.sessionVersion) {
+    if ((payload.sessionVersion || undefined) !== token.sessionVersion) {
       clearRestoreCookie(res);
       return browserSessionRequired(res);
     }
@@ -445,7 +445,7 @@ export const getGoogleSessionAccount = async (req) => {
   const payload = getGoogleSession(req);
   if (!payload) return "";
   const token = await readIntegrationToken({ provider: "google", account: payload.email });
-  if (!token || (payload.sessionVersion && payload.sessionVersion !== token.sessionVersion)) return "";
+  if (!token || (payload.sessionVersion || undefined) !== token.sessionVersion) return "";
   return payload.email;
 };
 
@@ -482,7 +482,7 @@ export const requireGoogleSession = async (req, res, next) => {
   try {
     const token = await readIntegrationToken({ provider: "google", account });
     if (!token) return googleConnectionRequired(res);
-    if (payload.sessionVersion && payload.sessionVersion !== token.sessionVersion) {
+    if ((payload.sessionVersion || undefined) !== token.sessionVersion) {
       return browserSessionRequired(res);
     }
   } catch (error) {

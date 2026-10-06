@@ -612,6 +612,9 @@ test("legacy callback upgrade stores a version only in the encrypted Google toke
     const cookie = response.headers.getSetCookie().find((value) => value.startsWith("ddpro_session_restore=")).split(";")[0];
     assert.equal((await restore(cookie)).status, 200);
     assert.doesNotMatch(JSON.stringify(await response.json()), /test-refresh|test-access|test-refreshed-access/);
+    const staleLegacy = await restore(legacyCookie);
+    assert.equal(staleLegacy.status, 401);
+    assert.equal((await staleLegacy.json()).code, "BROWSER_SESSION_REQUIRED");
   } finally {
     savedToken = previousToken;
   }
@@ -656,10 +659,29 @@ test("session parsing rejects non-finite expiry while legacy signed bearers stil
     assert.equal((await response.json()).data.gmail.connected, false);
   }
   const legacy = signedPayload({ email: "owner@example.com", expiresAt: Date.now() + 60_000 }, "browser:");
-  const response = await originalFetch(`${baseUrl}/api/integrations/status`, {
-    headers: { Origin: frontendOrigin, Authorization: ["Bearer", legacy].join(" ") },
-  });
-  assert.equal((await response.json()).data.gmail.connected, true);
+  const { encryptIntegrationToken, decryptIntegrationToken } = await import("../src/services/integration-vault.service.js");
+  const previousToken = structuredClone(savedToken);
+  const { sessionVersion: _version, ...legacyToken } = decryptIntegrationToken(savedToken.encrypted_token);
+  savedToken.encrypted_token = encryptIntegrationToken(legacyToken);
+  try {
+    for (const proof of [
+      { Authorization: ["Bearer", legacy].join(" ") },
+      { Cookie: `ddpro_integration_session=${signedPayload({
+        email: "owner@example.com", expiresAt: Date.now() + 60_000,
+      })}` },
+    ]) {
+      const response = await originalFetch(`${baseUrl}/api/integrations/status`, {
+        headers: { Origin: frontendOrigin, ...proof },
+      });
+      assert.equal((await response.json()).data.gmail.connected, true);
+      const protectedResponse = await originalFetch(`${baseUrl}/api/integrations/calendar/events/bad`, {
+        headers: { Origin: frontendOrigin, "X-Forwarded-For": "192.0.2.70", ...proof },
+      });
+      assert.equal(protectedResponse.status, 400);
+    }
+  } finally {
+    savedToken = previousToken;
+  }
 });
 
 test("restoration rate limit returns no-store without changing cookies or contacting Google", async () => {
@@ -677,6 +699,9 @@ test("restoration rate limit returns no-store without changing cookies or contac
 test("disconnect clears matching cookies and reconnect cannot revive old restore cookies or versioned sessions", async () => {
   const { decryptIntegrationToken } = await import("../src/services/integration-vault.service.js");
   const oldVersion = decryptIntegrationToken(savedToken.encrypted_token).sessionVersion;
+  const legacyPayload = { email: "owner@example.com", expiresAt: Date.now() + 60_000 };
+  const legacyCookie = `ddpro_integration_session=${signedPayload(legacyPayload)}`;
+  const legacyBearer = signedPayload(legacyPayload, "browser:");
   const disconnected = await originalFetch(`${baseUrl}/api/integrations/google/logout`, {
     method: "POST",
     headers: { Origin: frontendOrigin, Authorization: ["Bearer", browserSession].join(" "),
@@ -703,12 +728,22 @@ test("disconnect clears matching cookies and reconnect cannot revive old restore
   assert.doesNotMatch(callback.headers.get("set-cookie"), /ddpro_session_restore/);
   assert.notEqual(decryptIntegrationToken(savedToken.encrypted_token).sessionVersion, oldVersion);
   assert.equal((await (await restore(restoreCookie, { "X-Forwarded-For": "192.0.2.60" })).json()).code, "BROWSER_SESSION_REQUIRED");
-  for (const proof of [{ Authorization: ["Bearer", browserSession].join(" ") }, { Cookie: callbackCookie }]) {
+  const legacyRestore = await restore(legacyCookie, headers);
+  assert.equal(legacyRestore.status, 401);
+  assert.equal((await legacyRestore.json()).code, "BROWSER_SESSION_REQUIRED");
+  for (const proof of [
+    { Authorization: ["Bearer", browserSession].join(" ") }, { Cookie: callbackCookie },
+    { Authorization: ["Bearer", legacyBearer].join(" ") }, { Cookie: legacyCookie },
+  ]) {
     const response = await originalFetch(`${baseUrl}/api/integrations/calendar/events`, {
       headers: { ...headers, Origin: frontendOrigin, ...proof },
     });
     assert.equal(response.status, 401);
     assert.equal((await response.json()).code, "BROWSER_SESSION_REQUIRED");
+    const staleStatus = await originalFetch(`${baseUrl}/api/integrations/status`, {
+      headers: { Origin: frontendOrigin, ...proof },
+    });
+    assert.equal((await staleStatus.json()).data.gmail.connected, false);
   }
   const staleStatus = await originalFetch(`${baseUrl}/api/integrations/status`, {
     headers: { Origin: frontendOrigin, Authorization: ["Bearer", browserSession].join(" ") },
