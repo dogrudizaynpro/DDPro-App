@@ -10,6 +10,8 @@ import {
   isTokenTableAvailable,
   removeIntegrationToken,
   readIntegrationToken,
+  readIntegrationTokenSnapshot,
+  replaceIntegrationToken,
   saveIntegrationToken,
   encryptIntegrationToken,
   decryptIntegrationToken,
@@ -402,7 +404,8 @@ export const restoreGoogleSession = async (req, res, next) => {
     return browserSessionRequired(res);
   }
   try {
-    const token = await readIntegrationToken({ provider: "google", account: payload.email });
+    const snapshot = await readIntegrationTokenSnapshot({ provider: "google", account: payload.email });
+    const token = snapshot?.value;
     if (!token) {
       clearRestoreCookie(res);
       return googleConnectionRequired(res);
@@ -414,7 +417,11 @@ export const restoreGoogleSession = async (req, res, next) => {
     // A still-valid legacy callback session can bootstrap the browser partition once.
     if (!persistent && !token.sessionVersion) {
       token.sessionVersion = randomBytes(32).toString("base64url");
-      await saveIntegrationToken({ provider: "google", account: payload.email, value: token });
+      const replaced = await replaceIntegrationToken({
+        provider: "google", account: payload.email, value: token,
+        encryptedToken: snapshot.encryptedToken,
+      });
+      if (!replaced) return browserSessionRequired(res);
     }
     const expiresAt = persistent ? payload.expiresAt : Date.now() + restoreLifetime;
     if (!persistent) issueRestoreCookie(res, {
@@ -493,7 +500,8 @@ export const requireGoogleSession = async (req, res, next) => {
 };
 
 export const getGoogleAccessToken = async (account) => {
-  const token = await readIntegrationToken({ provider: "google", account });
+  const snapshot = await readIntegrationTokenSnapshot({ provider: "google", account });
+  const token = snapshot?.value;
   if (!token) throw Object.assign(new Error("Google account is not connected."), { statusCode: 401, expose: true });
   if (token.expiresAt > Date.now() + 60_000) return token.accessToken;
   if (!token.refreshToken) {
@@ -534,7 +542,15 @@ export const getGoogleAccessToken = async (account) => {
     accessToken: refreshed.access_token,
     expiresAt: Date.now() + (Number(refreshed.expires_in) || 3600) * 1000,
   };
-  await saveIntegrationToken({ provider: "google", account, value: updated });
+  const replaced = await replaceIntegrationToken({
+    provider: "google", account, value: updated, encryptedToken: snapshot.encryptedToken,
+  });
+  if (!replaced) {
+    throw Object.assign(new Error("Google connection changed during token refresh. Retry the request."), {
+      statusCode: 409,
+      expose: true,
+    });
+  }
   return updated.accessToken;
 };
 
