@@ -12,13 +12,17 @@ export const getDocuments = async (req, res, next) => {
 };
 
 export const postDocument = async (req, res, next) => {
+  if (!Buffer.isBuffer(req.body)) {
+    return res.status(400).json({ status: "error", message: "Document request body must be binary data." });
+  }
+  const queryString = (value) => typeof value === "string" ? value : undefined;
   try {
     const data = await uploadDocument(req.integrationAccount, {
-      originalName: req.query.name,
+      originalName: queryString(req.query.name),
       contentType: req.get("content-type"),
-      projectId: req.query.project_id,
-      crmContactId: req.query.crm_contact_id,
-      buffer: req.body,
+      projectId: queryString(req.query.project_id),
+      crmContactId: queryString(req.query.crm_contact_id),
+      buffer: Buffer.from(req.body),
     });
     return res.status(201).json({ status: "success", data });
   } catch (error) { return next(error); }

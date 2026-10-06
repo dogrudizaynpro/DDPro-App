@@ -26,7 +26,7 @@ const requireDatabase = () => {
 };
 
 export const normalizeDocumentUpload = ({ originalName, contentType, projectId, crmContactId, buffer }) => {
-  const fileBuffer = Buffer.isBuffer(buffer) ? buffer : null;
+  const fileBuffer = Buffer.isBuffer(buffer) ? Buffer.from(buffer) : null;
   if (typeof originalName !== "string") throw fail("A document filename is required.");
   const name = originalName.split(/[\\/]/).pop().trim();
   if (!name || name.length > 255 || /[\u0000-\u001f\u007f]/.test(name)) throw fail("Document filename is invalid.");
