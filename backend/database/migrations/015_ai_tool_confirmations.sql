@@ -16,8 +16,9 @@ CREATE TABLE IF NOT EXISTS public.ai_tool_confirmations (
     )
   ),
   operation TEXT NOT NULL CHECK (operation IN ('create', 'update', 'delete')),
-  record_id UUID,
+  record_id TEXT,
   record_payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+  record_snapshot JSONB,
   expires_at TIMESTAMPTZ NOT NULL,
   confirmed_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()

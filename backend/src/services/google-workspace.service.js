@@ -107,6 +107,14 @@ export const getGoogleCalendarEvents = async (account, start, end) => {
   return result.items || [];
 };
 
+export const getGoogleCalendarEvent = async (account, id) => {
+  const eventId = validateCalendarEventId(id);
+  return googleRequest(
+    account,
+    `/calendar/v3/calendars/primary/events/${eventId}`
+  );
+};
+
 export const testGoogleWorkspaceConnection = async (account, provider) => {
   if (provider === "gmail") {
     await googleRequest(account, "/gmail/v1/users/me/profile");

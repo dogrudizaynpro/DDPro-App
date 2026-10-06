@@ -1190,6 +1190,60 @@ function App() {
     [offers]
   );
 
+  const dashboardActivity = useMemo(() => {
+    const entries = [
+      ...(projectsFetchState === "success" || projectsFetchState === "empty"
+        ? projects.map((project) => ({
+            id: `project:${project.id}`,
+            message: `Proje kaydı: ${project.name}`,
+            createdAt: project.created_at || project.createdAt,
+          }))
+        : []),
+      ...(offersFetchState === "success" || offersFetchState === "empty"
+        ? offers.map((offer) => ({
+            id: `offer:${offer.id}`,
+            message: `Teklif kaydı: ${offer.title || offer.name}`,
+            createdAt: offer.created_at || offer.createdAt,
+          }))
+        : []),
+      ...(procurementFetchState === "success" || procurementFetchState === "empty"
+        ? procurementItems.map((item) => ({
+            id: `procurement:${item.id}`,
+            message: `Tedarik kaydı: ${item.name}`,
+            createdAt: item.created_at || item.createdAt,
+          }))
+        : []),
+    ];
+    return entries
+      .filter((entry) => entry.id && entry.message && Number.isFinite(Date.parse(entry.createdAt)))
+      .sort((first, second) => Date.parse(second.createdAt) - Date.parse(first.createdAt))
+      .slice(0, 4)
+      .map((entry) => ({
+        ...entry,
+        date: new Date(entry.createdAt).toLocaleString("tr-TR", {
+          dateStyle: "short",
+          timeStyle: "short",
+        }),
+      }));
+  }, [
+    offers,
+    offersFetchState,
+    procurementFetchState,
+    procurementItems,
+    projects,
+    projectsFetchState,
+  ]);
+  const dashboardActivityLoading = [
+    projectsFetchState,
+    offersFetchState,
+    procurementFetchState,
+  ].some((state) => state === "loading");
+  const dashboardActivityUnavailable = [
+    projectsFetchState,
+    offersFetchState,
+    procurementFetchState,
+  ].some((state) => state === "error");
+
   const metricValue = (value, state) =>
     ["success", "empty"].includes(state) ? value : "—";
   const metricDetail = (detail, state) =>
@@ -1200,7 +1254,7 @@ function App() {
         : state === "unavailable"
           ? "Oturum veya servis kullanılamıyor"
         : state === "empty"
-          ? "Bağlantı yok veya kayıt bulunmuyor"
+          ? "Kayıt bulunmuyor"
           : detail;
 
   const dashboardStats = useMemo(
@@ -2217,19 +2271,23 @@ function App() {
       <section className="panel recent-activity-panel">
         <div className="panel-header">
           <h2>SON İŞLEMLER</h2>
-          <span className="panel-kicker">{systemLogs.length ? "SON KAYITLAR" : "HAREKET BEKLENİYOR"}</span>
+          <span className="panel-kicker">KALICI BACKEND KAYITLARI</span>
         </div>
-        {systemLogs.length > 0 ? (
+        {dashboardActivity.length > 0 ? (
           <div className="log-list">
-            {systemLogs.slice(0, 4).map((log) => (
+            {dashboardActivity.map((log) => (
               <div className="log-item" key={log.id}>
                 <strong>{log.message}</strong>
                 <small>{log.date}</small>
               </div>
             ))}
           </div>
+        ) : dashboardActivityLoading ? (
+          <p className="activity-empty">Backend kayıtları yükleniyor…</p>
+        ) : dashboardActivityUnavailable ? (
+          <p className="activity-empty">Son kayıtlar backend üzerinden alınamadı.</p>
         ) : (
-          <p className="activity-empty">Yeni işlem kayıtları burada görüntülenecek.</p>
+          <p className="activity-empty">Gösterilecek kalıcı proje, teklif veya tedarik kaydı bulunmuyor.</p>
         )}
       </section>
     </div>

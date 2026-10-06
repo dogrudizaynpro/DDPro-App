@@ -65,7 +65,7 @@ const TOOL_DEFINITIONS = [
     type: "function",
     function: {
       name: "read_records",
-      description: "Read current authorized DDPro records. Price analysis returns verified records only.",
+      description: "Read up to 50 current authorized DDPro records. Price analysis returns verified records only.",
       parameters: {
         type: "object",
         properties: {
@@ -192,6 +192,36 @@ const parseToolArguments = (toolCall) => {
   }
 };
 
+const getVerifiedAnalysisAnswer = async (integrationAccount) => {
+  try {
+    const [priceRecords, materialRecords] = await Promise.all([
+      readOperationalRecords(integrationAccount, { resource: "price-analysis" }),
+      readOperationalRecords(integrationAccount, { resource: "material-analysis" }),
+    ]);
+    const verifiedMaterials = (materialRecords || []).filter(
+      (record) =>
+        record.verification_status === "VERIFIED" &&
+        Number.isFinite(Number(record.total_cost)) &&
+        Number(record.total_cost) >= 0 &&
+        record.currency &&
+        record.source
+    );
+    const lines = [
+      ...(priceRecords || []).slice(0, 10).map((record) =>
+        `• ${record.name}: ${record.currency} ${record.unit_price}/${record.unit} · Kaynak: ${record.source_url || record.source} · Doğrulama: ${record.verified_at}`
+      ),
+      ...verifiedMaterials.slice(0, 10).map((record) =>
+        `• ${record.name}: ${record.currency} ${record.total_cost} (${record.quantity} ${record.unit}) · Kaynak: ${record.source} · Durum: doğrulanmış`
+      ),
+    ];
+    return lines.length
+      ? `Backend'deki doğrulanmış fiyat ve malzeme kayıtları (tahmin değildir):\n${lines.join("\n")}`
+      : "Backend'de doğrulanmış fiyat veya malzeme maliyeti kaydı bulunmuyor. Tahmin üretmiyorum.";
+  } catch {
+    return "Doğrulanmış fiyat ve malzeme kayıtları backend'den okunamadı. Tahmin üretmiyorum.";
+  }
+};
+
 const removePriceFields = (value) => {
   if (Array.isArray(value)) return value.map(removePriceFields);
   if (!value || typeof value !== "object") return value;
@@ -209,6 +239,14 @@ export const requestAiCompletion = async ({ message, context = {}, integrationAc
     error.code = "AI_PROVIDER_NOT_CONFIGURED";
     error.expose = true;
     throw error;
+  }
+
+  const requestsPriceOrCost =
+    /fiyat|ücret|maliyet|bütçe|teklif tutarı|ne kadar|kaç para|kaç tl|price|cost|budget|how much/i.test(message.toLocaleLowerCase("tr-TR"));
+  const requestsMutation =
+    /\b(create|add|update|delete|remove|change|set|ekle|oluştur|güncelle|sil|değiştir|kaydet)\b/i.test(message.toLocaleLowerCase("tr-TR"));
+  if (requestsPriceOrCost && !requestsMutation) {
+    return { answer: await getVerifiedAnalysisAnswer(integrationAccount) };
   }
 
   const messages = [

@@ -4,6 +4,7 @@ import { createCrmContact } from "../services/crm.service.js";
 import {
   createGoogleCalendarEvent,
   deleteGoogleCalendarEvent,
+  getGoogleCalendarEvent,
   getGoogleCalendarEvents,
   importGmailMessages,
   updateGoogleCalendarEvent,
@@ -32,6 +33,15 @@ export const getCalendarEvents = async (req, res, next) => {
       req.query.start,
       req.query.end
     );
+    return res.status(200).json({ status: "success", data });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const getCalendarEventById = async (req, res, next) => {
+  try {
+    const data = await getGoogleCalendarEvent(req.integrationAccount, req.params.id);
     return res.status(200).json({ status: "success", data });
   } catch (error) {
     return next(error);

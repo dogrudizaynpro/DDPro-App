@@ -2737,6 +2737,41 @@ select:focus-visible {
   font-size: 10px;
 }
 
+.ai-action-confirmation {
+  display: grid;
+  max-width: 100%;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.ai-action-preview {
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid rgba(194, 189, 170, 0.18);
+  border-radius: 6px;
+}
+
+.ai-action-preview summary {
+  cursor: pointer;
+  color: #c5c8bc;
+  font-size: 11px;
+}
+
+.ai-action-preview pre {
+  max-height: 220px;
+  overflow: auto;
+  margin: 8px 0 0;
+  color: #aeb2a7;
+  font-size: 10px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.ai-action-confirmation > small {
+  color: #a4a69d;
+  font-size: 10px;
+}
+
 .calendar-route {
   display: grid;
   max-width: 900px;
@@ -4170,6 +4205,19 @@ textarea::placeholder {
 }
 
 @media (max-width: 640px) {
+  .ai-module-suggestion {
+    width: 100%;
+    justify-content: flex-start;
+    overflow-wrap: anywhere;
+    text-align: left;
+    white-space: normal;
+  }
+
+  .ai-action-preview pre {
+    max-height: 160px;
+    font-size: 9px;
+  }
+
   .operations-grid {
     grid-template-columns: 1fr;
   }

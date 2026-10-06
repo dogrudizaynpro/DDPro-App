@@ -13,6 +13,7 @@ import {
 } from "../services/google-integration.service.js";
 import {
   getCalendarEvents,
+  getCalendarEventById,
   getWebsiteContent,
   deleteCalendarEvent,
   patchWebsiteContent,
@@ -58,6 +59,7 @@ router.post("/google/exchange", googleOAuthRateLimit, exchangeGoogleSession);
 router.post("/google/logout", integrationActionRateLimit, requireGoogleSession, revokeGoogleSession);
 router.post("/gmail/import", integrationActionRateLimit, requireGoogleSession, postGmailImport);
 router.get("/calendar/events", integrationActionRateLimit, requireGoogleSession, getCalendarEvents);
+router.get("/calendar/events/:id", integrationActionRateLimit, requireGoogleSession, getCalendarEventById);
 router.post("/calendar/events", integrationActionRateLimit, requireGoogleSession, postCalendarEvent);
 router.patch("/calendar/events/:id", integrationActionRateLimit, requireGoogleSession, patchCalendarEvent);
 router.delete("/calendar/events/:id", integrationActionRateLimit, requireGoogleSession, deleteCalendarEvent);
