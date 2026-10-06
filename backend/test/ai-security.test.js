@@ -134,3 +134,19 @@ test("message conversation and message endpoints require the Google session", as
   const messages = await fetch(`${baseUrl}/api/messages/conversations/4bc6f5a6-0b6c-4ddb-b29b-208c84c344d0/messages`);
   assert.equal(messages.status, 401);
 });
+
+test("document list, download and upload endpoints require the Google session", async () => {
+  const list = await fetch(`${baseUrl}/api/documents`);
+  assert.equal(list.status, 401);
+  const download = await fetch(`${baseUrl}/api/documents/4bc6f5a6-0b6c-4ddb-b29b-208c84c344d0/download`);
+  assert.equal(download.status, 401);
+  const upload = await fetch(`${baseUrl}/api/documents?name=file.pdf`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/pdf",
+      Origin: "https://dogrudizaynpro.github.io",
+    },
+    body: "%PDF-test",
+  });
+  assert.equal(upload.status, 401);
+});

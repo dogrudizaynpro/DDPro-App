@@ -41,6 +41,7 @@ const CRMModule = lazy(() => import("./modules/CRMModule.jsx"));
 const SystemsModule = lazy(() => import("./modules/SystemsModule.jsx"));
 const AIModule = lazy(() => import("./modules/AIModule.jsx"));
 const MessagesModule = lazy(() => import("./modules/MessagesModule.jsx"));
+const DocumentsModule = lazy(() => import("./modules/DocumentsModule.jsx"));
 const SkeletonModule = lazy(() => import("./modules/SkeletonModule.jsx"));
 const OperationsModule = lazy(() => import("./modules/OperationsModule.jsx"));
 
@@ -2455,6 +2456,9 @@ function App() {
 
     if (activeModule === "messages") {
       return <MessagesModule />;
+    }
+    if (activeModule === "documents") {
+      return <DocumentsModule />;
     }
 
     if (
