@@ -21,7 +21,22 @@ let browserSession;
 let restoreCookie;
 let callbackCookie;
 let providerRequests = 0;
+let googleTokenUpserts = 0;
+let beforeConditionalTokenUpdate;
 const calendarRequests = [];
+const projectRows = [{
+  id: "10000000-0000-4000-8000-000000000001",
+  name: "Restored browser project",
+  project_type: "Genel Proje",
+  status: "Aktif",
+}];
+const crmRows = [{
+  id: "20000000-0000-4000-8000-000000000001",
+  name: "Restored browser customer",
+  email: "customer@example.com",
+  project_id: projectRows[0].id,
+  status: "Yeni",
+}];
 
 before(async () => {
   Object.assign(process.env, {
@@ -45,9 +60,24 @@ before(async () => {
         if (record.provider === "google_session_exchange") exchangeGrant = record;
         else {
           assert.equal(record.provider, "google");
+          googleTokenUpserts += 1;
           savedToken = record;
         }
         return new Response("", { status: 201 });
+      }
+      if (options.method === "PATCH") {
+        if (beforeConditionalTokenUpdate) {
+          const updateHook = beforeConditionalTokenUpdate;
+          beforeConditionalTokenUpdate = null;
+          await updateHook();
+        }
+        const query = new URL(url).searchParams;
+        assert.equal(query.get("provider"), "eq.google");
+        assert.equal(query.get("account"), "eq.owner@example.com");
+        const expected = `eq.${JSON.stringify(savedToken?.encrypted_token)}`;
+        if (!savedToken || query.get("encrypted_token") !== expected) return Response.json([]);
+        savedToken = { ...savedToken, ...JSON.parse(options.body) };
+        return Response.json([{ provider: "google" }]);
       }
       if (options.method === "DELETE") {
         if (new URL(url).searchParams.get("provider") === "eq.google") {
@@ -66,6 +96,17 @@ before(async () => {
         return Response.json(savedToken ? [{ provider: "google" }] : []);
       }
       return Response.json([]);
+    }
+    if (url.includes("/rest/v1/")) {
+      const table = new URL(url).pathname.split("/").at(-1);
+      const rows = {
+        projects: projectRows, crm_contacts: crmRows, offers: [], research_items: [],
+      }[table];
+      if (rows) {
+        return options.method === "HEAD"
+          ? new Response(null, { status: 200 })
+          : Response.json(rows);
+      }
     }
     providerRequests += 1;
     if (url === "https://oauth2.googleapis.com/revoke") {
@@ -451,6 +492,7 @@ test("failed Gmail 401 preserves the exchanged session, encrypted token and Cale
   const headers = {
     Origin: "https://dogrudizaynpro.github.io",
     Authorization: ["Bearer", browserSession].join(" "),
+    "X-Forwarded-For": "192.0.2.80",
   };
   const encryptedBefore = structuredClone(savedToken.encrypted_token);
   const deletesBefore = googleTokenDeletes;
@@ -532,6 +574,18 @@ test("restoration survives backend restart, issues only a short private bearer a
     headers: { Origin: frontendOrigin, Authorization: ["Bearer", body.data.session].join(" ") },
   });
   assert.equal((await status.json()).data.gmail.connected, true);
+  for (const [path, rows] of [["/api/projects", projectRows], ["/api/crm", crmRows]]) {
+    const response = await originalFetch(`${baseUrl}${path}`, {
+      headers: { Origin: frontendOrigin, Authorization: ["Bearer", body.data.session].join(" ") },
+    });
+    assert.equal(response.status, 200, path);
+    assert.deepEqual((await response.json()).data, rows);
+    const anonymous = await originalFetch(`${baseUrl}${path}`, {
+      headers: { Origin: frontendOrigin },
+    });
+    assert.equal(anonymous.status, 401, `${path} must not disclose rows anonymously`);
+    assert.equal((await anonymous.json()).code, "BROWSER_SESSION_REQUIRED");
+  }
 });
 
 test("restoration requires exact frontend origin and JSON, with credentialed CORS preflight", async () => {
@@ -682,6 +736,10 @@ test("session parsing rejects non-finite expiry while legacy signed bearers stil
   } finally {
     savedToken = previousToken;
   }
+  const versioned = await originalFetch(`${baseUrl}/api/integrations/status`, {
+    headers: { Origin: frontendOrigin, Authorization: ["Bearer", legacy].join(" ") },
+  });
+  assert.equal((await versioned.json()).data.gmail.connected, false);
 });
 
 test("restoration rate limit returns no-store without changing cookies or contacting Google", async () => {
@@ -757,4 +815,87 @@ test("disconnect clears matching cookies and reconnect cannot revive old restore
   assert.equal(exchanged.status, 200);
   const newCookie = exchanged.headers.getSetCookie().find((value) => value.startsWith("ddpro_session_restore=")).split(";")[0];
   assert.equal((await restore(newCookie, headers)).status, 200);
+});
+
+test("refresh racing disconnect or OAuth reconnection cannot resurrect or overwrite the saved Google token", async () => {
+  const { getGoogleAccessToken } = await import("../src/services/google-integration.service.js");
+  const { encryptIntegrationToken, decryptIntegrationToken, removeIntegrationToken, saveIntegrationToken } =
+    await import("../src/services/integration-vault.service.js");
+  const previousToken = structuredClone(savedToken);
+  try {
+    for (const change of ["disconnect", "reconnect"]) {
+      savedToken = structuredClone(previousToken);
+      const oldToken = decryptIntegrationToken(savedToken.encrypted_token);
+      savedToken.encrypted_token = encryptIntegrationToken({ ...oldToken, expiresAt: Date.now() - 1 });
+      let releaseRefresh;
+      let refreshStarted;
+      const started = new Promise((resolve) => { refreshStarted = resolve; });
+      refreshResponse = async () => {
+        refreshStarted();
+        await new Promise((resolve) => { releaseRefresh = resolve; });
+        return Response.json({ access_token: "stale-refreshed-access", expires_in: 3600 });
+      };
+      const refreshing = getGoogleAccessToken("owner@example.com");
+      await started;
+      if (change === "disconnect") {
+        await removeIntegrationToken({ provider: "google", account: "owner@example.com" });
+      } else {
+        await saveIntegrationToken({
+          provider: "google", account: "owner@example.com",
+          value: { ...oldToken, accessToken: "reconnected-access",
+            sessionVersion: randomBytes(32).toString("base64url") },
+        });
+      }
+      const expectedToken = structuredClone(savedToken);
+      const upsertsAfterChange = googleTokenUpserts;
+      releaseRefresh();
+      await assert.rejects(refreshing, (error) => {
+        assert.equal(error.statusCode, 409);
+        return true;
+      });
+      assert.deepEqual(savedToken, expectedToken, change);
+      assert.equal(googleTokenUpserts, upsertsAfterChange, "stale refresh must never upsert");
+    }
+  } finally {
+    savedToken = previousToken;
+    refreshResponse = null;
+  }
+});
+
+test("legacy restoration bootstrap racing disconnect or reconnect never replaces the changed Google token", async () => {
+  const { encryptIntegrationToken, decryptIntegrationToken, removeIntegrationToken, saveIntegrationToken } =
+    await import("../src/services/integration-vault.service.js");
+  const previousToken = structuredClone(savedToken);
+  const { sessionVersion: _version, ...legacyToken } = decryptIntegrationToken(savedToken.encrypted_token);
+  const legacyCookie = `ddpro_integration_session=${signedPayload({
+    email: "owner@example.com", expiresAt: Date.now() + 60_000,
+  })}`;
+  try {
+    for (const change of ["disconnect", "reconnect"]) {
+      savedToken = { ...previousToken, encrypted_token: encryptIntegrationToken(legacyToken) };
+      let expectedToken;
+      let upsertsAfterChange;
+      beforeConditionalTokenUpdate = async () => {
+        if (change === "disconnect") {
+          await removeIntegrationToken({ provider: "google", account: "owner@example.com" });
+        } else {
+          await saveIntegrationToken({
+            provider: "google", account: "owner@example.com",
+            value: { ...legacyToken, sessionVersion: randomBytes(32).toString("base64url") },
+          });
+        }
+        expectedToken = structuredClone(savedToken);
+        upsertsAfterChange = googleTokenUpserts;
+      };
+      const response = await restore(legacyCookie, { "X-Forwarded-For": "192.0.2.90" });
+      assert.equal(response.status, 401);
+      assert.equal((await response.json()).code, "BROWSER_SESSION_REQUIRED");
+      assert.equal(response.headers.get("set-cookie"), null);
+      assert.deepEqual(savedToken, expectedToken, change);
+      assert.equal(googleTokenUpserts, upsertsAfterChange, "stale bootstrap must never upsert");
+    }
+  } finally {
+    savedToken = previousToken;
+    beforeConditionalTokenUpdate = null;
+  }
 });
