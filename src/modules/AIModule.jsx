@@ -73,6 +73,7 @@ function AIModule({
   onNavigate,
   messagesOnly = false,
   aiSending = false,
+  onConfirmAction,
 }) {
   const promptFieldRef = useRef(null);
   const [providerStatus, setProviderStatus] = useState("checking");
@@ -185,6 +186,25 @@ function AIModule({
                 </strong>
                 <p>{message.text}</p>
                 <small>{message.date}</small>
+                {message.pendingAction ? (
+                  <div className="ai-action-confirmation">
+                    {message.pendingAction.preview ? (
+                      <details className="ai-action-preview">
+                        <summary>Önerilen kayıt değişikliğini incele</summary>
+                        <pre>{JSON.stringify(message.pendingAction.preview, null, 2)}</pre>
+                      </details>
+                    ) : null}
+                    <button
+                      className="ai-module-suggestion"
+                      type="button"
+                      disabled={aiSending}
+                      onClick={() => onConfirmAction?.(message.id, message.pendingAction.id)}
+                    >
+                      {aiSending ? "İşlem doğrulanıyor…" : message.pendingAction.summary}
+                    </button>
+                    <small>Onay bağlantısı 5 dakika geçerlidir ve yalnızca bir kez kullanılabilir.</small>
+                  </div>
+                ) : null}
                 {message.moduleSuggestion && MODULE_TITLES[message.moduleSuggestion] ? (
                   <button
                     className="ai-module-suggestion"

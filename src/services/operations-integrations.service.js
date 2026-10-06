@@ -91,6 +91,17 @@ export const createGoogleCalendarEvent = (event) =>
     body: JSON.stringify(event),
   });
 
+export const updateGoogleCalendarEvent = (id, event) =>
+  fetchAPI(`/api/integrations/calendar/events/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: JSON.stringify(event),
+  });
+
+export const deleteGoogleCalendarEvent = (id) =>
+  fetchAPI(`/api/integrations/calendar/events/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+
 export const sendWhatsAppText = (to, text) =>
   fetchAPI("/api/integrations/whatsapp/send", {
     method: "POST",
@@ -114,9 +125,11 @@ export const deleteCrmContact = (id) =>
 export const importGoogleCalendarToLocal = async () => {
   const response = await getGoogleCalendarEvents();
   return (response.data || []).map((event) => ({
+    id: `google-copy:${event.id}`,
     title: event.summary || "Google Calendar event",
     type: "Google Calendar",
     date: event.start?.dateTime || event.start?.date || "",
+    end: event.end?.dateTime || event.end?.date || "",
     time: "",
     project: "",
     notes: event.description || "",

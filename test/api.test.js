@@ -15,6 +15,7 @@ let getIntegrationStatus;
 let formatGoogleIntegrationError;
 let completeGoogleConnection;
 let setBrowserSession;
+let confirmAiAction;
 
 before(async () => {
   globalThis.window = {
@@ -30,11 +31,12 @@ before(async () => {
   };
   globalThis.fetch = async (url, options) => {
     requests.push({ url, options });
-    return response();
+    return response(url, options);
   };
   ({ fetchAPI, setBrowserSession } = await import("../src/services/api.js"));
   ({ testIntegrationConnection, getIntegrationStatus } = await import("../src/services/integrations.service.js"));
   ({ formatGoogleIntegrationError, completeGoogleConnection } = await import("../src/services/operations-integrations.service.js"));
+  ({ confirmAiAction } = await import("../src/services/ai.service.js"));
 });
 
 beforeEach(() => {
@@ -42,6 +44,36 @@ beforeEach(() => {
   storage.clear();
   storage.set("ddpro_browser_session", "existing-browser-session");
   window.location.hash = "";
+});
+
+test("API requests abort on timeout and expose a stable timeout error", async () => {
+  response = (_url, options) => new Promise((_resolve, reject) => {
+    options.signal.addEventListener("abort", () => reject(options.signal.reason), {
+      once: true,
+    });
+  });
+
+  await assert.rejects(fetchAPI("/slow", { timeoutMs: 5 }), (error) => {
+    assert.equal(error.name, "TimeoutError");
+    assert.equal(error.code, "API_TIMEOUT_ERROR");
+    assert.match(error.message, /timed out after 5 ms/);
+    return true;
+  });
+  assert.equal(requests.length, 1);
+  assert.equal("timeoutMs" in requests[0].options, false);
+});
+
+test("AI write confirmation posts only the opaque action ID through the authenticated backend API", async () => {
+  response = () => Response.json({ status: "success", data: { saved: true } });
+  const actionId = "4bc6f5a6-0b6c-4ddb-b29b-208c84c344d0";
+  const result = await confirmAiAction(actionId);
+
+  assert.deepEqual(result, { saved: true });
+  assert.equal(requests.length, 1);
+  assert.match(requests[0].url, /\/api\/ai\/tools\/confirm$/);
+  assert.equal(requests[0].options.method, "POST");
+  assert.deepEqual(JSON.parse(requests[0].options.body), { confirmationId: actionId });
+  assert.equal(requests[0].options.headers.Authorization, ["Bearer", "existing-browser-session"].join(" "));
 });
 
 test("OAuth exchange precedes concurrent Gmail and Calendar status reads and stores only the browser session", async () => {

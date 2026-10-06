@@ -3,8 +3,11 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { createCrmContact } from "../services/crm.service.js";
 import {
   createGoogleCalendarEvent,
+  deleteGoogleCalendarEvent,
+  getGoogleCalendarEvent,
   getGoogleCalendarEvents,
   importGmailMessages,
+  updateGoogleCalendarEvent,
 } from "../services/google-workspace.service.js";
 import {
   saveWhatsAppMessages,
@@ -36,10 +39,37 @@ export const getCalendarEvents = async (req, res, next) => {
   }
 };
 
+export const getCalendarEventById = async (req, res, next) => {
+  try {
+    const data = await getGoogleCalendarEvent(req.integrationAccount, req.params.id);
+    return res.status(200).json({ status: "success", data });
+  } catch (error) {
+    return next(error);
+  }
+};
+
 export const postCalendarEvent = async (req, res, next) => {
   try {
     const data = await createGoogleCalendarEvent(req.integrationAccount, req.body);
     return res.status(201).json({ status: "success", data });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const patchCalendarEvent = async (req, res, next) => {
+  try {
+    const data = await updateGoogleCalendarEvent(req.integrationAccount, req.params.id, req.body);
+    return res.status(200).json({ status: "success", data });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const deleteCalendarEvent = async (req, res, next) => {
+  try {
+    await deleteGoogleCalendarEvent(req.integrationAccount, req.params.id);
+    return res.status(200).json({ status: "success", data: { deleted: true } });
   } catch (error) {
     return next(error);
   }

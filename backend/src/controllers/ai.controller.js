@@ -1,6 +1,9 @@
 import {
+  getAiUsageCount,
   getAiProviderStatus,
+  recordAiUsage,
   requestAiCompletion,
+  confirmAiAction,
 } from "../services/ai.service.js";
 
 const MAX_MESSAGE_LENGTH = 8_000;
@@ -8,6 +11,17 @@ const MAX_CONTEXT_LENGTH = 24_000;
 
 export const getAiStatus = (_req, res) => {
   res.status(200).json({ status: "success", data: getAiProviderStatus() });
+};
+
+export const getAiUsage = async (req, res, next) => {
+  try {
+    return res.status(200).json({
+      status: "success",
+      data: { count: await getAiUsageCount(req.integrationAccount) },
+    });
+  } catch (error) {
+    return next(error);
+  }
 };
 
 export const createAiCompletion = async (req, res, next) => {
@@ -34,11 +48,28 @@ export const createAiCompletion = async (req, res, next) => {
   }
 
   try {
-    const answer = await requestAiCompletion({ message, context });
+    const completion = await requestAiCompletion({
+      message,
+      context,
+      integrationAccount: req.integrationAccount,
+    });
+    await recordAiUsage(req.integrationAccount);
     return res.status(200).json({
       status: "success",
-      data: { answer, provider: getAiProviderStatus().provider },
+      data: { ...completion, provider: getAiProviderStatus().provider },
     });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const confirmAiOperationalAction = async (req, res, next) => {
+  try {
+    const data = await confirmAiAction(
+      req.integrationAccount,
+      req.body?.confirmationId
+    );
+    return res.status(200).json({ status: "success", data });
   } catch (error) {
     return next(error);
   }

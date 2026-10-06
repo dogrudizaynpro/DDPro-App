@@ -10,6 +10,11 @@ import offersRouter from "./routes/offers.routes.js";
 import aiRouter from "./routes/ai.routes.js";
 import integrationsRouter from "./routes/integrations.routes.js";
 import crmRouter from "./routes/crm.routes.js";
+import catalogRouter from "./routes/catalog.routes.js";
+import reportsRouter from "./routes/reports.routes.js";
+import financeRouter from "./routes/finance.routes.js";
+import messagesRouter from "./routes/messages.routes.js";
+import documentsRouter from "./routes/documents.routes.js";
 import {
   getWhatsAppWebhookChallenge,
   postWebsiteLead,
@@ -73,6 +78,11 @@ app.use("/api/offers", offersRouter);
 app.use("/api/ai", aiRouter);
 app.use("/api/integrations", integrationsRouter);
 app.use("/api/crm", crmRouter);
+app.use("/api/reports", reportsRouter);
+app.use("/api/finance", financeRouter);
+app.use("/api/messages", messagesRouter);
+app.use("/api/documents", documentsRouter);
+app.use("/api", catalogRouter);
 app.get(
   "/webhooks/whatsapp",
   rateLimit({
@@ -128,10 +138,21 @@ app.get("/health", async (req, res) => {
   try {
     const coreTables = [
       ["projects", "id"],
-      ["offers", "id"],
-      ["research_items", "id"],
+      ["offers", "offer_snapshot"],
+      ["crm_contacts", "id"],
+      ["report_records", "id"],
+      ["project_costs", "id"],
+      ["message_conversations", "id"],
+      ["messages", "id"],
+      ["document_records", "id"],
+      ["ai_usage_events", "id"],
+      ["research_items", "procurement_status"],
       ["crm_contacts", "id"],
       ["integration_tokens", "provider"],
+      ["products", "id"],
+      ["systems", "id"],
+      ["price_analysis", "id"],
+      ["material_analysis", "id"],
     ];
     const results = await Promise.all(
       coreTables.map(([table, column]) =>

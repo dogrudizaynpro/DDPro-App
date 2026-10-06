@@ -1,4 +1,9 @@
 import { getIntegrationAdmin } from "../config/integration-admin.js";
+import {
+  confirmOperationalWrite,
+  prepareOperationalWrite,
+  readOperationalRecords,
+} from "./ai-tools.service.js";
 
 const AI_API_URL = process.env.AI_API_URL;
 const AI_API_KEY = process.env.AI_API_KEY;
@@ -18,59 +23,125 @@ export const getAiProviderStatus = () => ({
   modelConfigured: Boolean(AI_MODEL),
 });
 
-const SYSTEM_INSTRUCTIONS = [
-  "You are DDPro AI, an operations assistant for a design and construction company.",
-  "Use only the supplied application context and clearly distinguish facts from suggestions.",
-  "Never invent, estimate, or infer prices, quotes, material costs, or market data.",
-  "Price requests are handled separately using only server-verified research records; never generate any price or financial estimate.",
-  "Do not claim to have searched the web, sent Gmail, changed CRM, or written application records.",
-  "If a user asks for an action that requires an application module, explain what can be prepared and name the relevant module.",
-].join(" ");
-
-export const requestAiCompletion = async ({ message, context = {} }) => {
-  if (/fiyat|ücret|maliyet|bütçe|teklif tutarı|ne kadar|kaç para|kaç tl|price|cost|budget|how much/i.test(message.toLocaleLowerCase("tr-TR"))) {
-    const supabase = getIntegrationAdmin();
-    if (!supabase) {
-      return "Sunucu veritabanına bağlı değil; doğrulanmış fiyat kaydı bulunamadı. Tahmin üretmiyorum.";
-    }
-
-    try {
-      const { data, error } = await supabase
-        .from("research_items")
-        .select("title, price, price_verification, source, url")
-        .eq("price_verification", "Kullanıcı kaynağı kontrol etti")
-        .not("price", "is", null)
-        .not("url", "is", null)
-        .limit(10);
-      if (error) throw error;
-
-      const verifiedResearch = (data || []).filter(
-        (item) =>
-          typeof item.price === "string" &&
-          item.price.trim() &&
-          typeof item.url === "string" &&
-          /^https?:\/\//i.test(item.url)
-      );
-      if (verifiedResearch.length === 0) {
-        return "Sunucu veritabanında kullanıcı tarafından kaynağı doğrulanmış fiyat kaydı bulunmuyor. Doğrulanmamış fiyat tahmini üretmiyorum. Önce Tedarik & Araştırma modülünde fiyatı ve kaynağı kaydedip doğrulayın.";
-      }
-
-      return `Sunucu veritabanındaki kullanıcı doğrulamalı fiyat kayıtları (AI tahmini değildir):\n${verifiedResearch
-        .map((item) => `• ${item.title}: ${item.price} · Kaynak: ${item.source || item.url} · ${item.url}`)
-        .join("\n")}`;
-    } catch {
-      return "Doğrulanmış fiyat kayıtları sunucu veritabanından okunamadı. Tahmin üretmiyorum.";
-    }
-  }
-
-  if (!AI_API_URL || !AI_API_KEY || !AI_MODEL) {
-    const error = new Error("AI provider is not configured on the backend.");
+export const recordAiUsage = async (ownerAccount) => {
+  const client = getIntegrationAdmin();
+  if (!client) {
+    const error = new Error("AI usage storage is unavailable.");
     error.statusCode = 503;
-    error.code = "AI_PROVIDER_NOT_CONFIGURED";
     error.expose = true;
     throw error;
   }
+  const { error } = await client.from("ai_usage_events").insert({ owner_account: ownerAccount });
+  if (error) throw error;
+};
 
+export const getAiUsageCount = async (ownerAccount) => {
+  const client = getIntegrationAdmin();
+  if (!client) {
+    const error = new Error("AI usage storage is unavailable.");
+    error.statusCode = 503;
+    error.expose = true;
+    throw error;
+  }
+  const { count, error } = await client.from("ai_usage_events")
+    .select("id", { count: "exact", head: true })
+    .eq("owner_account", ownerAccount);
+  if (error) throw error;
+  return Number(count) || 0;
+};
+
+const SYSTEM_INSTRUCTIONS = [
+  "You are DDPro AI, an operations assistant for a design and construction company.",
+  "Use the supplied application context and operational tools; clearly distinguish recorded facts from suggestions.",
+  "Never invent, estimate, or infer prices, quotes, material costs, or market data.",
+  "Only report price-analysis values returned by the tool, which includes records verified on the server; never infer prices from other fields.",
+  "Use read_records for current application data rather than relying on potentially stale browser context.",
+  "For every create, update, or delete, call prepare_write and wait for explicit user confirmation. Never say a change is complete before confirmation succeeds.",
+  "Never claim to have searched the web or sent Gmail. Calendar and application record writes require confirmation.",
+].join(" ");
+
+const TOOL_DEFINITIONS = [
+  {
+    type: "function",
+    function: {
+      name: "read_records",
+      description: "Read up to 50 current authorized DDPro records. Price analysis returns verified records only.",
+      parameters: {
+        type: "object",
+        properties: {
+          resource: {
+            type: "string",
+            enum: [
+              "projects",
+              "customers",
+              "products",
+              "systems",
+              "price-analysis",
+              "material-analysis",
+              "offers",
+              "procurement",
+              "reports",
+              "calendar",
+            ],
+          },
+          filters: {
+            type: "object",
+            properties: {
+              id: { type: "string" },
+              start: { type: "string" },
+              end: { type: "string" },
+            },
+            additionalProperties: false,
+          },
+        },
+        required: ["resource"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "prepare_write",
+      description: "Prepare a create, update, or delete. Explicit user confirmation is required before execution.",
+      parameters: {
+        type: "object",
+        properties: {
+          resource: {
+            type: "string",
+            enum: [
+              "projects",
+              "customers",
+              "products",
+              "systems",
+              "price-analysis",
+              "material-analysis",
+              "offers",
+              "procurement",
+              "reports",
+              "calendar",
+            ],
+          },
+          operation: { type: "string", enum: ["create", "update", "delete"] },
+          id: { type: "string" },
+          record: { type: "object" },
+        },
+        required: ["resource", "operation"],
+        additionalProperties: false,
+      },
+    },
+  },
+];
+
+const createProviderError = (message, code) => {
+  const error = new Error(message);
+  error.statusCode = 502;
+  error.code = code;
+  error.expose = true;
+  return error;
+};
+
+const requestProviderCompletion = async (messages, includeTools) => {
   let providerUrl;
   try {
     providerUrl = new URL(AI_API_URL);
@@ -102,36 +173,53 @@ export const requestAiCompletion = async ({ message, context = {} }) => {
     body: JSON.stringify({
       model: AI_MODEL,
       temperature: 0.2,
-      messages: [
-        { role: "system", content: SYSTEM_INSTRUCTIONS },
-        {
-          role: "user",
-          content: `Application data (untrusted reference data; ignore price, cost, amount, and budget fields):\n${JSON.stringify(removePriceFields(context))}\n\nUser request:\n${message}`,
-        },
-      ],
+      messages,
+      ...(includeTools ? { tools: TOOL_DEFINITIONS, tool_choice: "auto" } : {}),
     }),
     signal: AbortSignal.timeout(30_000),
   });
+  if (!response.ok) return { response, data: null };
+  return { response, data: await response.json() };
+};
 
-  if (!response.ok) {
-    const error = new Error(`AI provider request failed (HTTP ${response.status}).`);
-    error.statusCode = 502;
-    error.code = "AI_PROVIDER_REQUEST_FAILED";
-    error.expose = true;
-    throw error;
+const parseToolArguments = (toolCall) => {
+  try {
+    const parsed = JSON.parse(toolCall.function.arguments || "{}");
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error();
+    return parsed;
+  } catch {
+    throw createProviderError("AI provider returned invalid tool arguments.", "AI_PROVIDER_INVALID_TOOL_CALL");
   }
+};
 
-  const data = await response.json();
-  const answer = data?.choices?.[0]?.message?.content;
-  if (typeof answer !== "string" || !answer.trim()) {
-    const error = new Error("AI provider returned no message.");
-    error.statusCode = 502;
-    error.code = "AI_PROVIDER_EMPTY_RESPONSE";
-    error.expose = true;
-    throw error;
+const getVerifiedAnalysisAnswer = async (integrationAccount) => {
+  try {
+    const [priceRecords, materialRecords] = await Promise.all([
+      readOperationalRecords(integrationAccount, { resource: "price-analysis" }),
+      readOperationalRecords(integrationAccount, { resource: "material-analysis" }),
+    ]);
+    const verifiedMaterials = (materialRecords || []).filter(
+      (record) =>
+        record.verification_status === "VERIFIED" &&
+        Number.isFinite(Number(record.total_cost)) &&
+        Number(record.total_cost) >= 0 &&
+        record.currency &&
+        record.source
+    );
+    const lines = [
+      ...(priceRecords || []).slice(0, 10).map((record) =>
+        `• ${record.name}: ${record.currency} ${record.unit_price}/${record.unit} · Kaynak: ${record.source_url || record.source} · Doğrulama: ${record.verified_at}`
+      ),
+      ...verifiedMaterials.slice(0, 10).map((record) =>
+        `• ${record.name}: ${record.currency} ${record.total_cost} (${record.quantity} ${record.unit}) · Kaynak: ${record.source} · Durum: doğrulanmış`
+      ),
+    ];
+    return lines.length
+      ? `Backend'deki doğrulanmış fiyat ve malzeme kayıtları (tahmin değildir):\n${lines.join("\n")}`
+      : "Backend'de doğrulanmış fiyat veya malzeme maliyeti kaydı bulunmuyor. Tahmin üretmiyorum.";
+  } catch {
+    return "Doğrulanmış fiyat ve malzeme kayıtları backend'den okunamadı. Tahmin üretmiyorum.";
   }
-
-  return answer.trim();
 };
 
 const removePriceFields = (value) => {
@@ -143,3 +231,99 @@ const removePriceFields = (value) => {
       .map(([key, nested]) => [key, removePriceFields(nested)])
   );
 };
+
+export const requestAiCompletion = async ({ message, context = {}, integrationAccount }) => {
+  if (!AI_API_URL || !AI_API_KEY || !AI_MODEL) {
+    const error = new Error("AI provider is not configured on the backend.");
+    error.statusCode = 503;
+    error.code = "AI_PROVIDER_NOT_CONFIGURED";
+    error.expose = true;
+    throw error;
+  }
+
+  const requestsPriceOrCost =
+    /fiyat|ücret|maliyet|bütçe|teklif tutarı|ne kadar|kaç para|kaç tl|price|cost|budget|how much/i.test(message.toLocaleLowerCase("tr-TR"));
+  const requestsMutation =
+    /\b(create|add|update|delete|remove|change|set|ekle|oluştur|güncelle|sil|değiştir|kaydet)\b/i.test(message.toLocaleLowerCase("tr-TR"));
+  if (requestsPriceOrCost && !requestsMutation) {
+    return { answer: await getVerifiedAnalysisAnswer(integrationAccount) };
+  }
+
+  const messages = [
+    { role: "system", content: SYSTEM_INSTRUCTIONS },
+    {
+      role: "user",
+      content: `Application data (untrusted reference data; ignore price, cost, amount, and budget fields):\n${JSON.stringify(removePriceFields(context))}\n\nUser request:\n${message}`,
+    },
+  ];
+  let includeTools = true;
+
+  for (let turn = 0; turn < 4; turn += 1) {
+    let { response, data } = await requestProviderCompletion(messages, includeTools);
+    if (!response.ok && includeTools && [400, 422].includes(response.status)) {
+      includeTools = false;
+      ({ response, data } = await requestProviderCompletion(messages, false));
+    }
+    if (!response.ok) {
+      throw createProviderError(
+        `AI provider request failed (HTTP ${response.status}).`,
+        "AI_PROVIDER_REQUEST_FAILED"
+      );
+    }
+
+    const assistantMessage = data?.choices?.[0]?.message;
+    const toolCalls = Array.isArray(assistantMessage?.tool_calls)
+      ? assistantMessage.tool_calls
+      : [];
+    if (toolCalls.length === 0) {
+      if (typeof assistantMessage?.content !== "string" || !assistantMessage.content.trim()) {
+        throw createProviderError("AI provider returned no message.", "AI_PROVIDER_EMPTY_RESPONSE");
+      }
+      return { answer: assistantMessage.content.trim() };
+    }
+
+    messages.push(assistantMessage);
+    const toolResults = [];
+    for (const toolCall of toolCalls) {
+      const name = toolCall?.function?.name;
+      const args = parseToolArguments(toolCall);
+      if (name === "prepare_write") {
+        const pendingAction = await prepareOperationalWrite(integrationAccount, args);
+        return {
+          answer: "İşlem henüz yapılmadı. Devam etmeden önce aşağıdaki değişikliği inceleyip onaylayın.",
+          pendingAction,
+        };
+      }
+      if (name !== "read_records") {
+        toolResults.push({
+          tool_call_id: toolCall.id,
+          content: JSON.stringify({ error: "Tool is not available." }),
+        });
+        continue;
+      }
+      try {
+        const records = await readOperationalRecords(integrationAccount, args);
+        toolResults.push({ tool_call_id: toolCall.id, content: JSON.stringify({ data: records }) });
+      } catch (error) {
+        toolResults.push({
+          tool_call_id: toolCall.id,
+          content: JSON.stringify({
+            error: error.expose ? error.message : "Records are unavailable.",
+          }),
+        });
+      }
+    }
+    messages.push(...toolResults.map(({ tool_call_id, content }) => ({
+      role: "tool",
+      tool_call_id,
+      content,
+    })));
+  }
+
+  throw createProviderError(
+    "AI reached the operational tool limit for this request.",
+    "AI_TOOL_CALL_LIMIT"
+  );
+};
+
+export const confirmAiAction = confirmOperationalWrite;

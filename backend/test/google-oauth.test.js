@@ -18,6 +18,7 @@ let refreshedAccessToken;
 let refreshResponse;
 let googleTokenDeletes = 0;
 let browserSession;
+const calendarRequests = [];
 
 before(async () => {
   Object.assign(process.env, {
@@ -76,6 +77,11 @@ before(async () => {
         url.startsWith("https://www.googleapis.com/calendar/v3/calendars/primary/events")) {
       assert.equal(options.headers.Authorization, ["Bearer", refreshedAccessToken || "test-access"].join(" "));
       if (workspaceResponse) return workspaceResponse();
+      if (url.includes("/events/")) {
+        calendarRequests.push({ method: options.method, url, body: options.body ? JSON.parse(options.body) : null });
+        if (options.method === "DELETE") return new Response(null, { status: 204 });
+        return Response.json({ id: "event_12345", ...JSON.parse(options.body || "{}") });
+      }
       return Response.json({});
     }
     throw new Error(`Unexpected request: ${url}`);
@@ -201,6 +207,40 @@ test("one-time exchange authenticates browser status and real provider test rout
     const afterSuccess = (await (await originalFetch(`${baseUrl}/api/integrations/status`, { headers })).json()).data;
     assert.equal(afterSuccess.gmail.connected, true);
     assert.equal(afterSuccess.googleCalendar.connected, true);
+  }
+  const calendarHeaders = { ...headers, "Content-Type": "application/json" };
+  const calendarBase = `${baseUrl}/api/integrations/calendar/events`;
+  const eventUpdate = await originalFetch(`${calendarBase}/event_12345`, {
+    method: "PATCH",
+    headers: calendarHeaders,
+    body: JSON.stringify({
+      summary: "Updated event",
+      start: "2026-10-07T10:00:00.000Z",
+      end: "2026-10-07T11:00:00.000Z",
+    }),
+  });
+  assert.equal(eventUpdate.status, 200);
+  assert.equal(calendarRequests.at(-1).method, "PATCH");
+  assert.equal(calendarRequests.at(-1).body.summary, "Updated event");
+  const invalidEventUpdate = await originalFetch(`${calendarBase}/event_12345`, {
+    method: "PATCH",
+    headers: calendarHeaders,
+    body: JSON.stringify({ start: "not-a-date", end: "2026-10-07T11:00:00.000Z" }),
+  });
+  assert.equal(invalidEventUpdate.status, 400);
+  const eventDelete = await originalFetch(`${calendarBase}/event_12345`, {
+    method: "DELETE",
+    headers,
+  });
+  assert.equal(eventDelete.status, 200);
+  assert.equal(calendarRequests.at(-1).method, "DELETE");
+  for (const method of ["PATCH", "DELETE"]) {
+    const protectedResponse = await originalFetch(`${calendarBase}/event_12345`, {
+      method,
+      headers: { Origin: "https://dogrudizaynpro.github.io", "Content-Type": "application/json" },
+      body: JSON.stringify({ summary: "Unauthorized" }),
+    });
+    assert.equal(protectedResponse.status, 401);
   }
   const unauthenticated = await originalFetch(`${baseUrl}/api/integrations/calendar/events`, {
     method: "POST", headers: { Origin: "https://dogrudizaynpro.github.io" },

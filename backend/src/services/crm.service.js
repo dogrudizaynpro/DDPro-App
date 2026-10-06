@@ -28,6 +28,11 @@ export const normalizeCrmContact = (body = {}, { inbound = false } = {}) => {
     : "manual";
   const area = body.area_m2 ?? body.area;
   const areaM2 = area === "" || area === null || area === undefined ? null : Number(area);
+  const rawContactDate = body.contact_date ?? body.date;
+  const contactDate = rawContactDate === undefined || rawContactDate === null || rawContactDate === ""
+    ? new Date().toISOString().slice(0, 10)
+    : typeof rawContactDate === "string" ? rawContactDate.trim() : "";
+  const parsedContactDate = new Date(`${contactDate}T00:00:00Z`);
 
   if (!name && !email && !phone) {
     throw Object.assign(
@@ -47,17 +52,30 @@ export const normalizeCrmContact = (body = {}, { inbound = false } = {}) => {
       expose: true,
     });
   }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(contactDate) ||
+      Number.isNaN(parsedContactDate.getTime()) ||
+      parsedContactDate.toISOString().slice(0, 10) !== contactDate) {
+    throw Object.assign(new Error("CRM contact date must be a valid YYYY-MM-DD date."), {
+      statusCode: 400,
+      expose: true,
+    });
+  }
+  const projectId = cleanText(body.project_id ?? body.projectId, 80) || null;
+  if (projectId && !/^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i.test(projectId)) {
+    throw Object.assign(new Error("CRM project reference must be a valid UUID."), {
+      statusCode: 400,
+      expose: true,
+    });
+  }
 
   const result = {
     name: name || email || phone,
-    contact_date:
-      cleanText(body.contact_date || body.date, 10) ||
-      new Date().toISOString().slice(0, 10),
+    contact_date: contactDate,
     company: cleanText(body.company, 500) || null,
     phone: phone || null,
     email: email || null,
     request: cleanText(body.request, 20_000) || null,
-    project_id: cleanText(body.project_id || body.projectId, 80) || null,
+    project_id: projectId,
     system: cleanText(body.system, 500) || null,
     area_m2: areaM2,
     status: cleanText(body.status, 100) || "Yeni",
@@ -71,6 +89,18 @@ export const normalizeCrmContact = (body = {}, { inbound = false } = {}) => {
       inbound || CRM_FIELDS.includes(key) ? value !== undefined : true
     )
   );
+};
+
+const findNaturalDuplicate = async (client, payload, excludeId = null) => {
+  for (const field of ["email", "phone"]) {
+    if (!payload[field]) continue;
+    let query = client.from("crm_contacts").select("*").eq(field, payload[field]);
+    if (excludeId) query = query.neq("id", excludeId);
+    const { data, error } = await query.limit(1).maybeSingle();
+    if (error) throw error;
+    if (data) return data;
+  }
+  return null;
 };
 
 export const listCrmContacts = async () => {
@@ -109,6 +139,8 @@ export const createCrmContact = async (body, options) => {
     if (lookupError) throw lookupError;
     if (existing) return { contact: existing, duplicate: true };
   }
+  const duplicate = await findNaturalDuplicate(client, payload);
+  if (duplicate) return { contact: duplicate, duplicate: true };
   const { data, error } = await client
     .from("crm_contacts")
     .insert(payload)
@@ -129,6 +161,12 @@ export const createCrmContact = async (body, options) => {
 };
 
 export const updateCrmContact = async (id, body) => {
+  if (!/^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i.test(id)) {
+    throw Object.assign(new Error("CRM contact id must be a valid UUID."), {
+      statusCode: 400,
+      expose: true,
+    });
+  }
   const client = getIntegrationAdmin();
   if (!client) {
     throw Object.assign(new Error("CRM database service-role configuration is required."), {
@@ -146,6 +184,13 @@ export const updateCrmContact = async (id, body) => {
   const payload = normalizeCrmContact({ ...current, ...body });
   payload.source = current.source;
   payload.source_external_id = current.source_external_id;
+  const duplicate = await findNaturalDuplicate(client, payload, id);
+  if (duplicate) {
+    throw Object.assign(new Error("Another CRM contact already uses this email address or phone number."), {
+      statusCode: 409,
+      expose: true,
+    });
+  }
   const { data, error } = await client
     .from("crm_contacts")
     .update({ ...payload, updated_at: new Date().toISOString() })
@@ -157,6 +202,12 @@ export const updateCrmContact = async (id, body) => {
 };
 
 export const deleteCrmContact = async (id) => {
+  if (!/^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i.test(id)) {
+    throw Object.assign(new Error("CRM contact id must be a valid UUID."), {
+      statusCode: 400,
+      expose: true,
+    });
+  }
   const client = getIntegrationAdmin();
   if (!client) {
     throw Object.assign(new Error("CRM database service-role configuration is required."), {

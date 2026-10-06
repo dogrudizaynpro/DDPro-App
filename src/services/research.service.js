@@ -47,6 +47,7 @@ export const mapResearchItemToViewModel = (item = {}) => {
     name,
     note,
     source: item.source || "",
+    supplier: item.supplier || "",
     recordSource: "api",
     product: item.product || "",
     manufacturer: item.manufacturer || "",
@@ -56,11 +57,13 @@ export const mapResearchItemToViewModel = (item = {}) => {
       item.price_verification || item.priceVerification || "Doğrulanmadı",
     url: item.url || "",
     status: item.status || "",
+    procurementStatus: item.procurement_status || item.procurementStatus || "RESEARCH",
     date: formatResearchDate(createdAt),
     createdAt,
     updatedAt,
     projectId: item.project_id || item.projectId || null,
     productId: item.product_id || item.productId || null,
+    systemId: item.system_id || item.systemId || null,
     raw: item,
   };
 };
@@ -144,6 +147,7 @@ const toResearchPayload = (item = {}) => {
         ? item.status.trim()
         : "Aktif",
     source: typeof item?.source === "string" ? item.source.trim() || null : null,
+    supplier: typeof item?.supplier === "string" ? item.supplier.trim() || null : null,
     product: typeof item?.product === "string" ? item.product.trim() || null : null,
     manufacturer:
       typeof item?.manufacturer === "string"
@@ -161,6 +165,8 @@ const toResearchPayload = (item = {}) => {
     url: typeof item?.url === "string" ? item.url.trim() || null : null,
     project_id: typeof item?.projectId === "string" ? item.projectId.trim() || null : null,
     product_id: typeof item?.productId === "string" ? item.productId.trim() || null : null,
+    system_id: typeof item?.systemId === "string" ? item.systemId.trim() || null : null,
+    procurement_status: item?.procurementStatus || item?.procurement_status || "RESEARCH",
   };
 };
 
@@ -178,6 +184,16 @@ export const createResearchItem = async (item) => {
     console.warn("Research creation API unavailable:", error.message);
     throw error;
   }
+};
+
+export const updateResearchItem = async (id, item) => {
+  if (!id) throw new Error("Research item ID is required");
+  const payload = toResearchPayload(item);
+  const response = await fetchAPI(`/api/research/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+  return response.data ? mapResearchItemToViewModel(response.data) : null;
 };
 
 export const deleteResearchItem = async (id) => {

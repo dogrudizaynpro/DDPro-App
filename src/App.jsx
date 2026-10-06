@@ -15,25 +15,41 @@ import {
   getOffers,
   mapOfferToViewModel,
   mapOffersToViewModel,
+  updateOffer as updateOfferRequest,
 } from "./services/offers.service.js";
 import {
   CAN_USE_LOCAL_FALLBACK,
   getApiHealth,
 } from "./services/api.js";
-import { requestAiCompletion } from "./services/ai.service.js";
-import { getCrmContacts } from "./services/operations-integrations.service.js";
+import {
+  confirmAiAction as confirmAiActionRequest,
+  getAiUsageCount,
+  requestAiCompletion,
+} from "./services/ai.service.js";
+import { getCatalogRecords } from "./services/catalog.service.js";
+import { getReports } from "./services/reports.service.js";
+import { getDocuments } from "./services/documents.service.js";
+import { getFinanceCosts } from "./services/finance.service.js";
+import {
+  getCrmContacts,
+  getGoogleCalendarEvents,
+} from "./services/operations-integrations.service.js";
 import { getIntegrationStatus } from "./services/integrations.service.js";
 import {
   createResearchItem as createProcurementRequest,
   deleteResearchItem as deleteProcurementRequest,
   getResearchItems as getProcurementItems,
+  updateResearchItem as updateProcurementRequest,
 } from "./services/research.service.js";
 
 const ProjectsModule = lazy(() => import("./modules/ProjectsModule.jsx"));
 const ProcurementModule = lazy(() => import("./modules/ProcurementModule.jsx"));
 const OffersModule = lazy(() => import("./modules/OffersModule.jsx"));
+const CRMModule = lazy(() => import("./modules/CRMModule.jsx"));
 const SystemsModule = lazy(() => import("./modules/SystemsModule.jsx"));
 const AIModule = lazy(() => import("./modules/AIModule.jsx"));
+const MessagesModule = lazy(() => import("./modules/MessagesModule.jsx"));
+const DocumentsModule = lazy(() => import("./modules/DocumentsModule.jsx"));
 const SkeletonModule = lazy(() => import("./modules/SkeletonModule.jsx"));
 const OperationsModule = lazy(() => import("./modules/OperationsModule.jsx"));
 
@@ -48,9 +64,19 @@ const STORAGE_KEYS = {
   priceAnalysis: "ddpro_price_analysis_v1",
   materialAnalysis: "ddpro_material_analysis_v1",
   customers: "ddpro_customers_v1",
-  documents: "ddpro_documents_v1",
-  finance: "ddpro_finance_v1",
   reports: "ddpro_reports_v1",
+};
+
+const useCatalogDataState = (resource) => {
+  const [value, setValue] = useState(EMPTY_ITEMS);
+  useEffect(() => {
+    let active = true;
+    getCatalogRecords(resource)
+      .then((records) => { if (active) setValue(records); })
+      .catch(() => { if (active) setValue(EMPTY_ITEMS); });
+    return () => { active = false; };
+  }, [resource]);
+  return value;
 };
 
 const modules = [
@@ -167,9 +193,9 @@ const modules = [
     path: "/mesajlar",
     icon: "✉",
     title: "Mesajlar",
-    short: "Yerel Mesajlar",
+    short: "Mesaj Merkezi",
     description:
-      "Mevcut DDPro AI yerel sohbet akışındaki mesajlar.",
+      "Proje ve müşteri ilişkili kalıcı konuşma kayıtları.",
   },
   {
     id: "finance",
@@ -362,7 +388,13 @@ const formatDate = () =>
     timeStyle: "short",
   });
 
-function DashboardCalendar({ now, title = "YAKLAŞAN TAKVİM", onOpenCalendar }) {
+function DashboardCalendar({
+  now,
+  title = "YAKLAŞAN TAKVİM",
+  onOpenCalendar,
+  events = [],
+  fetchState = "loading",
+}) {
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
   const leadingDays = (monthStart.getDay() + 6) % 7;
@@ -402,10 +434,30 @@ function DashboardCalendar({ now, title = "YAKLAŞAN TAKVİM", onOpenCalendar })
             );
           })}
         </div>
-        <div className="calendar-empty">
-          <span className="status-dot" aria-hidden="true" />
-          <p>Etkinlik verileri bağlandığında burada listelenecek.</p>
-        </div>
+        {fetchState === "loading" ? (
+          <div className="calendar-empty"><span className="status-dot" aria-hidden="true" /><p>Google Calendar verisi yükleniyor…</p></div>
+        ) : fetchState === "error" ? (
+          <div className="calendar-empty"><span className="status-dot warning" aria-hidden="true" /><p>Google Calendar verisi alınamadı.</p></div>
+        ) : fetchState === "unavailable" ? (
+          <div className="calendar-empty"><span className="status-dot" aria-hidden="true" /><p>Yaklaşan etkinlikler için Google Calendar bağlantısı gerekli.</p></div>
+        ) : events.length === 0 ? (
+          <div className="calendar-empty"><span className="status-dot" aria-hidden="true" /><p>Yaklaşan etkinlik bulunmuyor.</p></div>
+        ) : (
+          <div className="calendar-upcoming-list">
+            {events.slice(0, 3).map((event) => {
+              const start = event.start?.dateTime || event.start?.date;
+              const dateLabel = start
+                ? new Date(start).toLocaleString("tr-TR", { dateStyle: "short", timeStyle: event.start?.dateTime ? "short" : undefined })
+                : "Tarih belirtilmedi";
+              return (
+                <div className="calendar-upcoming-item" key={event.id}>
+                  <strong>{event.summary || "Başlıksız etkinlik"}</strong>
+                  <small>{dateLabel}</small>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </section>
   );
@@ -541,14 +593,18 @@ function App() {
     getStoredData(STORAGE_KEYS.logs)
   );
 
-  const [products] = useStoredDataState(STORAGE_KEYS.products);
-  const [systemInventory] = useStoredDataState(STORAGE_KEYS.systems);
-  const [priceAnalysisItems] = useStoredDataState(STORAGE_KEYS.priceAnalysis);
-  const [materialAnalysisItems] = useStoredDataState(STORAGE_KEYS.materialAnalysis);
+  const products = useCatalogDataState("products");
+  const systemInventory = useCatalogDataState("systems");
+  const priceAnalysisItems = useCatalogDataState("price-analysis");
+  const materialAnalysisItems = useCatalogDataState("material-analysis");
   const [customerItems] = useStoredDataState(STORAGE_KEYS.customers);
-  const [documentItems] = useStoredDataState(STORAGE_KEYS.documents);
-  const [financeItems] = useStoredDataState(STORAGE_KEYS.finance);
-  const [reportItems] = useStoredDataState(STORAGE_KEYS.reports);
+  const [documentItems, setDocumentItems] = useState([]);
+  const [financeItems, setFinanceItems] = useState([]);
+  const [reportItems, setReportItems] = useState([]);
+  const [aiAnalysisCount, setAiAnalysisCount] = useState(0);
+  const [aiUsageFetchState, setAiUsageFetchState] = useState("loading");
+  const [calendarEvents, setCalendarEvents] = useState([]);
+  const [calendarFetchState, setCalendarFetchState] = useState("loading");
 
   const [showProjectForm, setShowProjectForm] = useState(false);
   const [showProcurementForm, setShowProcurementForm] = useState(false);
@@ -586,6 +642,56 @@ function App() {
     const intervalId = window.setInterval(() => setCurrentDate(new Date()), 60_000);
     return () => window.clearInterval(intervalId);
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    if (!integrationState?.google?.connected) {
+      setReportItems([]);
+      setFinanceItems([]);
+      setDocumentItems([]);
+      setAiAnalysisCount(0);
+      setAiUsageFetchState("unavailable");
+      setCalendarEvents([]);
+      setCalendarFetchState("unavailable");
+      return () => { active = false; };
+    }
+    getReports()
+      .then((reports) => { if (active) setReportItems(reports); })
+      .catch(() => { if (active) setReportItems([]); });
+    getFinanceCosts()
+      .then((costs) => { if (active) setFinanceItems(costs); })
+      .catch(() => { if (active) setFinanceItems([]); });
+    getDocuments()
+      .then((documents) => { if (active) setDocumentItems(documents); })
+      .catch(() => { if (active) setDocumentItems([]); });
+    getAiUsageCount()
+      .then((count) => {
+        if (active) {
+          setAiAnalysisCount(count);
+          setAiUsageFetchState("success");
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setAiAnalysisCount(0);
+          setAiUsageFetchState("error");
+        }
+      });
+    getGoogleCalendarEvents()
+      .then((response) => {
+        if (active) {
+          setCalendarEvents(Array.isArray(response?.data) ? response.data : []);
+          setCalendarFetchState("success");
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setCalendarEvents([]);
+          setCalendarFetchState("error");
+        }
+      });
+    return () => { active = false; };
+  }, [integrationState?.google?.connected]);
 
   useEffect(() => {
     let active = true;
@@ -1084,48 +1190,114 @@ function App() {
     [offers]
   );
 
-  const aiUserMessageCount = useMemo(
-    () => aiMessages.filter((message) => message.role === "user").length,
-    [aiMessages]
-  );
+  const dashboardActivity = useMemo(() => {
+    const entries = [
+      ...(projectsFetchState === "success" || projectsFetchState === "empty"
+        ? projects.map((project) => ({
+            id: `project:${project.id}`,
+            message: `Proje kaydı: ${project.name}`,
+            createdAt: project.created_at || project.createdAt,
+          }))
+        : []),
+      ...(offersFetchState === "success" || offersFetchState === "empty"
+        ? offers.map((offer) => ({
+            id: `offer:${offer.id}`,
+            message: `Teklif kaydı: ${offer.title || offer.name}`,
+            createdAt: offer.created_at || offer.createdAt,
+          }))
+        : []),
+      ...(procurementFetchState === "success" || procurementFetchState === "empty"
+        ? procurementItems.map((item) => ({
+            id: `procurement:${item.id}`,
+            message: `Tedarik kaydı: ${item.name}`,
+            createdAt: item.created_at || item.createdAt,
+          }))
+        : []),
+    ];
+    return entries
+      .filter((entry) => entry.id && entry.message && Number.isFinite(Date.parse(entry.createdAt)))
+      .sort((first, second) => Date.parse(second.createdAt) - Date.parse(first.createdAt))
+      .slice(0, 4)
+      .map((entry) => ({
+        ...entry,
+        date: new Date(entry.createdAt).toLocaleString("tr-TR", {
+          dateStyle: "short",
+          timeStyle: "short",
+        }),
+      }));
+  }, [
+    offers,
+    offersFetchState,
+    procurementFetchState,
+    procurementItems,
+    projects,
+    projectsFetchState,
+  ]);
+  const dashboardActivityLoading = [
+    projectsFetchState,
+    offersFetchState,
+    procurementFetchState,
+  ].some((state) => state === "loading");
+  const dashboardActivityUnavailable = [
+    projectsFetchState,
+    offersFetchState,
+    procurementFetchState,
+  ].some((state) => state === "error");
+
+  const metricValue = (value, state) =>
+    ["success", "empty"].includes(state) ? value : "—";
+  const metricDetail = (detail, state) =>
+    state === "loading"
+      ? "Backend verisi yükleniyor"
+      : state === "error"
+        ? "Backend verisi alınamadı"
+        : state === "unavailable"
+          ? "Oturum veya servis kullanılamıyor"
+        : state === "empty"
+          ? "Kayıt bulunmuyor"
+          : detail;
 
   const dashboardStats = useMemo(
     () => [
       {
         label: "AKTİF PROJELER",
-        value: activeProjects.length,
-        detail: "Devam eden projeler",
+        value: metricValue(activeProjects.length, projectsFetchState),
+        detail: metricDetail("Devam eden projeler", projectsFetchState),
         icon: "▣",
         moduleId: "projects",
       },
       {
         label: "TEKLİFLER",
-        value: offers.length,
-        detail: `${pendingOffers.length} bekleyen teklif`,
+        value: metricValue(offers.length, offersFetchState),
+        detail: metricDetail(`${pendingOffers.length} bekleyen teklif`, offersFetchState),
         icon: "◈",
         moduleId: "offers",
       },
       {
         label: "ARAŞTIRMALAR",
-        value: procurementItems.length,
-        detail: "Tedarik ve ürün araştırması",
+        value: metricValue(procurementItems.length, procurementFetchState),
+        detail: metricDetail("Tedarik ve ürün araştırması", procurementFetchState),
         icon: "⌕",
         moduleId: "procurement",
       },
       {
         label: "AI ETKİLEŞİMİ",
-        value: aiUserMessageCount,
-        detail: "Asistan sohbet isteği",
+        value: metricValue(aiAnalysisCount, aiUsageFetchState),
+        detail: metricDetail("Kalıcı backend kullanım kaydı", aiUsageFetchState),
         icon: "AI",
         moduleId: "ai-assistant",
       },
     ],
     [
       activeProjects.length,
-      aiUserMessageCount,
+      aiAnalysisCount,
+      aiUsageFetchState,
       offers.length,
+      offersFetchState,
       pendingOffers.length,
       procurementItems.length,
+      procurementFetchState,
+      projectsFetchState,
     ]
   );
 
@@ -1461,12 +1633,32 @@ function App() {
     }
   };
 
+  const updateProcurement = async (id, updates) => {
+    procurementTouchedRef.current = true;
+    setProcurementError(null);
+    try {
+      const updated = await updateProcurementRequest(id, updates);
+      if (!updated) throw new Error("Research API did not return the updated record.");
+      setProcurementItems((items) => items.map((item) => item.id === id ? updated : item));
+      addLog(`Tedarik kaydı API üzerinden güncellendi: ${updated.name}`);
+    } catch (error) {
+      if (CAN_USE_LOCAL_FALLBACK) {
+        setProcurementItems((items) => items.map((item) => item.id === id ? { ...item, ...updates } : item));
+        setProcurementError("Tedarik kaydı API'ye güncellenemedi; yalnızca bu geliştirme oturumunda yerel olarak güncellendi.");
+      } else {
+        setProcurementError(`Tedarik kaydı güncellenemedi (${getApiFailureReason(error)}).`);
+      }
+    }
+  };
+
   const createOffer = async (event) => {
     event.preventDefault();
 
-    if (!offerName.trim()) return;
+    if (!offerName.trim()) return false;
     offersTouchedRef.current = true;
     let shouldResetForm = false;
+    const formValues = new FormData(event.currentTarget);
+    const editingOfferId = String(formValues.get("offerId") || "");
 
     const newOffer = mapOfferToViewModel({
       id: createId(),
@@ -1475,12 +1667,40 @@ function App() {
       status: offerStatus,
       statusRaw: offerStatus,
       date: formatDate(),
-      projectId: new FormData(event.currentTarget).get("projectId") || null,
-      crmContactId: new FormData(event.currentTarget).get("crmContactId") || null,
+      projectId: formValues.get("projectId") || null,
+      crmContactId: formValues.get("crmContactId") || null,
+      systemId: formValues.get("systemId") || null,
+      productId: formValues.get("productId") || null,
+      materialAnalysisId: formValues.get("materialAnalysisId") || null,
       source: "local",
     });
 
     setOffersError(null);
+
+    if (editingOfferId) {
+      try {
+        const updatedOffer = await updateOfferRequest(editingOfferId, {
+          ...newOffer,
+          source: "api",
+        });
+        if (!updatedOffer) throw new Error("Offers API did not return the updated offer.");
+        setOffers((current) => current.map((offer) =>
+          offer.id === editingOfferId ? updatedOffer : offer
+        ));
+        setSelectedOfferId(editingOfferId);
+        setSelectedOfferDetail(updatedOffer);
+        setShowOfferForm(false);
+        setOfferName("");
+        setOfferAmount("");
+        setOfferStatus("Hazırlanıyor");
+        addLog(`Teklif API üzerinden güncellendi: ${updatedOffer.title}`);
+        return true;
+      } catch (error) {
+        setOffersError(`Teklif güncellenemedi: ${getApiFailureReason(error)}.`);
+        addLog(`Teklif güncelleme hatası: ${getApiFailureReason(error)}.`);
+        return false;
+      }
+    }
 
     try {
       const createdOffer = await createOfferRequest(newOffer);
@@ -1523,6 +1743,7 @@ function App() {
       setOfferStatus("Hazırlanıyor");
       setShowOfferForm(false);
     }
+    return shouldResetForm;
   };
 
   const deleteOffer = async (id) => {
@@ -1724,16 +1945,16 @@ function App() {
         status,
         source,
       })),
-      products: getStoredData("ddpro_products_v1").slice(0, 30).map(({ id, name, detail }) => ({
+      products: products.slice(0, 30).map(({ id, name, description }) => ({
         id,
         name,
-        detail,
+        description,
       })),
-      systems: getStoredData("ddpro_system_inventory_v1").slice(0, 30).map(({ id, name, status, detail }) => ({
+      systems: systemInventory.slice(0, 30).map(({ id, name, status, description }) => ({
         id,
         name,
         status,
-        detail,
+        description,
       })),
       research: procurementItems.slice(0, 30).map(({
         id,
@@ -1781,15 +2002,16 @@ function App() {
           project,
           notes,
         })),
-        reports: getStoredData("ddpro_generated_reports_v1").slice(0, 5).map(({ id, type, createdAt }) => ({
+        reports: reportItems.slice(0, 5).map(({ id, report_type, created_at }) => ({
           id,
-          type,
-          createdAt,
+          type: report_type,
+          createdAt: created_at,
         })),
     };
 
     try {
       const completion = await requestAiCompletion({ message, context });
+      getAiUsageCount().then(setAiAnalysisCount).catch(() => {});
       setAiMessages((currentMessages) => [
         ...currentMessages,
         {
@@ -1798,6 +2020,7 @@ function App() {
           text: completion.answer,
           date: formatDate(),
           moduleSuggestion: suggestedModuleId,
+          pendingAction: completion.pendingAction,
         },
       ]);
       addLog("DDPro AI isteği yapılandırılmış sağlayıcıya gönderildi.");
@@ -1815,6 +2038,45 @@ function App() {
           date: formatDate(),
           status: "unavailable",
           moduleSuggestion: suggestedModuleId,
+        },
+      ]);
+    } finally {
+      setAiSending(false);
+    }
+  };
+
+  const confirmAiOperationalAction = async (messageId, confirmationId) => {
+    if (aiSending) return;
+    setAiSending(true);
+    try {
+      await confirmAiActionRequest(confirmationId);
+      setAiMessages((currentMessages) => [
+        ...currentMessages.map((message) =>
+          message.id === messageId
+            ? { ...message, pendingAction: null }
+            : message
+        ),
+        {
+          id: createId(),
+          role: "assistant",
+          text: "İşlem tamamlandı ve backend tarafından kaydedildi.",
+          date: formatDate(),
+        },
+      ]);
+      getAiUsageCount().then(setAiAnalysisCount).catch(() => {});
+    } catch (error) {
+      setAiMessages((currentMessages) => [
+        ...currentMessages.map((message) =>
+          message.id === messageId
+            ? { ...message, pendingAction: null }
+            : message
+        ),
+        {
+          id: createId(),
+          role: "assistant",
+          text: `İşlem tamamlanamadı; değişiklik yapıldığı varsayılmadı. ${getApiFailureReason(error)}`,
+          date: formatDate(),
+          status: "unavailable",
         },
       ]);
     } finally {
@@ -1895,6 +2157,14 @@ function App() {
           <div className="panel-content project-preview-list">
             {projectsLoading ? (
               <p className="empty-state">Projeler yükleniyor...</p>
+            ) : projectsFetchState === "error" ? (
+              <div className="dashboard-empty-state">
+                <span aria-hidden="true">!</span>
+                <p>{projectsError || "Projeler backend üzerinden alınamadı."}</p>
+                <button type="button" onClick={() => handleModuleNavigation("projects")}>
+                  Proje modülünü aç
+                </button>
+              </div>
             ) : activeProjects.length === 0 ? (
               <div className="dashboard-empty-state">
                 <span aria-hidden="true">▣</span>
@@ -1928,6 +2198,8 @@ function App() {
         <DashboardCalendar
           now={currentDate}
           onOpenCalendar={() => handleModuleNavigation("calendar")}
+          events={calendarEvents}
+          fetchState={calendarFetchState}
         />
       </div>
 
@@ -1942,7 +2214,7 @@ function App() {
           </div>
           <div className="system-status-list">
             <div className="system-status-item">
-              <span>DDPro Core</span><strong>Hazır</strong>
+              <span>DDPro Core</span><strong>{getConnectionLabel(apiHealthState.status)}</strong>
             </div>
             <div className="system-status-item">
               <span>Projeler API</span><strong>{getConnectionLabel(projectsFetchState)}</strong>
@@ -1999,19 +2271,23 @@ function App() {
       <section className="panel recent-activity-panel">
         <div className="panel-header">
           <h2>SON İŞLEMLER</h2>
-          <span className="panel-kicker">{systemLogs.length ? "SON KAYITLAR" : "HAREKET BEKLENİYOR"}</span>
+          <span className="panel-kicker">KALICI BACKEND KAYITLARI</span>
         </div>
-        {systemLogs.length > 0 ? (
+        {dashboardActivity.length > 0 ? (
           <div className="log-list">
-            {systemLogs.slice(0, 4).map((log) => (
+            {dashboardActivity.map((log) => (
               <div className="log-item" key={log.id}>
                 <strong>{log.message}</strong>
                 <small>{log.date}</small>
               </div>
             ))}
           </div>
+        ) : dashboardActivityLoading ? (
+          <p className="activity-empty">Backend kayıtları yükleniyor…</p>
+        ) : dashboardActivityUnavailable ? (
+          <p className="activity-empty">Son kayıtlar backend üzerinden alınamadı.</p>
         ) : (
-          <p className="activity-empty">Yeni işlem kayıtları burada görüntülenecek.</p>
+          <p className="activity-empty">Gösterilecek kalıcı proje, teklif veya tedarik kaydı bulunmuyor.</p>
         )}
       </section>
     </div>
@@ -2066,7 +2342,7 @@ function App() {
         ],
         statusNote: {
           tone: "info",
-          message: LOCAL_ONLY_MODULE_MESSAGE,
+          message: "Sistem kayıtları oturum korumalı backend ve Supabase üzerinden yüklenir.",
         },
       },
       "price-analysis": {
@@ -2332,6 +2608,10 @@ function App() {
       );
     }
 
+    if (activeModule === "crm") {
+      return <CRMModule projects={projects} onNavigate={handleModuleNavigation} setAiInput={setAiInput} />;
+    }
+
     if (activeModule === "procurement") {
       return (
         <ProcurementModule
@@ -2346,6 +2626,7 @@ function App() {
           procurementLoading={procurementLoading}
           procurementItems={procurementItems}
           deleteProcurement={deleteProcurement}
+          updateProcurement={updateProcurement}
           saveResearchResult={saveResearchResult}
           projects={projects}
         />
@@ -2361,22 +2642,16 @@ function App() {
           setAiInput={setAiInput}
           onNavigate={handleModuleNavigation}
           aiSending={aiSending}
+          onConfirmAction={confirmAiOperationalAction}
         />
       );
     }
 
     if (activeModule === "messages") {
-      return (
-        <AIModule
-          aiMessages={aiMessages}
-          sendAiMessage={sendAiMessage}
-          aiInput={aiInput}
-          setAiInput={setAiInput}
-          messagesOnly
-          onNavigate={handleModuleNavigation}
-          aiSending={aiSending}
-        />
-      );
+      return <MessagesModule />;
+    }
+    if (activeModule === "documents") {
+      return <DocumentsModule />;
     }
 
     if (
@@ -2402,6 +2677,8 @@ function App() {
           offers={offers}
           research={procurementItems}
           aiMessages={aiMessages}
+          onReportsChanged={setReportItems}
+          onFinanceChanged={setFinanceItems}
         />
       );
     }
