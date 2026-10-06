@@ -1,5 +1,7 @@
 import {
+  getAiUsageCount,
   getAiProviderStatus,
+  recordAiUsage,
   requestAiCompletion,
 } from "../services/ai.service.js";
 
@@ -8,6 +10,17 @@ const MAX_CONTEXT_LENGTH = 24_000;
 
 export const getAiStatus = (_req, res) => {
   res.status(200).json({ status: "success", data: getAiProviderStatus() });
+};
+
+export const getAiUsage = async (req, res, next) => {
+  try {
+    return res.status(200).json({
+      status: "success",
+      data: { count: await getAiUsageCount(req.integrationAccount) },
+    });
+  } catch (error) {
+    return next(error);
+  }
 };
 
 export const createAiCompletion = async (req, res, next) => {
@@ -35,6 +48,7 @@ export const createAiCompletion = async (req, res, next) => {
 
   try {
     const answer = await requestAiCompletion({ message, context });
+    await recordAiUsage(req.integrationAccount);
     return res.status(200).json({
       status: "success",
       data: { answer, provider: getAiProviderStatus().provider },

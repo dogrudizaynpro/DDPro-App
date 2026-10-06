@@ -36,6 +36,11 @@ test("AI chat requires an authenticated Google browser session", async () => {
     body: JSON.stringify({ message: "Summarize the project." }),
   });
 
+  test("AI usage count requires the authenticated Google browser session", async () => {
+    const response = await fetch(`${baseUrl}/api/ai/usage`);
+    assert.equal(response.status, 401);
+  });
+
   assert.equal(response.status, 401);
   assert.equal((await response.json()).message, "Google account connection is required.");
 });

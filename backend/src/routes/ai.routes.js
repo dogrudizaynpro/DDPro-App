@@ -2,6 +2,7 @@ import express from "express";
 import rateLimit from "express-rate-limit";
 import {
   createAiCompletion,
+  getAiUsage,
   getAiStatus,
 } from "../controllers/ai.controller.js";
 import { requireGoogleSession } from "../services/google-integration.service.js";
@@ -16,6 +17,7 @@ const aiChatRateLimit = rateLimit({
 });
 
 router.get("/status", getAiStatus);
+router.get("/usage", requireGoogleSession, getAiUsage);
 router.post("/chat", requireGoogleSession, aiChatRateLimit, createAiCompletion);
 
 export default router;

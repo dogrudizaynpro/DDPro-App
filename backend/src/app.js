@@ -145,6 +145,7 @@ app.get("/health", async (req, res) => {
       ["message_conversations", "id"],
       ["messages", "id"],
       ["document_records", "id"],
+      ["ai_usage_events", "id"],
       ["research_items", "procurement_status"],
       ["crm_contacts", "id"],
       ["integration_tokens", "provider"],

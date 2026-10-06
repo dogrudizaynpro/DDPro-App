@@ -18,6 +18,33 @@ export const getAiProviderStatus = () => ({
   modelConfigured: Boolean(AI_MODEL),
 });
 
+export const recordAiUsage = async (ownerAccount) => {
+  const client = getIntegrationAdmin();
+  if (!client) {
+    const error = new Error("AI usage storage is unavailable.");
+    error.statusCode = 503;
+    error.expose = true;
+    throw error;
+  }
+  const { error } = await client.from("ai_usage_events").insert({ owner_account: ownerAccount });
+  if (error) throw error;
+};
+
+export const getAiUsageCount = async (ownerAccount) => {
+  const client = getIntegrationAdmin();
+  if (!client) {
+    const error = new Error("AI usage storage is unavailable.");
+    error.statusCode = 503;
+    error.expose = true;
+    throw error;
+  }
+  const { count, error } = await client.from("ai_usage_events")
+    .select("id", { count: "exact", head: true })
+    .eq("owner_account", ownerAccount);
+  if (error) throw error;
+  return Number(count) || 0;
+};
+
 const SYSTEM_INSTRUCTIONS = [
   "You are DDPro AI, an operations assistant for a design and construction company.",
   "Use only the supplied application context and clearly distinguish facts from suggestions.",

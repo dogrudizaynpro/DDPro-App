@@ -21,7 +21,7 @@ import {
   CAN_USE_LOCAL_FALLBACK,
   getApiHealth,
 } from "./services/api.js";
-import { requestAiCompletion } from "./services/ai.service.js";
+import { getAiUsageCount, requestAiCompletion } from "./services/ai.service.js";
 import { getCatalogRecords } from "./services/catalog.service.js";
 import { getReports } from "./services/reports.service.js";
 import { getDocuments } from "./services/documents.service.js";
@@ -568,6 +568,7 @@ function App() {
   const [documentItems, setDocumentItems] = useState([]);
   const [financeItems, setFinanceItems] = useState([]);
   const [reportItems, setReportItems] = useState([]);
+  const [aiAnalysisCount, setAiAnalysisCount] = useState(0);
 
   const [showProjectForm, setShowProjectForm] = useState(false);
   const [showProcurementForm, setShowProcurementForm] = useState(false);
@@ -612,6 +613,7 @@ function App() {
       setReportItems([]);
       setFinanceItems([]);
       setDocumentItems([]);
+      setAiAnalysisCount(0);
       return () => { active = false; };
     }
     getReports()
@@ -623,6 +625,9 @@ function App() {
     getDocuments()
       .then((documents) => { if (active) setDocumentItems(documents); })
       .catch(() => { if (active) setDocumentItems([]); });
+    getAiUsageCount()
+      .then((count) => { if (active) setAiAnalysisCount(count); })
+      .catch(() => { if (active) setAiAnalysisCount(0); });
     return () => { active = false; };
   }, [integrationState?.google?.connected]);
 
@@ -1123,11 +1128,6 @@ function App() {
     [offers]
   );
 
-  const aiUserMessageCount = useMemo(
-    () => aiMessages.filter((message) => message.role === "user").length,
-    [aiMessages]
-  );
-
   const dashboardStats = useMemo(
     () => [
       {
@@ -1153,15 +1153,15 @@ function App() {
       },
       {
         label: "AI ETKİLEŞİMİ",
-        value: aiUserMessageCount,
-        detail: "Asistan sohbet isteği",
+        value: aiAnalysisCount,
+        detail: "Kalıcı backend kullanım kaydı",
         icon: "AI",
         moduleId: "ai-assistant",
       },
     ],
     [
       activeProjects.length,
-      aiUserMessageCount,
+      aiAnalysisCount,
       offers.length,
       pendingOffers.length,
       procurementItems.length,
@@ -1878,6 +1878,7 @@ function App() {
 
     try {
       const completion = await requestAiCompletion({ message, context });
+      getAiUsageCount().then(setAiAnalysisCount).catch(() => {});
       setAiMessages((currentMessages) => [
         ...currentMessages,
         {
