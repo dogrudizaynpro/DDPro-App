@@ -193,12 +193,6 @@ const moduleDefinitions = {
       field("notes", "Notlar", "textarea"),
     ],
   },
-  documents: {
-    title: "Belgeler",
-    storageKey: "ddpro_documents_v1",
-    notice: "Belge referansları yerel tarayıcı kaydıdır; dosya depolama servisi bağlı değildir.",
-    fields: [field("name", "Belge adı", "text", true), field("project", "İlgili proje"), field("sourceUrl", "Belge bağlantısı", "url"), field("notes", "Notlar", "textarea")],
-  },
   finance: {
     title: "Finans / Maliyet",
     notice: "Proje maliyetleri authenticated backend API üzerinden saklanır.",
