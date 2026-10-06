@@ -43,16 +43,53 @@ const verificationQuery = `
 
 export const applyAiToolConfirmationsMigration = async ({
   connectionString = process.env.DATABASE_URL,
+  caCertificate = process.env.DATABASE_SSL_CA,
+  caCertificatePath = process.env.DATABASE_SSL_CA_PATH,
   PoolClass = Pool,
 } = {}) => {
   if (!connectionString?.trim()) {
     throw new Error("DATABASE_URL is required to run production database migrations.");
   }
 
+  let databaseUrl;
+  try {
+    databaseUrl = new URL(connectionString);
+    if (
+      !["postgres:", "postgresql:"].includes(databaseUrl.protocol) ||
+      !databaseUrl.hostname
+    ) {
+      throw new Error();
+    }
+  } catch {
+    throw new Error("DATABASE_URL must be a valid PostgreSQL TCP connection URL.");
+  }
+
+  // pg URL SSL parameters replace the explicit SSL object, including its CA.
+  for (const key of [...databaseUrl.searchParams.keys()]) {
+    if (key.startsWith("ssl") || key === "uselibpqcompat") {
+      databaseUrl.searchParams.delete(key);
+    }
+  }
+
+  if (caCertificate?.trim() && caCertificatePath?.trim()) {
+    throw new Error("Configure only one of DATABASE_SSL_CA or DATABASE_SSL_CA_PATH.");
+  }
+  let ca = caCertificate?.replace(/\\n/g, "\n").trim();
+  if (caCertificatePath?.trim()) {
+    try {
+      ca = (await readFile(caCertificatePath.trim(), "utf8")).trim();
+    } catch {
+      throw new Error("DATABASE_SSL_CA_PATH must point to a readable PEM CA certificate.");
+    }
+    if (!ca) {
+      throw new Error("DATABASE_SSL_CA_PATH contains an empty CA certificate.");
+    }
+  }
+
   const migrationSql = await readFile(migrationUrl, "utf8");
   const pool = new PoolClass({
-    connectionString,
-    ssl: { rejectUnauthorized: true },
+    connectionString: databaseUrl.toString(),
+    ssl: { rejectUnauthorized: true, ...(ca ? { ca } : {}) },
     max: 1,
     connectionTimeoutMillis: 10_000,
   });
