@@ -21,12 +21,19 @@ import {
   CAN_USE_LOCAL_FALLBACK,
   getApiHealth,
 } from "./services/api.js";
-import { getAiUsageCount, requestAiCompletion } from "./services/ai.service.js";
+import {
+  confirmAiAction as confirmAiActionRequest,
+  getAiUsageCount,
+  requestAiCompletion,
+} from "./services/ai.service.js";
 import { getCatalogRecords } from "./services/catalog.service.js";
 import { getReports } from "./services/reports.service.js";
 import { getDocuments } from "./services/documents.service.js";
 import { getFinanceCosts } from "./services/finance.service.js";
-import { getCrmContacts } from "./services/operations-integrations.service.js";
+import {
+  getCrmContacts,
+  getGoogleCalendarEvents,
+} from "./services/operations-integrations.service.js";
 import { getIntegrationStatus } from "./services/integrations.service.js";
 import {
   createResearchItem as createProcurementRequest,
@@ -381,7 +388,13 @@ const formatDate = () =>
     timeStyle: "short",
   });
 
-function DashboardCalendar({ now, title = "YAKLAŞAN TAKVİM", onOpenCalendar }) {
+function DashboardCalendar({
+  now,
+  title = "YAKLAŞAN TAKVİM",
+  onOpenCalendar,
+  events = [],
+  fetchState = "loading",
+}) {
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
   const leadingDays = (monthStart.getDay() + 6) % 7;
@@ -421,10 +434,30 @@ function DashboardCalendar({ now, title = "YAKLAŞAN TAKVİM", onOpenCalendar })
             );
           })}
         </div>
-        <div className="calendar-empty">
-          <span className="status-dot" aria-hidden="true" />
-          <p>Etkinlik verileri bağlandığında burada listelenecek.</p>
-        </div>
+        {fetchState === "loading" ? (
+          <div className="calendar-empty"><span className="status-dot" aria-hidden="true" /><p>Google Calendar verisi yükleniyor…</p></div>
+        ) : fetchState === "error" ? (
+          <div className="calendar-empty"><span className="status-dot warning" aria-hidden="true" /><p>Google Calendar verisi alınamadı.</p></div>
+        ) : fetchState === "unavailable" ? (
+          <div className="calendar-empty"><span className="status-dot" aria-hidden="true" /><p>Yaklaşan etkinlikler için Google Calendar bağlantısı gerekli.</p></div>
+        ) : events.length === 0 ? (
+          <div className="calendar-empty"><span className="status-dot" aria-hidden="true" /><p>Yaklaşan etkinlik bulunmuyor.</p></div>
+        ) : (
+          <div className="calendar-upcoming-list">
+            {events.slice(0, 3).map((event) => {
+              const start = event.start?.dateTime || event.start?.date;
+              const dateLabel = start
+                ? new Date(start).toLocaleString("tr-TR", { dateStyle: "short", timeStyle: event.start?.dateTime ? "short" : undefined })
+                : "Tarih belirtilmedi";
+              return (
+                <div className="calendar-upcoming-item" key={event.id}>
+                  <strong>{event.summary || "Başlıksız etkinlik"}</strong>
+                  <small>{dateLabel}</small>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </section>
   );
@@ -569,6 +602,9 @@ function App() {
   const [financeItems, setFinanceItems] = useState([]);
   const [reportItems, setReportItems] = useState([]);
   const [aiAnalysisCount, setAiAnalysisCount] = useState(0);
+  const [aiUsageFetchState, setAiUsageFetchState] = useState("loading");
+  const [calendarEvents, setCalendarEvents] = useState([]);
+  const [calendarFetchState, setCalendarFetchState] = useState("loading");
 
   const [showProjectForm, setShowProjectForm] = useState(false);
   const [showProcurementForm, setShowProcurementForm] = useState(false);
@@ -614,6 +650,9 @@ function App() {
       setFinanceItems([]);
       setDocumentItems([]);
       setAiAnalysisCount(0);
+      setAiUsageFetchState("unavailable");
+      setCalendarEvents([]);
+      setCalendarFetchState("unavailable");
       return () => { active = false; };
     }
     getReports()
@@ -626,8 +665,31 @@ function App() {
       .then((documents) => { if (active) setDocumentItems(documents); })
       .catch(() => { if (active) setDocumentItems([]); });
     getAiUsageCount()
-      .then((count) => { if (active) setAiAnalysisCount(count); })
-      .catch(() => { if (active) setAiAnalysisCount(0); });
+      .then((count) => {
+        if (active) {
+          setAiAnalysisCount(count);
+          setAiUsageFetchState("success");
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setAiAnalysisCount(0);
+          setAiUsageFetchState("error");
+        }
+      });
+    getGoogleCalendarEvents()
+      .then((response) => {
+        if (active) {
+          setCalendarEvents(Array.isArray(response?.data) ? response.data : []);
+          setCalendarFetchState("success");
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setCalendarEvents([]);
+          setCalendarFetchState("error");
+        }
+      });
     return () => { active = false; };
   }, [integrationState?.google?.connected]);
 
@@ -1128,33 +1190,46 @@ function App() {
     [offers]
   );
 
+  const metricValue = (value, state) =>
+    ["success", "empty"].includes(state) ? value : "—";
+  const metricDetail = (detail, state) =>
+    state === "loading"
+      ? "Backend verisi yükleniyor"
+      : state === "error"
+        ? "Backend verisi alınamadı"
+        : state === "unavailable"
+          ? "Oturum veya servis kullanılamıyor"
+        : state === "empty"
+          ? "Bağlantı yok veya kayıt bulunmuyor"
+          : detail;
+
   const dashboardStats = useMemo(
     () => [
       {
         label: "AKTİF PROJELER",
-        value: activeProjects.length,
-        detail: "Devam eden projeler",
+        value: metricValue(activeProjects.length, projectsFetchState),
+        detail: metricDetail("Devam eden projeler", projectsFetchState),
         icon: "▣",
         moduleId: "projects",
       },
       {
         label: "TEKLİFLER",
-        value: offers.length,
-        detail: `${pendingOffers.length} bekleyen teklif`,
+        value: metricValue(offers.length, offersFetchState),
+        detail: metricDetail(`${pendingOffers.length} bekleyen teklif`, offersFetchState),
         icon: "◈",
         moduleId: "offers",
       },
       {
         label: "ARAŞTIRMALAR",
-        value: procurementItems.length,
-        detail: "Tedarik ve ürün araştırması",
+        value: metricValue(procurementItems.length, procurementFetchState),
+        detail: metricDetail("Tedarik ve ürün araştırması", procurementFetchState),
         icon: "⌕",
         moduleId: "procurement",
       },
       {
         label: "AI ETKİLEŞİMİ",
-        value: aiAnalysisCount,
-        detail: "Kalıcı backend kullanım kaydı",
+        value: metricValue(aiAnalysisCount, aiUsageFetchState),
+        detail: metricDetail("Kalıcı backend kullanım kaydı", aiUsageFetchState),
         icon: "AI",
         moduleId: "ai-assistant",
       },
@@ -1162,9 +1237,13 @@ function App() {
     [
       activeProjects.length,
       aiAnalysisCount,
+      aiUsageFetchState,
       offers.length,
+      offersFetchState,
       pendingOffers.length,
       procurementItems.length,
+      procurementFetchState,
+      projectsFetchState,
     ]
   );
 
@@ -1887,6 +1966,7 @@ function App() {
           text: completion.answer,
           date: formatDate(),
           moduleSuggestion: suggestedModuleId,
+          pendingAction: completion.pendingAction,
         },
       ]);
       addLog("DDPro AI isteği yapılandırılmış sağlayıcıya gönderildi.");
@@ -1904,6 +1984,45 @@ function App() {
           date: formatDate(),
           status: "unavailable",
           moduleSuggestion: suggestedModuleId,
+        },
+      ]);
+    } finally {
+      setAiSending(false);
+    }
+  };
+
+  const confirmAiOperationalAction = async (messageId, confirmationId) => {
+    if (aiSending) return;
+    setAiSending(true);
+    try {
+      await confirmAiActionRequest(confirmationId);
+      setAiMessages((currentMessages) => [
+        ...currentMessages.map((message) =>
+          message.id === messageId
+            ? { ...message, pendingAction: null }
+            : message
+        ),
+        {
+          id: createId(),
+          role: "assistant",
+          text: "İşlem tamamlandı ve backend tarafından kaydedildi.",
+          date: formatDate(),
+        },
+      ]);
+      getAiUsageCount().then(setAiAnalysisCount).catch(() => {});
+    } catch (error) {
+      setAiMessages((currentMessages) => [
+        ...currentMessages.map((message) =>
+          message.id === messageId
+            ? { ...message, pendingAction: null }
+            : message
+        ),
+        {
+          id: createId(),
+          role: "assistant",
+          text: `İşlem tamamlanamadı; değişiklik yapıldığı varsayılmadı. ${getApiFailureReason(error)}`,
+          date: formatDate(),
+          status: "unavailable",
         },
       ]);
     } finally {
@@ -1984,6 +2103,14 @@ function App() {
           <div className="panel-content project-preview-list">
             {projectsLoading ? (
               <p className="empty-state">Projeler yükleniyor...</p>
+            ) : projectsFetchState === "error" ? (
+              <div className="dashboard-empty-state">
+                <span aria-hidden="true">!</span>
+                <p>{projectsError || "Projeler backend üzerinden alınamadı."}</p>
+                <button type="button" onClick={() => handleModuleNavigation("projects")}>
+                  Proje modülünü aç
+                </button>
+              </div>
             ) : activeProjects.length === 0 ? (
               <div className="dashboard-empty-state">
                 <span aria-hidden="true">▣</span>
@@ -2017,6 +2144,8 @@ function App() {
         <DashboardCalendar
           now={currentDate}
           onOpenCalendar={() => handleModuleNavigation("calendar")}
+          events={calendarEvents}
+          fetchState={calendarFetchState}
         />
       </div>
 
@@ -2031,7 +2160,7 @@ function App() {
           </div>
           <div className="system-status-list">
             <div className="system-status-item">
-              <span>DDPro Core</span><strong>Hazır</strong>
+              <span>DDPro Core</span><strong>{getConnectionLabel(apiHealthState.status)}</strong>
             </div>
             <div className="system-status-item">
               <span>Projeler API</span><strong>{getConnectionLabel(projectsFetchState)}</strong>
@@ -2455,6 +2584,7 @@ function App() {
           setAiInput={setAiInput}
           onNavigate={handleModuleNavigation}
           aiSending={aiSending}
+          onConfirmAction={confirmAiOperationalAction}
         />
       );
     }

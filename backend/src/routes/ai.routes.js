@@ -2,6 +2,7 @@ import express from "express";
 import rateLimit from "express-rate-limit";
 import {
   createAiCompletion,
+  confirmAiOperationalAction,
   getAiUsage,
   getAiStatus,
 } from "../controllers/ai.controller.js";
@@ -19,5 +20,6 @@ const aiChatRateLimit = rateLimit({
 router.get("/status", getAiStatus);
 router.get("/usage", requireGoogleSession, getAiUsage);
 router.post("/chat", requireGoogleSession, aiChatRateLimit, createAiCompletion);
+router.post("/tools/confirm", requireGoogleSession, aiChatRateLimit, confirmAiOperationalAction);
 
 export default router;

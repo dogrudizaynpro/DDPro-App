@@ -19,3 +19,11 @@ export const requestAiCompletion = async ({ message, context }) => {
   });
   return response.data;
 };
+
+export const confirmAiAction = async (confirmationId) => {
+  const response = await fetchAPI("/api/ai/tools/confirm", {
+    method: "POST",
+    body: JSON.stringify({ confirmationId }),
+  });
+  return response.data;
+};

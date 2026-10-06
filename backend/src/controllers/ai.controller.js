@@ -3,6 +3,7 @@ import {
   getAiProviderStatus,
   recordAiUsage,
   requestAiCompletion,
+  confirmAiAction,
 } from "../services/ai.service.js";
 
 const MAX_MESSAGE_LENGTH = 8_000;
@@ -47,12 +48,28 @@ export const createAiCompletion = async (req, res, next) => {
   }
 
   try {
-    const answer = await requestAiCompletion({ message, context });
+    const completion = await requestAiCompletion({
+      message,
+      context,
+      integrationAccount: req.integrationAccount,
+    });
     await recordAiUsage(req.integrationAccount);
     return res.status(200).json({
       status: "success",
-      data: { answer, provider: getAiProviderStatus().provider },
+      data: { ...completion, provider: getAiProviderStatus().provider },
     });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const confirmAiOperationalAction = async (req, res, next) => {
+  try {
+    const data = await confirmAiAction(
+      req.integrationAccount,
+      req.body?.confirmationId
+    );
+    return res.status(200).json({ status: "success", data });
   } catch (error) {
     return next(error);
   }

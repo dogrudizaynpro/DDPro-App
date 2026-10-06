@@ -73,6 +73,7 @@ function AIModule({
   onNavigate,
   messagesOnly = false,
   aiSending = false,
+  onConfirmAction,
 }) {
   const promptFieldRef = useRef(null);
   const [providerStatus, setProviderStatus] = useState("checking");
@@ -185,6 +186,16 @@ function AIModule({
                 </strong>
                 <p>{message.text}</p>
                 <small>{message.date}</small>
+                {message.pendingAction ? (
+                  <button
+                    className="ai-module-suggestion"
+                    type="button"
+                    disabled={aiSending}
+                    onClick={() => onConfirmAction?.(message.id, message.pendingAction.id)}
+                  >
+                    {aiSending ? "İşlem doğrulanıyor…" : message.pendingAction.summary}
+                  </button>
+                ) : null}
                 {message.moduleSuggestion && MODULE_TITLES[message.moduleSuggestion] ? (
                   <button
                     className="ai-module-suggestion"
