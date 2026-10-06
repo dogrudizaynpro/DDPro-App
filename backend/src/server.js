@@ -7,6 +7,7 @@ const PORT = process.env.PORT || 3001;
 const startServer = async () => {
   if (process.env.NODE_ENV === "production") {
     await applyAiToolConfirmationsMigration();
+    console.log("✅ Migration 015 applied and schema/RLS/grants verified.");
   }
 
   app.listen(PORT, () => {
@@ -25,7 +26,7 @@ const startServer = async () => {
 startServer().catch((error) => {
   const code = error?.code ? ` (database error ${error.code})` : "";
   console.error(
-    `❌ Production database migration failed${code}. Verify DATABASE_URL and database permissions.`
+    `❌ Production database migration failed${code}. Verify DATABASE_URL, DATABASE_SSL_CA / DATABASE_SSL_CA_PATH, the database hostname and permissions.`
   );
   process.exitCode = 1;
 });
