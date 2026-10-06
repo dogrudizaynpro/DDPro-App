@@ -16,6 +16,7 @@ let formatGoogleIntegrationError;
 let completeGoogleConnection;
 let setBrowserSession;
 let confirmAiAction;
+let disconnectGoogle;
 
 before(async () => {
   globalThis.window = {
@@ -35,14 +36,14 @@ before(async () => {
   };
   ({ fetchAPI, setBrowserSession } = await import("../src/services/api.js"));
   ({ testIntegrationConnection, getIntegrationStatus } = await import("../src/services/integrations.service.js"));
-  ({ formatGoogleIntegrationError, completeGoogleConnection } = await import("../src/services/operations-integrations.service.js"));
+  ({ formatGoogleIntegrationError, completeGoogleConnection, disconnectGoogle } = await import("../src/services/operations-integrations.service.js"));
   ({ confirmAiAction } = await import("../src/services/ai.service.js"));
 });
 
 beforeEach(() => {
   requests = [];
   storage.clear();
-  storage.set("ddpro_browser_session", "existing-browser-session");
+  setBrowserSession("existing-browser-session");
   window.location.hash = "";
 });
 
@@ -134,12 +135,143 @@ test("failed exchange retains callback and verifier for retry without claiming a
 test("google_connected URL alone does not authenticate Gmail or Calendar", async () => {
   storage.clear();
   window.location.hash = "#/ayarlar?integration=google_connected";
-  response = () => Response.json({ data: { gmail: { connected: false }, googleCalendar: { connected: false } } });
+  response = (url) => url.endsWith("/google/restore")
+    ? Response.json({ code: "BROWSER_SESSION_REQUIRED", message: "Browser authorization required." }, { status: 401 })
+    : Response.json({ data: { gmail: { connected: false }, googleCalendar: { connected: false } } });
   const status = await getIntegrationStatus();
   assert.equal(status.gmail.connected, false);
   assert.equal(status.googleCalendar.connected, false);
-  assert.equal(requests.length, 1);
+  assert.equal(requests.length, 2);
   assert.equal(requests[0].options.headers.Authorization, undefined);
+});
+
+test("browser restart restores once before concurrent Projects, CRM, offers and procurement reads", async () => {
+  storage.clear();
+  let finishRestore;
+  response = (url) => url.endsWith("/google/restore")
+    ? new Promise((resolve) => { finishRestore = resolve; })
+    : Response.json({ data: [{ id: "backend-record" }] });
+  const endpoints = ["/api/projects", "/api/crm", "/api/offers", "/api/research"];
+  const pending = endpoints.map((endpoint) => fetchAPI(endpoint));
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(requests.length, 1);
+  assert.match(requests[0].url, /google\/restore$/);
+  assert.equal(requests[0].options.credentials, "include");
+  assert.equal(requests[0].options.method, "POST");
+  assert.equal(requests[0].options.headers.Authorization, undefined);
+  finishRestore(Response.json({ data: { session: "restored-session" } }));
+  const results = await Promise.all(pending);
+  assert.ok(results.every((result) => result.data[0].id === "backend-record"));
+  assert.equal(requests.length, 5);
+  assert.ok(requests.slice(1).every(({ options }) =>
+    options.headers.Authorization === ["Bearer", "restored-session"].join(" ")));
+  assert.deepEqual([...storage.keys()], ["ddpro_browser_session"]);
+});
+
+test("an expired browser session restores with cookies and retries the protected request only once", async () => {
+  response = (url, options) => url.endsWith("/google/restore")
+    ? Response.json({ data: { session: "renewed-session" } })
+    : options.headers.Authorization === ["Bearer", "renewed-session"].join(" ")
+      ? Response.json({ data: ["real-project"] })
+      : Response.json({ message: "Browser session expired." }, { status: 401 });
+  const result = await fetchAPI("/api/projects");
+  assert.deepEqual(result.data, ["real-project"]);
+  assert.equal(requests.length, 3);
+  assert.equal(requests[1].options.headers.Authorization, undefined);
+  assert.equal(storage.get("ddpro_browser_session"), "renewed-session");
+});
+
+test("known session expiry restores before the public integration status read", async () => {
+  setBrowserSession(`${btoa(JSON.stringify({
+    email: "owner@example.com", expiresAt: Date.now() - 1000,
+  }))}.signature`);
+  response = (url) => url.endsWith("/google/restore")
+    ? Response.json({ data: { session: "fresh-session" } })
+    : Response.json({ data: { google: { connected: true } } });
+  assert.equal((await getIntegrationStatus()).google.connected, true);
+  assert.equal(requests.length, 2);
+  assert.match(requests[0].url, /google\/restore$/);
+  assert.equal(requests[1].options.headers.Authorization, ["Bearer", "fresh-session"].join(" "));
+});
+
+test("a late concurrent 401 reuses the already renewed session instead of restoring again", async () => {
+  let finishLateResponse;
+  response = (url, options) => {
+    if (url.endsWith("/google/restore")) return Response.json({ data: { session: "shared-renewal" } });
+    if (options.headers.Authorization === ["Bearer", "shared-renewal"].join(" ")) {
+      return Response.json({ data: ["backend-record"] });
+    }
+    if (url.endsWith("/api/crm")) return new Promise((resolve) => { finishLateResponse = resolve; });
+    return Response.json({ message: "Session expired." }, { status: 401 });
+  };
+  const projects = fetchAPI("/api/projects");
+  const crm = fetchAPI("/api/crm");
+  await projects;
+  finishLateResponse(Response.json({ message: "Session expired." }, { status: 401 }));
+  assert.deepEqual((await crm).data, ["backend-record"]);
+  assert.equal(requests.filter(({ url }) => url.endsWith("/google/restore")).length, 1);
+  assert.equal(storage.get("ddpro_browser_session"), "shared-renewal");
+});
+
+test("missing restoration proof never calls protected APIs or assumes a saved Google account", async () => {
+  storage.clear();
+  response = () => Response.json({
+    code: "BROWSER_SESSION_REQUIRED", message: "Browser authorization required.",
+  }, { status: 401 });
+  await assert.rejects(fetchAPI("/api/projects"), (error) => error.code === "BROWSER_SESSION_REQUIRED");
+  await assert.rejects(fetchAPI("/api/crm"), (error) => error.status === 401);
+  assert.equal(requests.length, 1);
+  assert.equal(storage.has("ddpro_browser_session"), false);
+});
+
+test("a transient restoration failure is retryable without clearing a Google connection", async () => {
+  storage.clear();
+  response = () => Response.json({ message: "Storage unavailable." }, { status: 503 });
+  await assert.rejects(fetchAPI("/api/projects"), (error) => error.status === 503);
+  response = (url) => url.endsWith("/google/restore")
+    ? Response.json({ data: { session: "recovered-session" } })
+    : Response.json({ data: ["backend-project"] });
+  assert.deepEqual((await fetchAPI("/api/projects")).data, ["backend-project"]);
+  assert.equal(requests.length, 3);
+  assert.ok(requests.every(({ url }) => !url.includes("logout")));
+});
+
+test("Projects waits for the OAuth handoff as well as integration status", async () => {
+  storage.clear();
+  storage.set("ddpro_oauth_verifier", "verifier");
+  window.location.hash = "#/ayarlar?integration=google_connected&exchange_code=projects-code";
+  response = (url) => url.endsWith("/google/exchange")
+    ? Response.json({ data: { session: "oauth-project-session" } })
+    : Response.json({ data: ["oauth-project"] });
+  assert.deepEqual((await fetchAPI("/api/projects")).data, ["oauth-project"]);
+  assert.equal(requests.length, 2);
+  assert.match(requests[0].url, /google\/exchange$/);
+  assert.equal(requests[1].options.headers.Authorization, ["Bearer", "oauth-project-session"].join(" "));
+});
+
+test("non-Google provider tests remain usable without browser authorization", async () => {
+  storage.clear();
+  response = () => Response.json({ data: { provider: "ai", connected: true } });
+  assert.equal((await testIntegrationConnection("ai")).data.connected, true);
+  assert.equal(requests.length, 1);
+  assert.match(requests[0].url, /test\/ai$/);
+  response = () => Response.json({ message: "Provider authorization failed." }, { status: 401 });
+  await assert.rejects(testIntegrationConnection("ai"), (error) => error.status === 401);
+  assert.equal(requests.length, 2);
+  assert.ok(requests.every(({ url }) => !url.includes("restore")));
+});
+
+test("disconnect clears the browser bearer only after backend success", async () => {
+  response = () => Response.json({ message: "Revocation unavailable." }, { status: 502 });
+  await assert.rejects(disconnectGoogle(), (error) => error.status === 502);
+  assert.equal(storage.get("ddpro_browser_session"), "existing-browser-session");
+  response = () => Response.json({ data: { disconnected: true } });
+  await disconnectGoogle();
+  assert.equal(storage.has("ddpro_browser_session"), false);
+  response = () => Response.json({ code: "BROWSER_SESSION_REQUIRED" }, { status: 401 });
+  await assert.rejects(fetchAPI("/api/projects"), (error) => error.status === 401);
+  assert.equal(requests.length, 3);
+  assert.match(requests[2].url, /google\/restore$/);
 });
 
 test("a consumed exchange cannot block backend status or discard an existing session", async () => {

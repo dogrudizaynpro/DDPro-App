@@ -9,6 +9,7 @@ import {
   beginGoogleOAuth,
   exchangeGoogleSession,
   requireGoogleSession,
+  restoreGoogleSession,
   revokeGoogleSession,
 } from "../services/google-integration.service.js";
 import {
@@ -56,6 +57,15 @@ router.post(
 router.get("/google/start", googleOAuthRateLimit, beginGoogleOAuth);
 router.get("/google/callback", googleOAuthRateLimit, completeGoogleOAuth);
 router.post("/google/exchange", googleOAuthRateLimit, exchangeGoogleSession);
+router.post("/google/restore",
+  (_req, res, next) => { res.set("Cache-Control", "no-store"); next(); },
+  rateLimit({
+    windowMs: 60_000,
+    limit: 30,
+    standardHeaders: "draft-8",
+    legacyHeaders: false,
+  }),
+  restoreGoogleSession);
 router.post("/google/logout", integrationActionRateLimit, requireGoogleSession, revokeGoogleSession);
 router.post("/gmail/import", integrationActionRateLimit, requireGoogleSession, postGmailImport);
 router.get("/calendar/events", integrationActionRateLimit, requireGoogleSession, getCalendarEvents);

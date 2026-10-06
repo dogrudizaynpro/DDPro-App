@@ -10,6 +10,8 @@ import {
   isTokenTableAvailable,
   removeIntegrationToken,
   readIntegrationToken,
+  readIntegrationTokenSnapshot,
+  replaceIntegrationToken,
   saveIntegrationToken,
   encryptIntegrationToken,
   decryptIntegrationToken,
@@ -97,11 +99,18 @@ const cookieValue = (req, name) => {
   }
 };
 
+const hasCookie = (req, name) => (req.headers.cookie || "")
+  .split(";").some((entry) => entry.trim().startsWith(`${name}=`));
+
+const restoreCookieName = "ddpro_session_restore";
+const restoreCookiePath = "/api/integrations/google";
+const browserSessionLifetime = 8 * 60 * 60 * 1000;
+const restoreLifetime = 30 * 24 * 60 * 60 * 1000;
 const setCookie = (res, name, value, maxAge, path = "/api") => {
   const secure = process.env.NODE_ENV === "production";
   res.append(
     "Set-Cookie",
-    `${name}=${encodeURIComponent(value)}; HttpOnly; Path=${path}; Max-Age=${maxAge}; Secure; SameSite=${secure ? "None" : "Lax"}`
+    `${name}=${encodeURIComponent(value)}; HttpOnly; Path=${path}; Max-Age=${maxAge}; Secure; SameSite=${secure ? "None" : "Lax"}${secure && name === restoreCookieName ? "; Partitioned" : ""}`
   );
 };
 
@@ -133,6 +142,51 @@ const allowedGoogleEmails = () =>
       .map((email) => email.trim().toLowerCase())
       .filter(Boolean)
   );
+
+const validExpiry = (expiresAt) =>
+  Number.isFinite(expiresAt) && expiresAt > Date.now();
+
+const readSignedSession = (raw, prefix = "") => {
+  const separator = raw.lastIndexOf(".");
+  if (!process.env.INTEGRATION_SESSION_SECRET || separator <= 0) return null;
+  const session = raw.slice(0, separator);
+  if (!safeEqual(raw.slice(separator + 1), sign(`${prefix}${session}`))) return null;
+  try {
+    const payload = JSON.parse(Buffer.from(session, "base64url").toString("utf8"));
+    if (!validExpiry(payload.expiresAt) ||
+        typeof payload.email !== "string" ||
+        !allowedGoogleEmails().has(payload.email.toLowerCase()) ||
+        (payload.sessionVersion !== undefined &&
+          (typeof payload.sessionVersion !== "string" || !payload.sessionVersion))) return null;
+    return { ...payload, email: payload.email.toLowerCase() };
+  } catch {
+    return null;
+  }
+};
+
+const signedSession = (payload, prefix = "") => {
+  const encoded = Buffer.from(JSON.stringify(payload)).toString("base64url");
+  return `${encoded}.${sign(`${prefix}${encoded}`)}`;
+};
+
+const issueRestoreCookie = (res, payload) =>
+  setCookie(res, restoreCookieName, signedSession(payload, "restore:"),
+    Math.max(0, Math.ceil((payload.expiresAt - Date.now()) / 1000)), restoreCookiePath);
+
+const clearRestoreCookie = (res) =>
+  setCookie(res, restoreCookieName, "", 0, restoreCookiePath);
+
+const browserSessionRequired = (res) => res.status(401).json({
+  status: "error",
+  code: "BROWSER_SESSION_REQUIRED",
+  message: "Browser authorization is required. Authorize this browser with Google.",
+});
+
+const googleConnectionRequired = (res) => res.status(401).json({
+  status: "error",
+  code: "GOOGLE_CONNECTION_REQUIRED",
+  message: "Google account connection is required.",
+});
 
 export const beginGoogleOAuth = async (req, res, next) => {
   const { clientId, redirectUri } = getOAuthConfig();
@@ -219,7 +273,7 @@ export const completeGoogleOAuth = async (req, res, next) => {
   if (
     !stateDetails ||
     !safeEqual(signature, sign(`oauth:${statePayload}`)) ||
-    stateDetails.expiresAt < Date.now() ||
+    !validExpiry(stateDetails.expiresAt) ||
     !safeEqual(cookieNonce, stateDetails.browserNonce)
   ) {
     return redirectOAuthResult("google_error", "state_invalid");
@@ -256,6 +310,7 @@ export const completeGoogleOAuth = async (req, res, next) => {
       return redirectOAuthResult("google_error", "account_not_allowed");
     }
 
+    const sessionVersion = randomBytes(32).toString("base64url");
     await saveIntegrationToken({
       provider: "google",
       account: email,
@@ -264,10 +319,11 @@ export const completeGoogleOAuth = async (req, res, next) => {
         refreshToken: token.refresh_token || null,
         expiresAt: Date.now() + (Number(token.expires_in) || 3600) * 1000,
         scopes: token.scope || "",
+        sessionVersion,
       },
     });
     const session = Buffer.from(
-      JSON.stringify({ email, expiresAt: Date.now() + 8 * 60 * 60 * 1000 })
+      JSON.stringify({ email, sessionVersion, expiresAt: Date.now() + browserSessionLifetime })
     ).toString("base64url");
     setCookie(res, "ddpro_integration_session", `${session}.${sign(session)}`, 8 * 60 * 60    );
     if (stateDetails.challenge) {
@@ -291,8 +347,12 @@ export const completeGoogleOAuth = async (req, res, next) => {
 };
 
 export const exchangeGoogleSession = async (req, res, next) => {
+  res.set("Cache-Control", "no-store");
   if (!allowedFrontendOrigin(req)) {
     return res.status(403).json({ status: "error", message: "Request origin is not allowed." });
+  }
+  if (!req.is("application/json")) {
+    return res.status(415).json({ status: "error", message: "application/json is required." });
   }
   const { code, verifier } = req.body || {};
   if (typeof code !== "string" || !/^[A-Za-z0-9_-]{43}$/.test(code) ||
@@ -306,10 +366,17 @@ export const exchangeGoogleSession = async (req, res, next) => {
     if (error) throw error;
     if (!data) return res.status(401).json({ status: "error", message: "Authorization expired or already used." });
     const grant = decryptIntegrationToken(data.encrypted_token);
-    if (grant.expiresAt < Date.now() || !safeEqual(grant.challenge, digest(verifier))) {
+    if (!validExpiry(grant.expiresAt) || !safeEqual(grant.challenge, digest(verifier))) {
       return res.status(401).json({ status: "error", message: "Authorization expired or invalid." });
     }
-    res.set("Cache-Control", "no-store");
+    const payload = readSignedSession(`${grant.session}.${sign(grant.session)}`);
+    if (!payload?.sessionVersion) return browserSessionRequired(res);
+    const token = await readIntegrationToken({ provider: "google", account: payload.email });
+    if (!token) return googleConnectionRequired(res);
+    if (token.sessionVersion !== payload.sessionVersion) return browserSessionRequired(res);
+    issueRestoreCookie(res, {
+      email: payload.email, sessionVersion: payload.sessionVersion, expiresAt: Date.now() + restoreLifetime,
+    });
     return res.json({
       status: "success",
       data: { session: `${grant.session}.${sign(`browser:${grant.session}`)}` },
@@ -319,31 +386,74 @@ export const exchangeGoogleSession = async (req, res, next) => {
   }
 };
 
-export const getGoogleSessionAccount = (req) => {
-  const secret = process.env.INTEGRATION_SESSION_SECRET;
-  const allowedEmails = allowedGoogleEmails();
-  const authorization = req.get("authorization");
-  if (authorization && !allowedFrontendOrigin(req)) return "";
-  const bearer = authorization?.startsWith("Bearer ") ? authorization.slice(7) : "";
-  if (authorization && !bearer) return "";
-  const raw = bearer || cookieValue(req, "ddpro_integration_session");
-  const separator = raw.lastIndexOf(".");
-  if (!secret || separator < 0) return "";
-  const session = raw.slice(0, separator);
-  const signature = raw.slice(separator + 1);
-  if (!safeEqual(signature, sign(bearer ? `browser:${session}` : session))) return "";
-  try {
-    const payload = JSON.parse(Buffer.from(session, "base64url").toString("utf8"));
-    if (
-      payload.expiresAt < Date.now() ||
-      !allowedEmails.has(String(payload.email || "").toLowerCase())
-    ) {
-      return "";
-    }
-    return String(payload.email).toLowerCase();
-  } catch {
-    return "";
+export const restoreGoogleSession = async (req, res, next) => {
+  res.set("Cache-Control", "no-store");
+  if (!allowedFrontendOrigin(req)) {
+    return res.status(403).json({ status: "error", message: "Request origin is not allowed." });
   }
+  if (!req.is("application/json")) {
+    return res.status(415).json({ status: "error", message: "application/json is required." });
+  }
+  const raw = cookieValue(req, restoreCookieName);
+  const persistent = hasCookie(req, restoreCookieName);
+  const payload = persistent
+    ? readSignedSession(raw, "restore:")
+    : readSignedSession(cookieValue(req, "ddpro_integration_session"));
+  if (!payload || (persistent && !payload.sessionVersion)) {
+    clearRestoreCookie(res);
+    return browserSessionRequired(res);
+  }
+  try {
+    const snapshot = await readIntegrationTokenSnapshot({ provider: "google", account: payload.email });
+    const token = snapshot?.value;
+    if (!token) {
+      clearRestoreCookie(res);
+      return googleConnectionRequired(res);
+    }
+    if ((payload.sessionVersion || undefined) !== token.sessionVersion) {
+      clearRestoreCookie(res);
+      return browserSessionRequired(res);
+    }
+    // A still-valid legacy callback session can bootstrap the browser partition once.
+    if (!persistent && !token.sessionVersion) {
+      token.sessionVersion = randomBytes(32).toString("base64url");
+      const replaced = await replaceIntegrationToken({
+        provider: "google", account: payload.email, value: token,
+        encryptedToken: snapshot.encryptedToken,
+      });
+      if (!replaced) return browserSessionRequired(res);
+    }
+    const expiresAt = persistent ? payload.expiresAt : Date.now() + restoreLifetime;
+    if (!persistent) issueRestoreCookie(res, {
+      email: payload.email, sessionVersion: token.sessionVersion, expiresAt,
+    });
+    return res.json({
+      status: "success",
+      data: { session: signedSession({
+        email: payload.email, sessionVersion: token.sessionVersion,
+        expiresAt: Math.min(expiresAt, Date.now() + browserSessionLifetime),
+      }, "browser:") },
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const getGoogleSession = (req) => {
+  const authorization = req.get("authorization");
+  if (authorization && !allowedFrontendOrigin(req)) return null;
+  const bearer = authorization?.startsWith("Bearer ") ? authorization.slice(7) : "";
+  if (authorization && !bearer) return null;
+  const raw = bearer || cookieValue(req, "ddpro_integration_session");
+  return readSignedSession(raw, bearer ? "browser:" : "");
+};
+
+export const getGoogleSessionAccount = async (req) => {
+  const payload = getGoogleSession(req);
+  if (!payload) return "";
+  const token = await readIntegrationToken({ provider: "google", account: payload.email });
+  if (!token || (payload.sessionVersion || undefined) !== token.sessionVersion) return "";
+  return payload.email;
 };
 
 export const requireGoogleSession = async (req, res, next) => {
@@ -371,25 +481,27 @@ export const requireGoogleSession = async (req, res, next) => {
       return res.status(403).json({ status: "error", message: "Request origin is not allowed." });
     }
   }
-  const account = getGoogleSessionAccount(req);
-  if (!account) {
-    return res.status(401).json({ status: "error", message: "Google account connection is required." });
+  const payload = getGoogleSession(req);
+  if (!payload) {
+    return browserSessionRequired(res);
   }
-  if (req.get("authorization")) {
-    try {
-      if (!await hasStoredIntegrationToken("google", account)) {
-        return res.status(401).json({ status: "error", message: "Google account connection is required." });
-      }
-    } catch (error) {
-      return next(error);
+  const account = payload.email;
+  try {
+    const token = await readIntegrationToken({ provider: "google", account });
+    if (!token) return googleConnectionRequired(res);
+    if ((payload.sessionVersion || undefined) !== token.sessionVersion) {
+      return browserSessionRequired(res);
     }
+  } catch (error) {
+    return next(error);
   }
   req.integrationAccount = account;
   return next();
 };
 
 export const getGoogleAccessToken = async (account) => {
-  const token = await readIntegrationToken({ provider: "google", account });
+  const snapshot = await readIntegrationTokenSnapshot({ provider: "google", account });
+  const token = snapshot?.value;
   if (!token) throw Object.assign(new Error("Google account is not connected."), { statusCode: 401, expose: true });
   if (token.expiresAt > Date.now() + 60_000) return token.accessToken;
   if (!token.refreshToken) {
@@ -430,7 +542,15 @@ export const getGoogleAccessToken = async (account) => {
     accessToken: refreshed.access_token,
     expiresAt: Date.now() + (Number(refreshed.expires_in) || 3600) * 1000,
   };
-  await saveIntegrationToken({ provider: "google", account, value: updated });
+  const replaced = await replaceIntegrationToken({
+    provider: "google", account, value: updated, encryptedToken: snapshot.encryptedToken,
+  });
+  if (!replaced) {
+    throw Object.assign(new Error("Google connection changed during token refresh. Retry the request."), {
+      statusCode: 409,
+      expose: true,
+    });
+  }
   return updated.accessToken;
 };
 
@@ -468,10 +588,8 @@ export const revokeGoogleSession = async (req, res, next) => {
   } catch (error) {
     return next(error);
   }
-  res.append(
-    "Set-Cookie",
-    `ddpro_integration_session=; HttpOnly; Path=/api; Max-Age=0; Secure; SameSite=${process.env.NODE_ENV === "production" ? "None" : "Lax"}`
-  );
+  setCookie(res, "ddpro_integration_session", "", 0);
+  clearRestoreCookie(res);
   return res.status(200).json({
     status: "success",
     data: { disconnected: true, providerRevoked: revoked },

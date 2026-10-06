@@ -36,7 +36,7 @@ test("AI chat requires an authenticated Google browser session", async () => {
     body: JSON.stringify({ message: "Summarize the project." }),
   });
   assert.equal(response.status, 401);
-  assert.equal((await response.json()).message, "Google account connection is required.");
+  assert.equal((await response.json()).code, "BROWSER_SESSION_REQUIRED");
 });
 
 test("AI usage count requires the authenticated Google browser session", async () => {
@@ -54,7 +54,7 @@ test("AI write confirmation requires the authenticated Google browser session", 
     body: JSON.stringify({ confirmationId: "4bc6f5a6-0b6c-4ddb-b29b-208c84c344d0" }),
   });
   assert.equal(response.status, 401);
-  assert.equal((await response.json()).message, "Google account connection is required.");
+  assert.equal((await response.json()).code, "BROWSER_SESSION_REQUIRED");
 });
 
 test("catalog CRUD and material calculation endpoints require the Google session", async () => {

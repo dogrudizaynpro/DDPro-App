@@ -82,7 +82,7 @@ export const saveIntegrationToken = async ({ provider, account, value }) => {
   if (error) throw error;
 };
 
-export const readIntegrationToken = async ({ provider, account }) => {
+export const readIntegrationTokenSnapshot = async ({ provider, account }) => {
   const client = getIntegrationAdmin();
   if (!client || !getEncryptionKey()) return null;
   const { data, error } = await client
@@ -92,7 +92,32 @@ export const readIntegrationToken = async ({ provider, account }) => {
     .eq("account", account)
     .maybeSingle();
   if (error) throw error;
-  return data ? decryptIntegrationToken(data.encrypted_token) : null;
+  return data ? {
+    value: decryptIntegrationToken(data.encrypted_token),
+    encryptedToken: data.encrypted_token,
+  } : null;
+};
+
+export const readIntegrationToken = async (options) =>
+  (await readIntegrationTokenSnapshot(options))?.value || null;
+
+export const replaceIntegrationToken = async ({ provider, account, value, encryptedToken }) => {
+  const client = getIntegrationAdmin();
+  if (!client || !getEncryptionKey()) {
+    throw new Error("Secure integration token storage is not configured.");
+  }
+  const { data, error } = await client.from("integration_tokens")
+    .update({
+      encrypted_token: encryptIntegrationToken(value),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("provider", provider)
+    .eq("account", account)
+    .eq("encrypted_token", JSON.stringify(encryptedToken))
+    .select("provider")
+    .maybeSingle();
+  if (error) throw error;
+  return Boolean(data);
 };
 
 export const removeIntegrationToken = async ({ provider, account }) => {
