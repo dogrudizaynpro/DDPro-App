@@ -26,23 +26,24 @@ const requireDatabase = () => {
 };
 
 export const normalizeDocumentUpload = ({ originalName, contentType, projectId, crmContactId, buffer }) => {
+  const fileBuffer = Buffer.isBuffer(buffer) ? buffer : null;
   if (typeof originalName !== "string") throw fail("A document filename is required.");
   const name = originalName.split(/[\\/]/).pop().trim();
   if (!name || name.length > 255 || /[\u0000-\u001f\u007f]/.test(name)) throw fail("Document filename is invalid.");
   const extension = name.slice(name.lastIndexOf(".")).toLowerCase();
   if (MIME_TYPES.get(extension) !== contentType) throw fail("Document file type is not supported.");
-  if (!Buffer.isBuffer(buffer) || buffer.length === 0 || buffer.length > MAX_FILE_SIZE) {
+  if (!fileBuffer || fileBuffer.length === 0 || fileBuffer.length > MAX_FILE_SIZE) {
     throw fail("Document must be between 1 byte and 10 MB.");
   }
   const signatureValid = extension === ".pdf"
-    ? buffer.subarray(0, 5).toString() === "%PDF-"
+    ? fileBuffer.subarray(0, 5).toString() === "%PDF-"
     : extension === ".png"
-      ? buffer.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
+      ? fileBuffer.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
       : [".jpg", ".jpeg"].includes(extension)
-        ? buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff
+        ? fileBuffer[0] === 0xff && fileBuffer[1] === 0xd8 && fileBuffer[2] === 0xff
         : [".docx", ".xlsx"].includes(extension)
-          ? buffer[0] === 0x50 && buffer[1] === 0x4b
-          : !buffer.includes(0);
+          ? fileBuffer[0] === 0x50 && fileBuffer[1] === 0x4b
+          : !fileBuffer.includes(0);
   if (!signatureValid) throw fail("Document contents do not match the selected file type.");
   const reference = (value, label) => {
     if (value === undefined || value === null || value === "") return null;
@@ -54,7 +55,7 @@ export const normalizeDocumentUpload = ({ originalName, contentType, projectId, 
     content_type: contentType,
     project_id: reference(projectId, "Project"),
     crm_contact_id: reference(crmContactId, "CRM contact"),
-    file_size: buffer.length,
+    file_size: fileBuffer.length,
   };
 };
 
