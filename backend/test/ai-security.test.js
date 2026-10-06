@@ -118,3 +118,19 @@ test("finance cost CRUD endpoints require the Google session", async () => {
   });
   assert.equal(create.status, 401);
 });
+
+test("message conversation and message endpoints require the Google session", async () => {
+  const list = await fetch(`${baseUrl}/api/messages/conversations`);
+  assert.equal(list.status, 401);
+  const create = await fetch(`${baseUrl}/api/messages/conversations`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Origin: "https://dogrudizaynpro.github.io",
+    },
+    body: JSON.stringify({ title: "Unauthorized conversation" }),
+  });
+  assert.equal(create.status, 401);
+  const messages = await fetch(`${baseUrl}/api/messages/conversations/4bc6f5a6-0b6c-4ddb-b29b-208c84c344d0/messages`);
+  assert.equal(messages.status, 401);
+});

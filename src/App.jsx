@@ -40,6 +40,7 @@ const OffersModule = lazy(() => import("./modules/OffersModule.jsx"));
 const CRMModule = lazy(() => import("./modules/CRMModule.jsx"));
 const SystemsModule = lazy(() => import("./modules/SystemsModule.jsx"));
 const AIModule = lazy(() => import("./modules/AIModule.jsx"));
+const MessagesModule = lazy(() => import("./modules/MessagesModule.jsx"));
 const SkeletonModule = lazy(() => import("./modules/SkeletonModule.jsx"));
 const OperationsModule = lazy(() => import("./modules/OperationsModule.jsx"));
 
@@ -184,9 +185,9 @@ const modules = [
     path: "/mesajlar",
     icon: "✉",
     title: "Mesajlar",
-    short: "Yerel Mesajlar",
+    short: "Mesaj Merkezi",
     description:
-      "Mevcut DDPro AI yerel sohbet akışındaki mesajlar.",
+      "Proje ve müşteri ilişkili kalıcı konuşma kayıtları.",
   },
   {
     id: "finance",
@@ -2453,17 +2454,7 @@ function App() {
     }
 
     if (activeModule === "messages") {
-      return (
-        <AIModule
-          aiMessages={aiMessages}
-          sendAiMessage={sendAiMessage}
-          aiInput={aiInput}
-          setAiInput={setAiInput}
-          messagesOnly
-          onNavigate={handleModuleNavigation}
-          aiSending={aiSending}
-        />
-      );
+      return <MessagesModule />;
     }
 
     if (
