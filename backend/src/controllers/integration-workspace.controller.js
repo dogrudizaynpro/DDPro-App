@@ -91,7 +91,7 @@ export const postWhatsAppWebhook = async (req, res, next) => {
     return res.status(401).json({ status: "error", message: "Webhook signature is invalid." });
   }
   try {
-    const processed = await saveWhatsAppMessages(req.body || {});
+    const processed = await saveWhatsAppMessages(req.body);
     return res.status(200).json({ status: "success", data: { processed } });
   } catch (error) {
     return next(error);

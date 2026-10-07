@@ -120,8 +120,7 @@ export const listCrmContacts = async () => {
   return data || [];
 };
 
-export const createCrmContact = async (body, options) => {
-  const client = getIntegrationAdmin();
+export const createCrmContact = async (body, options, client = getIntegrationAdmin()) => {
   if (!client) {
     throw Object.assign(new Error("CRM database service-role configuration is required."), {
       statusCode: 503,
@@ -139,7 +138,10 @@ export const createCrmContact = async (body, options) => {
     if (lookupError) throw lookupError;
     if (existing) return { contact: existing, duplicate: true };
   }
-  const duplicate = await findNaturalDuplicate(client, payload);
+  // A WhatsApp lead represents an inbound message, not a unique phone number.
+  const duplicate = payload.source === "whatsapp" && payload.source_external_id
+    ? null
+    : await findNaturalDuplicate(client, payload);
   if (duplicate) return { contact: duplicate, duplicate: true };
   const { data, error } = await client
     .from("crm_contacts")
@@ -160,14 +162,13 @@ export const createCrmContact = async (body, options) => {
   return { contact: data, duplicate: false };
 };
 
-export const updateCrmContact = async (id, body) => {
+export const updateCrmContact = async (id, body, client = getIntegrationAdmin()) => {
   if (!/^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i.test(id)) {
     throw Object.assign(new Error("CRM contact id must be a valid UUID."), {
       statusCode: 400,
       expose: true,
     });
   }
-  const client = getIntegrationAdmin();
   if (!client) {
     throw Object.assign(new Error("CRM database service-role configuration is required."), {
       statusCode: 503,
@@ -184,7 +185,9 @@ export const updateCrmContact = async (id, body) => {
   const payload = normalizeCrmContact({ ...current, ...body });
   payload.source = current.source;
   payload.source_external_id = current.source_external_id;
-  const duplicate = await findNaturalDuplicate(client, payload, id);
+  const duplicate = payload.source === "whatsapp" && payload.source_external_id
+    ? null
+    : await findNaturalDuplicate(client, payload, id);
   if (duplicate) {
     throw Object.assign(new Error("Another CRM contact already uses this email address or phone number."), {
       statusCode: 409,

@@ -41,6 +41,7 @@ export const serviceRoleTables = [
   "document_records",
   "ai_usage_events",
   "ai_tool_confirmations",
+  "whatsapp_inbound_messages",
 ];
 // Tables that must exist with RLS enabled and no direct client access.
 const privateTables = ["integration_tokens", "schema_migrations"];
