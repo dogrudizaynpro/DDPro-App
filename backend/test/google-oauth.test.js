@@ -1,11 +1,18 @@
 import assert from "node:assert/strict";
 import { createHash, createHmac, randomBytes } from "node:crypto";
+import { spawn, spawnSync } from "node:child_process";
+import { once } from "node:events";
+import { existsSync } from "node:fs";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { createServer } from "node:https";
 import { after, before, test } from "node:test";
 
 const keys = [
   "NODE_ENV", "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "GOOGLE_REDIRECT_URI",
   "GOOGLE_ALLOWED_EMAILS", "FRONTEND_URL", "INTEGRATION_SESSION_SECRET",
-  "INTEGRATION_TOKEN_ENCRYPTION_KEY", "SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY",
+  "INTEGRATION_TOKEN_ENCRYPTION_KEY", "SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "ALLOWED_ORIGINS",
 ];
 const previous = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
 const originalFetch = globalThis.fetch;
@@ -46,6 +53,7 @@ before(async () => {
     GOOGLE_REDIRECT_URI: "https://ddpro-app.onrender.com/api/integrations/google/callback",
     GOOGLE_ALLOWED_EMAILS: "owner@example.com",
     FRONTEND_URL: "https://dogrudizaynpro.github.io/DDPro-App/",
+    ALLOWED_ORIGINS: "https://other.example",
     INTEGRATION_SESSION_SECRET: "test-session-secret",
     INTEGRATION_TOKEN_ENCRYPTION_KEY: "a".repeat(64),
     SUPABASE_URL: "https://example.supabase.co",
@@ -103,6 +111,26 @@ before(async () => {
         projects: projectRows, crm_contacts: crmRows, offers: [], research_items: [],
       }[table];
       if (rows) {
+        if (table === "projects") {
+          const id = new URL(url).searchParams.get("id")?.replace(/^eq\./, "");
+          const index = projectRows.findIndex((row) => row.id === id);
+          if (options.method === "POST") {
+            const body = JSON.parse(options.body);
+            const row = { id: "10000000-0000-4000-8000-000000000002", ...(Array.isArray(body) ? body[0] : body) };
+            projectRows.push(row);
+            return Response.json(row, { status: 201 });
+          }
+          if (options.method === "PATCH") {
+            if (index < 0) return Response.json([]);
+            projectRows[index] = { ...projectRows[index], ...JSON.parse(options.body) };
+            return Response.json([projectRows[index]]);
+          }
+          if (options.method === "DELETE") {
+            if (index >= 0) projectRows.splice(index, 1);
+            return new Response(null, { status: 204 });
+          }
+          if (id) return Response.json(index < 0 ? [] : [projectRows[index]]);
+        }
         return options.method === "HEAD"
           ? new Response(null, { status: 200 })
           : Response.json(rows);
@@ -605,12 +633,266 @@ test("restoration requires exact frontend origin and JSON, with credentialed COR
   const preflight = await originalFetch(`${baseUrl}/api/integrations/google/restore`, {
     method: "OPTIONS",
     headers: { Origin: frontendOrigin, "Access-Control-Request-Method": "POST",
-      "Access-Control-Request-Headers": "content-type" },
+      "Access-Control-Request-Headers": "content-type,authorization" },
   });
   assert.equal(preflight.status, 204);
   assert.equal(preflight.headers.get("access-control-allow-origin"), frontendOrigin);
   assert.equal(preflight.headers.get("access-control-allow-credentials"), "true");
   assert.match(preflight.headers.get("access-control-allow-headers"), /content-type/);
+  assert.match(preflight.headers.get("access-control-allow-headers"), /authorization/);
+  assert.match(preflight.headers.get("vary"), /Origin/);
+  for (const Origin of ["https://evil.example", "http://localhost:5173"]) {
+    const denied = await originalFetch(`${baseUrl}/api/projects`, {
+      method: "OPTIONS",
+      headers: { Origin, "Access-Control-Request-Method": "POST" },
+    });
+    assert.equal(denied.headers.get("access-control-allow-origin"), null);
+  }
+  const otherOrigin = await restore(restoreCookie, { Origin: "https://other.example" });
+  assert.equal(otherOrigin.status, 403);
+  assert.equal(otherOrigin.headers.get("access-control-allow-origin"), "https://other.example");
+});
+
+test("restored production session authorizes project CRUD and persists across another restoration", async () => {
+  const forwarded = { "X-Forwarded-For": "192.0.2.90" };
+  const restored = await restore(restoreCookie, forwarded);
+  assert.equal(restored.status, 200);
+  const session = (await restored.json()).data.session;
+  const headers = { ...forwarded, Origin: frontendOrigin,
+    Authorization: ["Bearer", session].join(" "), "Content-Type": "application/json" };
+  for (const method of ["POST", "PATCH", "DELETE"]) {
+    const unauthorized = await originalFetch(`${baseUrl}/api/projects${method === "POST" ? "" : `/${projectRows[0].id}`}`, {
+      method, headers: { Origin: frontendOrigin, "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "Unauthorized", status: "Aktif" }),
+    });
+    assert.equal(unauthorized.status, 401);
+    assert.equal((await unauthorized.json()).code, "BROWSER_SESSION_REQUIRED");
+  }
+  const created = await originalFetch(`${baseUrl}/api/projects`, {
+    method: "POST", headers, body: JSON.stringify({ name: "Persistent production project" }),
+  });
+  assert.equal(created.status, 201);
+  assert.equal(created.headers.get("access-control-allow-origin"), frontendOrigin);
+  assert.equal(created.headers.get("access-control-allow-credentials"), "true");
+  const row = (await created.json()).data;
+  assert.equal(row.name, "Persistent production project");
+  const reloaded = await restore(restoreCookie, forwarded);
+  assert.equal(reloaded.status, 200);
+  headers.Authorization = ["Bearer", (await reloaded.json()).data.session].join(" ");
+  const list = await originalFetch(`${baseUrl}/api/projects`, { headers });
+  assert.equal(list.status, 200);
+  assert.ok((await list.json()).data.some(({ id }) => id === row.id));
+  const updated = await originalFetch(`${baseUrl}/api/projects/${row.id}`, {
+    method: "PATCH", headers, body: JSON.stringify({ status: "Tamamlandı" }),
+  });
+  assert.equal(updated.status, 200);
+  assert.equal((await updated.json()).data.status, "Tamamlandı");
+  const denied = await originalFetch(`${baseUrl}/api/projects`, {
+    headers: { ...headers, Origin: "https://other.example" },
+  });
+  assert.equal(denied.status, 403);
+  const deleted = await originalFetch(`${baseUrl}/api/projects/${row.id}`, { method: "DELETE", headers });
+  assert.equal(deleted.status, 200);
+  const final = await originalFetch(`${baseUrl}/api/projects`, { headers });
+  assert.equal((await final.json()).data.some(({ id }) => id === row.id), false);
+});
+
+test("authenticated integration status reports a stale bearer as a browser-session 401, not disconnected Google", async () => {
+  const response = await originalFetch(`${baseUrl}/api/integrations/status`, {
+    headers: { Origin: frontendOrigin, Authorization: ["Bearer", "invalid-browser-session"].join(" ") },
+  });
+  assert.equal(response.status, 401);
+  assert.equal(response.headers.get("cache-control"), "no-store");
+  assert.equal((await response.json()).code, "BROWSER_SESSION_REQUIRED");
+  const anonymous = await originalFetch(`${baseUrl}/api/integrations/status`, { headers: { Origin: frontendOrigin } });
+  assert.equal(anonymous.status, 200);
+  assert.equal(anonymous.headers.get("cache-control"), "no-store");
+  assert.equal((await anonymous.json()).data.gmail.connected, false);
+});
+
+test("Chromium accepts the production-origin CHIPS cookie and restores after refresh and browser restart", {
+  skip: !existsSync(process.env.DDPRO_CHROMIUM_PATH || "/usr/bin/chromium") ||
+    typeof WebSocket === "undefined" ? "Chromium and native WebSocket are required" : false,
+  timeout: 60_000,
+}, async () => {
+  const profile = await mkdtemp(join(tmpdir(), "ddpro-browser-session-"));
+  const { encryptIntegrationToken } = await import("../src/services/integration-vault.service.js");
+  const code = randomBytes(32).toString("base64url");
+  const verifier = randomBytes(32).toString("base64url");
+  exchangeGrant = {
+    provider: "google_session_exchange",
+    account: createHash("sha256").update(code).digest("base64url"),
+    encrypted_token: encryptIntegrationToken({
+      session: browserSession.split(".")[0],
+      challenge: createHash("sha256").update(verifier).digest("base64url"),
+      expiresAt: Date.now() + 120_000,
+    }),
+  };
+  const certificate = spawnSync("openssl", ["req", "-x509", "-newkey", "rsa:2048", "-nodes",
+    "-keyout", join(profile, "key.pem"), "-out", join(profile, "cert.pem"),
+    "-subj", "/CN=ddpro-app.onrender.com", "-days", "1"], { stdio: "ignore" });
+  assert.equal(certificate.status, 0, "A temporary browser-fixture certificate must be generated");
+  const { default: app } = await import("../src/app.js");
+  const calls = [];
+  const httpsServer = createServer({
+    key: await readFile(join(profile, "key.pem")), cert: await readFile(join(profile, "cert.pem")),
+  }, (req, res) => {
+    if (req.method === "POST") calls.push(req.url);
+    req.headers["x-forwarded-for"] = "192.0.2.100";
+    app(req, res);
+  }).listen(0, "127.0.0.1");
+  await once(httpsServer, "listening");
+  const apiOrigin = `https://ddpro-app.onrender.com:${httpsServer.address().port}`;
+  const frontend = `${frontendOrigin}/DDPro-App/`;
+  let browser;
+  let websocket;
+  let command;
+  let browserClosed;
+  let proxyError;
+  const networkFailures = [];
+  const pageHtml = `<!doctype html><script>
+    (async () => {
+      const exchange = new URLSearchParams(location.search).get("phase") === "exchange";
+      const auth = await fetch(${JSON.stringify(apiOrigin)} + "/api/integrations/google/" + (exchange ? "exchange" : "restore"), {
+        method: "POST", credentials: "include", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(exchange ? ${JSON.stringify({ code, verifier })} : {})
+      });
+      const body = await auth.json();
+      if (!auth.ok) throw new Error(body.code || body.message);
+      sessionStorage.setItem("ddpro_browser_session", body.data.session);
+      const headers = { Authorization: ["Bearer", body.data.session].join(" "), "Content-Type": "application/json" };
+      if (exchange) {
+        const created = await fetch(${JSON.stringify(apiOrigin)} + "/api/projects", {
+          method: "POST", credentials: "include", headers, body: JSON.stringify({ name: "CHIPS browser project" })
+        });
+        if (created.status !== 201) throw new Error("Project creation failed");
+      }
+      const [projects, status] = await Promise.all([
+        fetch(${JSON.stringify(apiOrigin)} + "/api/projects", { credentials: "include", headers }).then(r => r.json()),
+        fetch(${JSON.stringify(apiOrigin)} + "/api/integrations/status", { credentials: "include", headers }).then(r => r.json())
+      ]);
+      window.result = { projects: projects.data, gmail: status.data.gmail.connected, calendar: status.data.googleCalendar.connected };
+    })().catch(error => { window.result = { error: error.message }; });
+  </script>`;
+  const startBrowser = async () => {
+    browser = spawn(process.env.DDPRO_CHROMIUM_PATH || "/usr/bin/chromium", [
+      "--headless", "--no-sandbox", "--disable-gpu", "--disable-background-networking",
+      // This isolated test browser accepts the fixture certificate; application TLS is unchanged.
+      "--ignore-certificate-errors", "--host-resolver-rules=MAP ddpro-app.onrender.com 127.0.0.1",
+      "--no-proxy-server", "--remote-debugging-port=0", `--user-data-dir=${profile}`, "about:blank",
+    ], { stdio: "ignore" });
+    browserClosed = once(browser, "exit");
+    let port;
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      try {
+        port = Number((await readFile(join(profile, "DevToolsActivePort"), "utf8")).split("\n")[0]);
+        if (port) break;
+      } catch {}
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    assert.ok(port, "Chromium debugging endpoint must start");
+    const targets = await (await originalFetch(`http://127.0.0.1:${port}/json`)).json();
+    websocket = new WebSocket(targets.find((target) => target.type === "page").webSocketDebuggerUrl);
+    await once(websocket, "open");
+    const pending = new Map();
+    let id = 0;
+    command = (method, params = {}) => new Promise((resolve, reject) => {
+      const next = ++id;
+      const timeout = setTimeout(() => { pending.delete(next); reject(new Error(`CDP timeout: ${method}`)); }, 10_000);
+      pending.set(next, (message) => {
+        clearTimeout(timeout);
+        if (message.error) reject(new Error(message.error.message));
+        else resolve(message.result);
+      });
+      websocket.send(JSON.stringify({ id: next, method, params }));
+    });
+    websocket.addEventListener("message", async (event) => {
+      const message = JSON.parse(event.data);
+      if (Number.isSafeInteger(message.id)) {
+        const handler = pending.get(message.id);
+        if (typeof handler !== "function") return;
+        pending.delete(message.id);
+        handler(message);
+      } else if (message.method === "Network.loadingFailed") {
+        networkFailures.push({ error: message.params.errorText, reason: message.params.blockedReason });
+      } else if (message.method === "Fetch.requestPaused") {
+        const { requestId } = message.params;
+        try {
+          await command("Fetch.fulfillRequest", { requestId, responseCode: 200,
+            responseHeaders: [{ name: "Content-Type", value: "text/html" }],
+            body: Buffer.from(pageHtml).toString("base64") });
+        } catch (error) {
+          proxyError = error;
+          await command("Fetch.failRequest", { requestId, errorReason: "Failed" }).catch(() => {});
+        }
+      }
+    });
+    // The frontend document is a fixture; real backend responses go through Chromium's cookie/CORS stack.
+    await command("Fetch.enable", { patterns: [
+      { urlPattern: `${frontend}*` },
+    ] });
+    await command("Network.enable");
+    // The Render hostname maps to a loopback fixture, not a public production address.
+    await command("Browser.grantPermissions", {
+      origin: frontendOrigin, permissions: ["localNetworkAccess", "loopbackNetwork"],
+    });
+  };
+  const waitForResult = async () => {
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      if (proxyError) throw proxyError;
+      const { result } = await command("Runtime.evaluate", { expression: "window.result", returnByValue: true });
+      if (result.value) {
+        assert.equal(result.value.error, undefined, JSON.stringify(networkFailures));
+        assert.equal(result.value.gmail, true);
+        assert.equal(result.value.calendar, true);
+        assert.ok(result.value.projects.some((project) => project.name === "CHIPS browser project"));
+        return;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    assert.fail("Browser restoration must complete");
+  };
+  const closeBrowser = async () => {
+    await command("Browser.close");
+    await browserClosed;
+    websocket.close();
+    browser = null;
+    await rm(join(profile, "DevToolsActivePort"), { force: true });
+  };
+  try {
+    await startBrowser();
+    await command("Page.navigate", { url: `${frontend}?phase=exchange#/projects` });
+    await waitForResult();
+    const { cookies } = await command("Storage.getCookies");
+    const cookie = cookies.find(({ name }) => name === "ddpro_session_restore");
+    assert.ok(cookie);
+    assert.equal(cookie.httpOnly, true);
+    assert.equal(cookie.secure, true);
+    assert.equal(cookie.sameSite, "None");
+    assert.equal(cookie.path, "/api/integrations/google");
+    assert.equal(cookie.partitionKey?.topLevelSite, frontendOrigin);
+    assert.ok(cookie.expires * 1000 > Date.now() + 29 * 24 * 60 * 60 * 1000);
+    await command("Runtime.evaluate", { expression: "sessionStorage.clear()" });
+    await command("Page.navigate", { url: `${frontend}?phase=restore#/projects` });
+    await waitForResult();
+    await command("Runtime.evaluate", { expression: "sessionStorage.clear(); window.result = undefined" });
+    await command("Page.reload");
+    await waitForResult();
+    await closeBrowser();
+    await startBrowser();
+    await command("Page.navigate", { url: `${frontend}?phase=restore#/projects` });
+    await waitForResult();
+    assert.equal(calls.filter((url) => url.endsWith("/google/exchange")).length, 1);
+    assert.equal(calls.filter((url) => url.endsWith("/google/restore")).length, 3);
+    await closeBrowser();
+  } finally {
+    if (browser) { browser.kill("SIGTERM"); await browserClosed; }
+    websocket?.close();
+    await new Promise((resolve) => httpsServer.close(resolve));
+    await rm(profile, { recursive: true, force: true });
+    const index = projectRows.findIndex((row) => row.name === "CHIPS browser project");
+    if (index >= 0) projectRows.splice(index, 1);
+  }
 });
 
 test("missing, expired, tampered and malformed restoration proof require browser authorization", async () => {
@@ -710,7 +992,8 @@ test("session parsing rejects non-finite expiry while legacy signed bearers stil
     const response = await originalFetch(`${baseUrl}/api/integrations/status`, {
       headers: { Origin: frontendOrigin, Authorization: ["Bearer", session].join(" ") },
     });
-    assert.equal((await response.json()).data.gmail.connected, false);
+    assert.equal(response.status, 401);
+    assert.equal((await response.json()).code, "BROWSER_SESSION_REQUIRED");
   }
   const legacy = signedPayload({ email: "owner@example.com", expiresAt: Date.now() + 60_000 }, "browser:");
   const { encryptIntegrationToken, decryptIntegrationToken } = await import("../src/services/integration-vault.service.js");
@@ -739,7 +1022,8 @@ test("session parsing rejects non-finite expiry while legacy signed bearers stil
   const versioned = await originalFetch(`${baseUrl}/api/integrations/status`, {
     headers: { Origin: frontendOrigin, Authorization: ["Bearer", legacy].join(" ") },
   });
-  assert.equal((await versioned.json()).data.gmail.connected, false);
+  assert.equal(versioned.status, 401);
+  assert.equal((await versioned.json()).code, "BROWSER_SESSION_REQUIRED");
 });
 
 test("restoration rate limit returns no-store without changing cookies or contacting Google", async () => {
@@ -801,12 +1085,19 @@ test("disconnect clears matching cookies and reconnect cannot revive old restore
     const staleStatus = await originalFetch(`${baseUrl}/api/integrations/status`, {
       headers: { Origin: frontendOrigin, ...proof },
     });
-    assert.equal((await staleStatus.json()).data.gmail.connected, false);
+    if (proof.Authorization) {
+      assert.equal(staleStatus.status, 401);
+      assert.equal((await staleStatus.json()).code, "BROWSER_SESSION_REQUIRED");
+    } else {
+      assert.equal(staleStatus.status, 200);
+      assert.equal((await staleStatus.json()).data.gmail.connected, false);
+    }
   }
   const staleStatus = await originalFetch(`${baseUrl}/api/integrations/status`, {
     headers: { Origin: frontendOrigin, Authorization: ["Bearer", browserSession].join(" ") },
   });
-  assert.equal((await staleStatus.json()).data.gmail.connected, false);
+  assert.equal(staleStatus.status, 401);
+  assert.equal((await staleStatus.json()).code, "BROWSER_SESSION_REQUIRED");
   const code = new URLSearchParams(callback.headers.get("location").split("?")[1]).get("exchange_code");
   const exchanged = await originalFetch(`${baseUrl}/api/integrations/google/exchange`, {
     method: "POST", headers: { ...headers, Origin: frontendOrigin, "Content-Type": "application/json" },

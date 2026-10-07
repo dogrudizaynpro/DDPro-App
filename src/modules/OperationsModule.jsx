@@ -335,6 +335,7 @@ function IntegrationSettings({ onNavigate, hubMode = false }) {
       )}
       <p className="status-banner info">API anahtarı, OAuth secret veya token bu arayüze girilmez. Credential değerlerini yalnızca backend environment variables üzerinden yönetin. Environment ile yönetilen servislerin bağlantısını kesmek için ilgili değişkenleri kaldırıp backend'i yeniden başlatın.</p>
       {error ? <p className="status-banner warning">{error}</p> : null}
+      {status?.browserSession ? <p className="status-banner warning">{status.browserSession.message} ({status.browserSession.code})</p> : null}
       {notice ? <p className="status-banner success">{notice}</p> : null}
       <div className="operations-grid">
         {integrationCatalog.map((integration) => {

@@ -261,7 +261,7 @@ const moduleRouteMap = Object.fromEntries(
 );
 
 const routeModuleMap = Object.fromEntries(
-  modules.map((module) => [module.path, module.id])
+  modules.flatMap((module) => [[`/${module.id}`, module.id], [module.path, module.id]])
 );
 const moduleIds = new Set(modules.map((module) => module.id));
 const dashboardQuickAccessModuleIds = new Set([
@@ -580,9 +580,12 @@ function App() {
   const [selectedOfferDetail, setSelectedOfferDetail] = useState(null);
   const [offerDetailLoading, setOfferDetailLoading] = useState(false);
   const [offerDetailError, setOfferDetailError] = useState(null);
-  const projectsTouchedRef = useRef(false);
-  const procurementTouchedRef = useRef(false);
-  const offersTouchedRef = useRef(false);
+  const projectsTouchedRef = useRef(0);
+  const procurementTouchedRef = useRef(0);
+  const offersTouchedRef = useRef(0);
+  const projectsActiveMutationsRef = useRef(0);
+  const procurementActiveMutationsRef = useRef(0);
+  const offersActiveMutationsRef = useRef(0);
   const offerDetailsCacheRef = useRef(new Map());
 
   const [memoryItems, setMemoryItems] = useState(() =>
@@ -865,6 +868,8 @@ function App() {
     let cancelled = false;
 
     const fetchOffersFromApi = async () => {
+      const mutationRevision = offersTouchedRef.current;
+      const mutationWasActive = offersActiveMutationsRef.current > 0;
       const localOffers = getStoredData(STORAGE_KEYS.offers);
       const localOfferViewModels = mapOffersToViewModel(localOffers);
       setOffersLoading(true);
@@ -878,11 +883,10 @@ function App() {
 
         offerDetailsCacheRef.current.clear();
 
-        if (offersTouchedRef.current) {
+        if (mutationWasActive || offersTouchedRef.current !== mutationRevision) {
           addLog(
             "Tekliflerde yerel değişiklik algılandı, API yanıtı üzerine yazmadı."
           );
-          setOffersFetchState(apiOffers.length > 0 ? "success" : "empty");
           return;
         }
 
@@ -909,7 +913,7 @@ function App() {
         }
       } catch (error) {
         const reason = getApiFailureReason(error);
-        if (!cancelled) {
+        if (!cancelled && !mutationWasActive && offersTouchedRef.current === mutationRevision) {
           console.warn("Teklif API erişimi başarısız:", error.message);
           setOffers(CAN_USE_LOCAL_FALLBACK ? localOfferViewModels : EMPTY_ITEMS);
           setSelectedOfferId((currentId) =>
@@ -934,6 +938,9 @@ function App() {
         }
       } finally {
         if (!cancelled) {
+          if (mutationWasActive || offersTouchedRef.current !== mutationRevision) {
+            setOffersFetchState((current) => current === "loading" ? "success" : current);
+          }
           setOffersLoading(false);
         }
       }
@@ -944,7 +951,7 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, [offersReloadKey]);
+  }, [offersReloadKey, integrationState?.google?.connected]);
 
   useEffect(() => {
     if (offers.length === 0) {
@@ -1025,6 +1032,8 @@ function App() {
     let cancelled = false;
 
     const fetchProcurementFromApi = async () => {
+      const mutationRevision = procurementTouchedRef.current;
+      const mutationWasActive = procurementActiveMutationsRef.current > 0;
       const localProcurementItems = getInitialItems(STORAGE_KEYS.procurement);
       setProcurementLoading(true);
       setProcurementError(null);
@@ -1035,12 +1044,9 @@ function App() {
 
         if (cancelled) return;
 
-        if (procurementTouchedRef.current) {
+        if (mutationWasActive || procurementTouchedRef.current !== mutationRevision) {
           addLog(
             "Tedarik kayıtlarında yerel değişiklik algılandı, API yanıtı üzerine yazmadı."
-          );
-          setProcurementFetchState(
-            apiProcurementItems.length > 0 ? "success" : "empty"
           );
         } else if (apiProcurementItems && apiProcurementItems.length > 0) {
           setProcurementItems(apiProcurementItems);
@@ -1059,7 +1065,7 @@ function App() {
         }
       } catch (error) {
         const reason = getApiFailureReason(error);
-        if (!cancelled) {
+        if (!cancelled && !mutationWasActive && procurementTouchedRef.current === mutationRevision) {
           setProcurementItems(
             CAN_USE_LOCAL_FALLBACK ? localProcurementItems : EMPTY_ITEMS
           );
@@ -1077,6 +1083,9 @@ function App() {
         }
       } finally {
         if (!cancelled) {
+          if (mutationWasActive || procurementTouchedRef.current !== mutationRevision) {
+            setProcurementFetchState((current) => current === "loading" ? "success" : current);
+          }
           setProcurementLoading(false);
         }
       }
@@ -1087,7 +1096,7 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [integrationState?.google?.connected]);
 
   useEffect(() => {
     localStorage.setItem(
@@ -1107,6 +1116,8 @@ function App() {
     let cancelled = false;
 
     const fetchProjectsFromApi = async () => {
+      const mutationRevision = projectsTouchedRef.current;
+      const mutationWasActive = projectsActiveMutationsRef.current > 0;
       const localProjects = getInitialItems(STORAGE_KEYS.projects);
       setProjectsLoading(true);
       setProjectsError(null);
@@ -1117,11 +1128,10 @@ function App() {
 
         if (cancelled) return;
 
-        if (projectsTouchedRef.current) {
+        if (mutationWasActive || projectsTouchedRef.current !== mutationRevision) {
           addLog(
             "Projelerde yerel değişiklik algılandı, API yanıtı üzerine yazmadı."
           );
-          setProjectsFetchState(apiProjects.length > 0 ? "success" : "empty");
           return;
         }
 
@@ -1140,7 +1150,7 @@ function App() {
         }
       } catch (error) {
         const reason = getApiFailureReason(error);
-        if (!cancelled) {
+        if (!cancelled && !mutationWasActive && projectsTouchedRef.current === mutationRevision) {
           setProjects(CAN_USE_LOCAL_FALLBACK ? localProjects : EMPTY_ITEMS);
           setProjectsFetchState("error");
           setProjectsError(
@@ -1156,6 +1166,9 @@ function App() {
         }
       } finally {
         if (!cancelled) {
+          if (mutationWasActive || projectsTouchedRef.current !== mutationRevision) {
+            setProjectsFetchState((current) => current === "loading" ? "success" : current);
+          }
           setProjectsLoading(false);
         }
       }
@@ -1166,7 +1179,7 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [integrationState?.google?.connected]);
 
   const addLog = (message) => {
     const newLog = {
@@ -1371,7 +1384,7 @@ function App() {
     event.preventDefault();
 
     if (!projectName.trim()) return;
-    projectsTouchedRef.current = true;
+    projectsTouchedRef.current += 1;
     let shouldResetForm = false;
 
     const newProject = {
@@ -1384,6 +1397,7 @@ function App() {
 
     setProjectsError(null);
 
+    projectsActiveMutationsRef.current += 1;
     try {
       const createdProject = await createProjectRequest(newProject);
       if (!createdProject) {
@@ -1410,6 +1424,9 @@ function App() {
           `Proje oluşturma production API hatası: ${getApiFailureReason(error)}.`
         );
       }
+    } finally {
+      projectsActiveMutationsRef.current -= 1;
+      projectsTouchedRef.current += 1;
     }
 
     if (shouldResetForm) {
@@ -1422,7 +1439,7 @@ function App() {
 
   const deleteProject = async (id) => {
     const project = projects.find((item) => item.id === id);
-    projectsTouchedRef.current = true;
+    projectsTouchedRef.current += 1;
 
     if (!isUuid(id)) {
       setProjects((currentProjects) =>
@@ -1436,6 +1453,7 @@ function App() {
       return;
     }
 
+    projectsActiveMutationsRef.current += 1;
     try {
       await deleteProjectRequest(id);
       setProjectsError(null);
@@ -1463,11 +1481,14 @@ function App() {
       if (project) {
         addLog(`Proje silme hatası: ${project.name}`);
       }
+    } finally {
+      projectsActiveMutationsRef.current -= 1;
+      projectsTouchedRef.current += 1;
     }
   };
 
   const updateProject = async (id, updates) => {
-    projectsTouchedRef.current = true;
+    projectsTouchedRef.current += 1;
     const project = projects.find((item) => item.id === id);
 
     if (!project) return false;
@@ -1479,6 +1500,7 @@ function App() {
       return true;
     }
 
+    projectsActiveMutationsRef.current += 1;
     try {
       const updatedProject = await updateProjectRequest(id, updates);
       if (!updatedProject) return false;
@@ -1493,13 +1515,17 @@ function App() {
         `Proje ayrıntıları kaydedilemedi (${getApiFailureReason(error)}).`
       );
       return false;
+    } finally {
+      projectsActiveMutationsRef.current -= 1;
+      projectsTouchedRef.current += 1;
     }
   };
 
   const persistProcurementRecord = async (newProcurement) => {
-    procurementTouchedRef.current = true;
+    procurementTouchedRef.current += 1;
     let shouldResetForm = false;
     setProcurementError(null);
+    procurementActiveMutationsRef.current += 1;
 
     try {
       const createdProcurement = await createProcurementRequest(newProcurement);
@@ -1529,6 +1555,9 @@ function App() {
           `Tedarik oluşturma production API hatası: ${getApiFailureReason(error)}.`
         );
       }
+    } finally {
+      procurementActiveMutationsRef.current -= 1;
+      procurementTouchedRef.current += 1;
     }
 
     if (shouldResetForm) {
@@ -1588,7 +1617,7 @@ function App() {
     const item = procurementItems.find(
       (procurement) => procurement.id === id
     );
-    procurementTouchedRef.current = true;
+    procurementTouchedRef.current += 1;
 
     if (!isUuid(id)) {
       setProcurementItems((currentItems) =>
@@ -1602,6 +1631,7 @@ function App() {
       return;
     }
 
+    procurementActiveMutationsRef.current += 1;
     try {
       await deleteProcurementRequest(id);
       setProcurementError(null);
@@ -1630,12 +1660,16 @@ function App() {
       if (item) {
         addLog(`Tedarik silme hatası: ${item.name}`);
       }
+    } finally {
+      procurementActiveMutationsRef.current -= 1;
+      procurementTouchedRef.current += 1;
     }
   };
 
   const updateProcurement = async (id, updates) => {
-    procurementTouchedRef.current = true;
+    procurementTouchedRef.current += 1;
     setProcurementError(null);
+    procurementActiveMutationsRef.current += 1;
     try {
       const updated = await updateProcurementRequest(id, updates);
       if (!updated) throw new Error("Research API did not return the updated record.");
@@ -1648,6 +1682,9 @@ function App() {
       } else {
         setProcurementError(`Tedarik kaydı güncellenemedi (${getApiFailureReason(error)}).`);
       }
+    } finally {
+      procurementActiveMutationsRef.current -= 1;
+      procurementTouchedRef.current += 1;
     }
   };
 
@@ -1655,7 +1692,7 @@ function App() {
     event.preventDefault();
 
     if (!offerName.trim()) return false;
-    offersTouchedRef.current = true;
+    offersTouchedRef.current += 1;
     let shouldResetForm = false;
     const formValues = new FormData(event.currentTarget);
     const editingOfferId = String(formValues.get("offerId") || "");
@@ -1678,6 +1715,7 @@ function App() {
     setOffersError(null);
 
     if (editingOfferId) {
+      offersActiveMutationsRef.current += 1;
       try {
         const updatedOffer = await updateOfferRequest(editingOfferId, {
           ...newOffer,
@@ -1699,9 +1737,13 @@ function App() {
         setOffersError(`Teklif güncellenemedi: ${getApiFailureReason(error)}.`);
         addLog(`Teklif güncelleme hatası: ${getApiFailureReason(error)}.`);
         return false;
+      } finally {
+        offersActiveMutationsRef.current -= 1;
+        offersTouchedRef.current += 1;
       }
     }
 
+    offersActiveMutationsRef.current += 1;
     try {
       const createdOffer = await createOfferRequest(newOffer);
       if (!createdOffer) {
@@ -1735,6 +1777,9 @@ function App() {
           `Teklif oluşturma production API hatası: ${getApiFailureReason(error)}.`
         );
       }
+    } finally {
+      offersActiveMutationsRef.current -= 1;
+      offersTouchedRef.current += 1;
     }
 
     if (shouldResetForm) {
@@ -1748,7 +1793,7 @@ function App() {
 
   const deleteOffer = async (id) => {
     const offer = offers.find((item) => item.id === id);
-    offersTouchedRef.current = true;
+    offersTouchedRef.current += 1;
 
     if (!isUuid(id)) {
       setOffersError(null);
@@ -1768,6 +1813,7 @@ function App() {
       return;
     }
 
+    offersActiveMutationsRef.current += 1;
     try {
       await deleteOfferRequest(id);
       setOffersError(null);
@@ -1808,6 +1854,9 @@ function App() {
       if (offer) {
         addLog(`Teklif silme hatası: ${offer.title || offer.name}`);
       }
+    } finally {
+      offersActiveMutationsRef.current -= 1;
+      offersTouchedRef.current += 1;
     }
   };
 
