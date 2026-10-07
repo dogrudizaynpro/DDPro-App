@@ -4,12 +4,18 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { Client } from "pg";
-import { applyAiToolConfirmationsMigration } from "../src/services/migration-runner.js";
+import {
+  applyDatabaseMigrations,
+  loadMigrations,
+  serviceRoleTables,
+} from "../src/services/migration-runner.js";
 
 class FakePool {
-  constructor(options, { verified = true } = {}) {
+  constructor(options, { verified = true, history = [], unprotected = [] } = {}) {
     this.options = options;
     this.verified = verified;
+    this.history = history;
+    this.unprotected = unprotected;
     this.queries = [];
     this.ended = false;
     this.released = false;
@@ -19,6 +25,12 @@ class FakePool {
     return {
       query: async (text) => {
         this.queries.push(text);
+        if (text.startsWith("SELECT version, checksum FROM public.schema_migrations")) {
+          return { rows: this.history };
+        }
+        if (text.includes("unnest($1::text[]")) {
+          return { rows: this.unprotected.map((table_name) => ({ table_name })) };
+        }
         if (text.includes("FROM pg_class AS table_info")) {
           return {
             rows: [
@@ -47,12 +59,12 @@ class FakePool {
 
 test("migration requires a direct database connection configuration", async () => {
   await assert.rejects(
-    applyAiToolConfirmationsMigration({ connectionString: " " }),
+    applyDatabaseMigrations({ connectionString: " " }),
     /DATABASE_URL is required/
   );
 });
 
-test("migration applies and verifies the protected table in one locked transaction", async () => {
+test("all migrations are applied in numeric order in one locked transaction", async () => {
   let pool;
   class SuccessfulPool extends FakePool {
     constructor(options) {
@@ -61,21 +73,126 @@ test("migration applies and verifies the protected table in one locked transacti
     }
   }
 
-  const result = await applyAiToolConfirmationsMigration({
+  const migrations = await loadMigrations();
+  const result = await applyDatabaseMigrations({
     connectionString: "postgresql://example.invalid/ddpro",
     PoolClass: SuccessfulPool,
   });
 
   assert.deepEqual(result, {
-    migration: "015_ai_tool_confirmations",
-    applied: true,
+    applied: migrations.map((migration) => migration.name),
+    skipped: [],
   });
+  assert.equal(result.applied[0], "001_base_schema");
+  assert.equal(result.applied.at(-1), "015_ai_tool_confirmations");
   assert.equal(pool.options.ssl.rejectUnauthorized, true);
   assert.equal(pool.queries[0], "BEGIN");
   assert.match(pool.queries[1], /pg_advisory_xact_lock/);
-  assert.ok(pool.queries[2].includes("CREATE TABLE IF NOT EXISTS"));
-  assert.ok(pool.queries[3].includes("FROM pg_class AS table_info"));
+  assert.match(pool.queries[2], /CREATE TABLE IF NOT EXISTS public\.schema_migrations/);
+  const executed = pool.queries.filter((text) =>
+    migrations.some((migration) => migration.sql === text)
+  );
+  assert.deepEqual(
+    executed,
+    migrations.map((migration) => migration.sql)
+  );
+  assert.equal(
+    pool.queries.filter((text) => text.startsWith("INSERT INTO public.schema_migrations")).length,
+    migrations.length
+  );
+  assert.ok(pool.queries.at(-3).includes("FROM pg_class AS table_info"));
+  assert.ok(pool.queries.at(-2).includes("unnest($1::text[]"));
   assert.equal(pool.queries.at(-1), "COMMIT");
+  assert.equal(pool.released, true);
+  assert.equal(pool.ended, true);
+});
+
+test("migrations loaded from disk are numbered, unique and include the core production tables", async () => {
+  const migrations = await loadMigrations();
+  const versions = migrations.map((migration) => Number(migration.version));
+  assert.deepEqual(versions, [...versions].sort((left, right) => left - right));
+  assert.equal(new Set(versions).size, versions.length);
+  const allSql = migrations.map((migration) => migration.sql).join("\n");
+  for (const table of ["crm_contacts", "offers", "research_items", "ai_usage_events"]) {
+    assert.ok(serviceRoleTables.includes(table));
+    assert.match(allSql, new RegExp(`CREATE TABLE IF NOT EXISTS (public\\.)?${table} \\(`));
+  }
+});
+
+test("migration files are ordered numerically and invalid names fail closed", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "ddpro-migrations-"));
+  try {
+    await writeFile(join(directory, "010_later.sql"), "SELECT 10;");
+    await writeFile(join(directory, "002_earlier.sql"), "SELECT 2;");
+    await writeFile(join(directory, "README.md"), "ignored");
+    const migrations = await loadMigrations(directory);
+    assert.deepEqual(
+      migrations.map((migration) => migration.name),
+      ["002_earlier", "010_later"]
+    );
+    await writeFile(join(directory, "2_bad.sql"), "SELECT 1;");
+    await assert.rejects(loadMigrations(directory), /Invalid migration file name/);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("previously applied migrations are skipped and modified ones fail closed", async () => {
+  const migrations = await loadMigrations();
+  const history = migrations
+    .slice(0, -1)
+    .map(({ version, checksum }) => ({ version, checksum }));
+  let pool;
+  class HistoryPool extends FakePool {
+    constructor(options) {
+      super(options, { history });
+      pool = this;
+    }
+  }
+  const result = await applyDatabaseMigrations({
+    connectionString: "postgresql://example.invalid/ddpro",
+    PoolClass: HistoryPool,
+  });
+  assert.deepEqual(result.applied, ["015_ai_tool_confirmations"]);
+  assert.equal(result.skipped.length, migrations.length - 1);
+  for (const migration of migrations.slice(0, -1)) {
+    assert.ok(!pool.queries.includes(migration.sql));
+  }
+  assert.equal(pool.queries.at(-1), "COMMIT");
+
+  class TamperedPool extends FakePool {
+    constructor(options) {
+      super(options, { history: [{ version: "004", checksum: "0".repeat(64) }] });
+      pool = this;
+    }
+  }
+  await assert.rejects(
+    applyDatabaseMigrations({
+      connectionString: "postgresql://example.invalid/ddpro",
+      PoolClass: TamperedPool,
+    }),
+    /004_operations_integrations was modified after it was applied/
+  );
+  assert.equal(pool.queries.at(-1), "ROLLBACK");
+  assert.equal(pool.ended, true);
+});
+
+test("migration rolls back when core tables are missing or exposed", async () => {
+  let pool;
+  class UnprotectedPool extends FakePool {
+    constructor(options) {
+      super(options, { unprotected: ["crm_contacts", "offers"] });
+      pool = this;
+    }
+  }
+  await assert.rejects(
+    applyDatabaseMigrations({
+      connectionString: "postgresql://example.invalid/ddpro",
+      PoolClass: UnprotectedPool,
+    }),
+    /verification failed for: crm_contacts, offers/
+  );
+  assert.equal(pool.queries.at(-1), "ROLLBACK");
   assert.equal(pool.released, true);
   assert.equal(pool.ended, true);
 });
@@ -103,7 +220,7 @@ test("URL SSL options cannot replace CA trust or disable certificate/hostname ve
         pool = this;
       }
     }
-    await applyAiToolConfirmationsMigration({
+    await applyDatabaseMigrations({
       connectionString: databaseUrl.toString(),
       caCertificate: ca,
       caCertificatePath: "",
@@ -136,7 +253,7 @@ test("CA configuration supports escaped PEM newlines and mounted files", async (
           pool = this;
         }
       }
-      await applyAiToolConfirmationsMigration({
+      await applyDatabaseMigrations({
         connectionString: "postgresql://example.invalid/ddpro",
         ...source,
         PoolClass: ConfigPool,
@@ -148,7 +265,7 @@ test("CA configuration supports escaped PEM newlines and mounted files", async (
     }
     await writeFile(path, " ");
     await assert.rejects(
-      applyAiToolConfirmationsMigration({
+      applyDatabaseMigrations({
         connectionString: "postgresql://example.invalid/ddpro",
         caCertificate: "",
         caCertificatePath: path,
@@ -162,19 +279,19 @@ test("CA configuration supports escaped PEM newlines and mounted files", async (
 
 test("configuration errors fail closed without exposing connection credentials", async () => {
   await assert.rejects(
-    applyAiToolConfirmationsMigration({
+    applyDatabaseMigrations({
       connectionString: "invalid-secret-database-url",
     }),
     { message: "DATABASE_URL must be a valid PostgreSQL TCP connection URL." }
   );
   await assert.rejects(
-    applyAiToolConfirmationsMigration({
+    applyDatabaseMigrations({
       connectionString: "https://example.invalid/ddpro",
     }),
     /valid PostgreSQL TCP/
   );
   await assert.rejects(
-    applyAiToolConfirmationsMigration({
+    applyDatabaseMigrations({
       connectionString: "postgresql://example.invalid/ddpro",
       caCertificate: "CA",
       caCertificatePath: "/unused",
@@ -182,7 +299,7 @@ test("configuration errors fail closed without exposing connection credentials",
     /only one/
   );
   await assert.rejects(
-    applyAiToolConfirmationsMigration({
+    applyDatabaseMigrations({
       connectionString: "postgresql://example.invalid/ddpro",
       caCertificate: "",
       caCertificatePath: "/missing/ca.pem",
@@ -204,7 +321,7 @@ test("TLS connection failures close the pool without applying the migration", as
     }
   }
   await assert.rejects(
-    applyAiToolConfirmationsMigration({
+    applyDatabaseMigrations({
       connectionString: "postgresql://example.invalid/ddpro",
       caCertificate: "",
       caCertificatePath: "",
@@ -226,7 +343,7 @@ test("migration rolls back and closes the connection when verification fails", a
   }
 
   await assert.rejects(
-    applyAiToolConfirmationsMigration({
+    applyDatabaseMigrations({
       connectionString: "postgresql://example.invalid/ddpro",
       PoolClass: FailedVerificationPool,
     }),
