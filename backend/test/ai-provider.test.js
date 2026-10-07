@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { after, before, beforeEach, test } from "node:test";
+import { after, afterEach, before, beforeEach, test } from "node:test";
 
 const TEST_API_KEY = "test-ai-key-not-a-secret";
 const savedEnv = {};
@@ -44,16 +44,19 @@ beforeEach(() => {
   responses = [];
 });
 
+afterEach(() => {
+  assert.equal(responses.length, 0, "Every queued AI provider response must be consumed");
+});
+
 const completion = (message) => ({ status: 200, body: { choices: [{ message }] } });
 
 const rejectSamplingParameters = (body) => {
-  if ("temperature" in body || "top_p" in body) {
-    return {
-      status: 400,
-      body: { error: { message: "Unsupported parameter: 'temperature'.", type: "invalid_request_error" } },
-    };
-  }
-  return null;
+  const unsupported = ["temperature", "top_p"].find((key) => key in body);
+  if (!unsupported) return null;
+  return {
+    status: 400,
+    body: { error: { message: `Unsupported parameter: '${unsupported}'.`, type: "invalid_request_error" } },
+  };
 };
 
 test("Chat Completions request omits sampling parameters unsupported by gpt-5.6-luna", async () => {
