@@ -113,7 +113,7 @@ export const loadMigrations = async (directory = migrationsDirectoryUrl) => {
     }
     const match = migrationFilePattern.exec(entry.name);
     if (!match) {
-      throw new MigrationError(`Invalid migration file name: ${entry.name}`);
+      throw new MigrationError(`Invalid migration file name: ${entry.name} (expected NNN_lowercase_name.sql).`);
     }
     const sql = await readFile(join(directoryPath, entry.name), "utf8");
     migrations.push({

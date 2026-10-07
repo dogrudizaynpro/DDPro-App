@@ -100,7 +100,7 @@ test("all migrations are applied in numeric order in one locked transaction", as
     pool.queries.filter((text) => text.startsWith("INSERT INTO public.schema_migrations")).length,
     migrations.length
   );
-  assert.ok(pool.queries.at(-3).includes("FROM pg_class AS table_info"));
+  assert.ok(pool.queries.at(-3).includes("table_info.relname = 'ai_tool_confirmations'"));
   assert.ok(pool.queries.at(-2).includes("unnest($1::text[]"));
   assert.equal(pool.queries.at(-1), "COMMIT");
   assert.equal(pool.released, true);
