@@ -172,7 +172,6 @@ const requestProviderCompletion = async (messages, includeTools) => {
     },
     body: JSON.stringify({
       model: AI_MODEL,
-      temperature: 0.2,
       messages,
       ...(includeTools ? { tools: TOOL_DEFINITIONS, tool_choice: "auto" } : {}),
     }),
