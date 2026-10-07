@@ -117,6 +117,30 @@ const testCrmAndSupabase = async (provider) => {
   if (tokenError) throw Object.assign(new Error("Secure OAuth token storage is unavailable; apply the operations integration migration."), { statusCode: 503, expose: true });
 };
 
+const testWebsite = async () => {
+  if (!process.env.WEBSITE_WEBHOOK_SECRET) {
+    throw Object.assign(new Error("Website lead webhook secret is not configured."), {
+      statusCode: 503,
+      expose: true,
+    });
+  }
+  const admin = getIntegrationAdmin();
+  if (!admin) {
+    throw Object.assign(new Error("Supabase service-role credentials are required for website leads."), {
+      statusCode: 503,
+      expose: true,
+    });
+  }
+  const { error } = await admin.from("crm_contacts").select("id", { head: true }).limit(1);
+  if (error) {
+    throw Object.assign(
+      new Error("CRM storage is unavailable for website leads; apply the operations integration migration."),
+      { statusCode: 503, expose: true }
+    );
+  }
+  await requestWebsiteCms({ method: "GET", contentType: "pages" });
+};
+
 const tests = {
   ai: async () => {
     await requestAiCompletion({
@@ -128,9 +152,7 @@ const tests = {
   googleCalendar: async (_account) => testGoogleWorkspaceConnection(_account, "calendar"),
   whatsapp: testWhatsApp,
   crm: async () => testCrmAndSupabase("crm"),
-  website: async () => {
-    await requestWebsiteCms({ method: "GET", contentType: "pages" });
-  },
+  website: testWebsite,
   appStore: testApple,
   supabase: async () => testCrmAndSupabase("supabase"),
   research: async () => {
