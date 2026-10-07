@@ -808,9 +808,11 @@ test("Chromium accepts the production-origin CHIPS cookie and restores after ref
     });
     websocket.addEventListener("message", async (event) => {
       const message = JSON.parse(event.data);
-      if (message.id) {
-        pending.get(message.id)?.(message);
+      if (Number.isSafeInteger(message.id)) {
+        const handler = pending.get(message.id);
+        if (typeof handler !== "function") return;
         pending.delete(message.id);
+        handler(message);
       } else if (message.method === "Network.loadingFailed") {
         networkFailures.push({ error: message.params.errorText, reason: message.params.blockedReason });
       } else if (message.method === "Fetch.requestPaused") {
