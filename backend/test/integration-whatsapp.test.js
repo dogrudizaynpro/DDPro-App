@@ -6,7 +6,7 @@ const keys = [
   "WHATSAPP_ACCESS_TOKEN", "WHATSAPP_PHONE_NUMBER_ID", "WHATSAPP_API_VERSION",
   "WHATSAPP_APP_SECRET", "WHATSAPP_VERIFY_TOKEN", "SUPABASE_URL",
   "SUPABASE_SERVICE_ROLE_KEY", "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET",
-  "GOOGLE_REDIRECT_URI", "INTEGRATION_SESSION_SECRET",
+  "GOOGLE_REDIRECT_URI", "INTEGRATION_SESSION_SECRET", "FRONTEND_URL",
 ];
 const previous = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
 const originalFetch = globalThis.fetch;
@@ -134,13 +134,35 @@ test("invalid WhatsApp configuration fails closed before calling Graph", async (
 });
 
 test("outbound WhatsApp endpoint keeps existing session authorization", async () => {
+  process.env.FRONTEND_URL = "http://localhost:5173";
   const response = await originalFetch(`${baseUrl}/api/integrations/whatsapp/send`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", Origin: "http://localhost:5173" },
     body: JSON.stringify({ to: "905550000000", text: "Test" }),
   });
   assert.equal(response.status, 401);
   assert.equal(providerRequests.length, 0);
+});
+
+test("malformed WhatsApp JSON cannot echo or log webhook content before signature validation", async () => {
+  const originalLog = console.error;
+  const logs = [];
+  console.error = (...args) => logs.push(args);
+  try {
+    const response = await originalFetch(`${baseUrl}/webhooks/whatsapp`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: `${process.env.WHATSAPP_ACCESS_TOKEN}{invalid`,
+    });
+    assert.equal(response.status, 400);
+    assert.deepEqual(await response.json(), {
+      status: "error", message: "WhatsApp webhook payload is invalid.",
+    });
+    assert.deepEqual(logs, []);
+    assert.equal(providerRequests.length, 0);
+  } finally {
+    console.error = originalLog;
+  }
 });
 
 after(async () => {

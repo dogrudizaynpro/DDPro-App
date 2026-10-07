@@ -1,20 +1,25 @@
 import { createHash, createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import { getIntegrationAdmin } from "../config/integration-admin.js";
 import { createCrmContact } from "./crm.service.js";
-import { recordAiUsage } from "./ai.service.js";
+import { decryptIntegrationToken } from "./integration-vault.service.js";
 import { getWhatsAppAiAccount, requestWhatsAppAiReply } from "./whatsapp-ai.service.js";
 
-const safeError = (message, statusCode = 502) =>
-  Object.assign(new Error(message), { statusCode, expose: true });
+const safeErrors = new WeakSet();
+const safeError = (message, statusCode = 502) => {
+  const error = Object.assign(new Error(message), { statusCode, expose: true });
+  safeErrors.add(error);
+  return error;
+};
 const validCredential = (value) =>
   typeof value === "string" && /^[^\s\x00-\x1f\x7f]{1,4096}$/.test(value);
+const validPhoneId = (value) => typeof value === "string" && /^\d{1,40}$/.test(value);
 const configuration = () => ({
   token: process.env.WHATSAPP_ACCESS_TOKEN,
   phoneId: process.env.WHATSAPP_PHONE_NUMBER_ID,
   version: process.env.WHATSAPP_API_VERSION || "v23.0",
 });
 const validSendConfiguration = ({ token, phoneId, version }) =>
-  validCredential(token) && /^\d{1,40}$/.test(phoneId || "") &&
+  validCredential(token) && validPhoneId(phoneId) &&
   /^v[1-9]\d{0,2}\.\d{1,2}$/.test(version);
 
 export const getWhatsAppConfigurationStatus = () => {
@@ -101,6 +106,30 @@ export const sendWhatsAppMessage = async ({ to, text } = {}) => {
 const object = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 const invalidPayload = () => safeError("WhatsApp webhook payload is invalid.", 400);
 
+const readGoogleConnectionVersion = async (admin, account) => {
+  if (!/^[\da-f]{64}$/i.test(process.env.INTEGRATION_TOKEN_ENCRYPTION_KEY || "")) return null;
+  const { data, error } = await admin.from("integration_tokens").select("encrypted_token")
+    .eq("provider", "google").eq("account", account).maybeSingle();
+  if (error) throw safeError("WhatsApp AI authorization storage is unavailable.", 503);
+  if (!data) return null;
+  try {
+    const token = decryptIntegrationToken(data.encrypted_token);
+    if (!object(token) || !validCredential(token.accessToken) ||
+        !Number.isFinite(token.expiresAt) || token.expiresAt <= 0 ||
+        (token.expiresAt <= Date.now() && !validCredential(token.refreshToken))) return null;
+    // Refresh preserves sessionVersion; reconnect rotates it. Store only a
+    // digest, with a stable credential fallback for legacy encrypted tokens.
+    const identity = typeof token.sessionVersion === "string" &&
+      /^[\da-z_-]{16,128}$/i.test(token.sessionVersion)
+      ? `session:${token.sessionVersion}`
+      : validCredential(token.refreshToken)
+        ? `refresh:${token.refreshToken}` : `access:${token.accessToken}`;
+    return createHash("sha256").update(identity).digest("hex");
+  } catch {
+    return null;
+  }
+};
+
 export const extractWhatsAppMessages = (body) => {
   if (!object(body) || body.object !== "whatsapp_business_account" || !Array.isArray(body.entry)) {
     throw invalidPayload();
@@ -114,8 +143,17 @@ export const extractWhatsAppMessages = (body) => {
       if (value.messages === undefined) continue; // Delivery/read status notifications.
       if (!Array.isArray(value.messages) ||
           (value.contacts !== undefined && !Array.isArray(value.contacts))) throw invalidPayload();
+      if (value.messages.length) {
+        const receivingPhoneId = configuration().phoneId;
+        if (!validPhoneId(receivingPhoneId)) {
+          throw safeError("WhatsApp receiving phone is not configured.", 503);
+        }
+        if (!object(value.metadata) || !validPhoneId(value.metadata.phone_number_id)) throw invalidPayload();
+        // One Meta app secret can authenticate deliveries for several businesses.
+        if (value.metadata.phone_number_id !== receivingPhoneId) continue;
+      }
       for (const message of value.messages) {
-        if (!object(message) || typeof message.id !== "string" ||
+        if (!object(message) || typeof message.type !== "string" || typeof message.id !== "string" ||
             !/^[^\s\x00-\x1f\x7f]{1,500}$/.test(message.id) ||
             typeof message.from !== "string" || !/^\d{8,20}$/.test(message.from)) throw invalidPayload();
         let text;
@@ -137,14 +175,15 @@ export const extractWhatsAppMessages = (body) => {
   return messages;
 };
 
-export const saveWhatsAppMessages = async (body, dependencies = {}) => {
+const processWhatsAppMessages = async (body, dependencies) => {
   const messages = extractWhatsAppMessages(body);
   if (!messages.length) return 0;
   const admin = dependencies.admin || getIntegrationAdmin();
   if (!admin) throw safeError("WhatsApp inbound storage is unavailable.", 503);
   const createContact = dependencies.createContact || createCrmContact;
   const aiReply = dependencies.aiReply || requestWhatsAppAiReply;
-  const usage = dependencies.recordUsage || recordAiUsage;
+  const usage = dependencies.recordUsage ||
+    (async (account) => (await import("./ai.service.js")).recordAiUsage(account));
   const send = dependencies.send || sendWhatsAppMessage;
   let processed = 0;
   const started = Date.now();
@@ -180,14 +219,34 @@ export const saveWhatsAppMessages = async (body, dependencies = {}) => {
       }
       const account = getWhatsAppAiAccount(message.from);
       if (account && (!state.owner_account || state.owner_account === account)) {
-        const { data: existingAccount, error } = await admin.from("integration_tokens")
-          .select("account").eq("provider", "google").eq("account", account).maybeSingle();
-        if (error) throw error;
-        if (existingAccount) {
+        const connectionVersion = await readGoogleConnectionVersion(admin, account);
+        if (connectionVersion && (state.connection_version
+          ? state.connection_version === connectionVersion : !state.reply_chunks)) {
           if (!state.owner_account) await checkpoint({ owner_account: account });
+          if (!state.connection_version) await checkpoint({ connection_version: connectionVersion });
+          const authorize = async () => getWhatsAppAiAccount(message.from) === account &&
+            await readGoogleConnectionVersion(admin, account) === connectionVersion;
           if (!state.reply_chunks) {
+            if (!state.confirmation_attempted) {
+              const { count, error: quotaError } = await admin.from("ai_usage_events")
+                .select("id", { count: "exact", head: true })
+                .eq("owner_account", account)
+                .gte("created_at", new Date(Date.now() - 60_000).toISOString());
+              if (quotaError || !Number.isInteger(count) || count < 0) {
+                throw safeError("WhatsApp AI quota storage is unavailable.", 503);
+              }
+              if (count >= 20) {
+                throw safeError("WhatsApp AI request limit reached. Please retry later.", 503);
+              }
+              // Reserve usage before the AI/write boundary, so failed requests
+              // cannot bypass the durable limit by repeatedly requesting retries.
+              await usage(account);
+              await checkpoint({ usage_recorded: true });
+            }
+            if (!(await authorize())) throw safeError("WhatsApp AI authorization changed. Please retry.", 503);
             const reply = await aiReply({
               message, sender: message.from, account, admin, state, checkpoint,
+              connectionVersion, authorize,
             });
             await checkpoint(reply);
           }
@@ -196,6 +255,7 @@ export const saveWhatsAppMessages = async (body, dependencies = {}) => {
             await checkpoint({ usage_recorded: true });
           }
           for (let index = state.next_chunk; index < state.reply_chunks.length; index += 1) {
+            if (!(await authorize())) throw safeError("WhatsApp AI authorization changed. Please retry.", 503);
             await send({ to: message.from, text: state.reply_chunks[index] });
             // A provider acceptance followed by a crash before this checkpoint can
             // duplicate a reply on redelivery; external sends are not exactly-once.
@@ -205,14 +265,25 @@ export const saveWhatsAppMessages = async (body, dependencies = {}) => {
       }
       await checkpoint({ status: "completed", lease_token: null, leased_until: null });
       processed += 1;
-    } catch {
+    } catch (error) {
       try {
         await checkpoint({ status: "retry", lease_token: null, leased_until: null });
       } catch {
         // If release fails, the durable lease expires and redelivery can retry.
       }
+      if (safeErrors.has(error)) throw error;
       throw safeError("WhatsApp message processing failed. Please retry.", 503);
     }
   }
   return processed;
+};
+
+export const saveWhatsAppMessages = async (body, dependencies = {}) => {
+  try {
+    return await processWhatsAppMessages(body, dependencies);
+  } catch (error) {
+    // The global handler logs error.message, even in development.
+    if (safeErrors.has(error)) throw error;
+    throw safeError("WhatsApp message processing failed. Please retry.", 503);
+  }
 };

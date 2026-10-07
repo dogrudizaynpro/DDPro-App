@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS public.whatsapp_inbound_messages (
   leased_until TIMESTAMPTZ,
   contact_id UUID REFERENCES public.crm_contacts(id) ON DELETE SET NULL,
   owner_account TEXT,
+  connection_version TEXT CHECK (connection_version IS NULL OR connection_version ~ '^[0-9a-f]{64}$'),
   reply_chunks JSONB,
   next_chunk INTEGER NOT NULL DEFAULT 0 CHECK (next_chunk >= 0),
   usage_recorded BOOLEAN NOT NULL DEFAULT false,

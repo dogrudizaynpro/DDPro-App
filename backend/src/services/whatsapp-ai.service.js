@@ -1,5 +1,3 @@
-import { requestAiCompletion, confirmAiAction } from "./ai.service.js";
-
 const UUID = /^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i;
 
 export const getWhatsAppAiAccount = (phone) => {
@@ -37,15 +35,19 @@ const chunkReply = (text) => {
 };
 
 export const requestWhatsAppAiReply = async ({
-  message, sender, account, admin, state, checkpoint,
-}, { complete = requestAiCompletion, confirm = confirmAiAction } = {}) => {
+  message, sender, account, admin, state, checkpoint, connectionVersion, authorize,
+}, { complete, confirm } = {}) => {
+  if (typeof authorize !== "function" || !(await authorize())) {
+    throw new Error("WhatsApp AI authorization is unavailable.");
+  }
   // Only plain inbound text can authorize a write; interactive IDs are untrusted.
-  const match = message.type === "text" && /^ONAYLA ([\da-f-]{36})$/.exec(message.text);
+  const match = message.type === "text" && /^ONAYLA ([\da-fA-F-]{36})$/.exec(message.text);
   if (match && UUID.test(match[1])) {
     const { data: pending, error } = await admin.from("whatsapp_inbound_messages")
       .select("message_id")
       .eq("sender", sender)
       .eq("owner_account", account)
+      .eq("connection_version", connectionVersion)
       .eq("pending_action_id", match[1].toLowerCase())
       .eq("status", "completed")
       .gt("pending_expires_at", new Date().toISOString())
@@ -58,15 +60,20 @@ export const requestWhatsAppAiReply = async ({
       return { reply_chunks: ["Önceki onayın sonucu kesinleştirilemedi. Yeniden işlem yapmadan uygulamadan kontrol edin."] };
     }
     // Persist before crossing the write boundary. A crash must never repeat a write.
+    if (!(await authorize())) throw new Error("WhatsApp AI authorization is unavailable.");
     await checkpoint({ confirmation_attempted: true });
+    if (!(await authorize())) throw new Error("WhatsApp AI authorization is unavailable.");
     try {
-      await confirm(account, match[1]);
+      const confirmAction = confirm || (await import("./ai.service.js")).confirmAiAction;
+      await confirmAction(account, match[1]);
       return { reply_chunks: ["Onaylanan işlem tamamlandı."] };
     } catch {
       return { reply_chunks: ["Onay tamamlanamadı veya süresi doldu. Yeniden işlem yapmadan uygulamadan kontrol edin."] };
     }
   }
-  const result = await complete({
+  // AI tools import the workspace controller; load lazily to avoid a module cycle.
+  const completeRequest = complete || (await import("./ai.service.js")).requestAiCompletion;
+  const result = await completeRequest({
     message: message.text, context: { channel: "whatsapp" }, integrationAccount: account,
   });
   if (!result.pendingAction) return { reply_chunks: chunkReply(result.answer) };

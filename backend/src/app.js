@@ -67,6 +67,12 @@ app.use(express.json({
   },
 }));
 app.use(express.urlencoded({ extended: true }));
+app.use("/webhooks/whatsapp", (error, _req, res, next) => {
+  if (error.type === "entity.parse.failed") {
+    return res.status(400).json({ status: "error", message: "WhatsApp webhook payload is invalid." });
+  }
+  return next(error);
+});
 
 // ============================================================
 // API ROUTES

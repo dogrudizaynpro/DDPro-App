@@ -84,7 +84,7 @@ test("all migrations are applied in numeric order in one locked transaction", as
     skipped: [],
   });
   assert.equal(result.applied[0], "001_base_schema");
-  assert.equal(result.applied.at(-1), "015_ai_tool_confirmations");
+  assert.equal(result.applied.at(-1), "016_whatsapp_inbound");
   assert.equal(pool.options.ssl.rejectUnauthorized, true);
   assert.equal(pool.queries[0], "BEGIN");
   assert.match(pool.queries[1], /pg_advisory_xact_lock/);
@@ -113,7 +113,7 @@ test("migrations loaded from disk are numbered, unique and include the core prod
   assert.deepEqual(versions, [...versions].sort((left, right) => left - right));
   assert.equal(new Set(versions).size, versions.length);
   const allSql = migrations.map((migration) => migration.sql).join("\n");
-  for (const table of ["crm_contacts", "offers", "research_items", "ai_usage_events"]) {
+  for (const table of ["crm_contacts", "offers", "research_items", "ai_usage_events", "whatsapp_inbound_messages"]) {
     assert.ok(serviceRoleTables.includes(table));
     assert.match(allSql, new RegExp(`CREATE TABLE IF NOT EXISTS (public\\.)?${table} \\(`));
   }
@@ -153,7 +153,7 @@ test("previously applied migrations are skipped and modified ones fail closed", 
     connectionString: "postgresql://example.invalid/ddpro",
     PoolClass: HistoryPool,
   });
-  assert.deepEqual(result.applied, ["015_ai_tool_confirmations"]);
+  assert.deepEqual(result.applied, ["016_whatsapp_inbound"]);
   assert.equal(result.skipped.length, migrations.length - 1);
   for (const migration of migrations.slice(0, -1)) {
     assert.ok(!pool.queries.includes(migration.sql));
