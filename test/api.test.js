@@ -17,6 +17,7 @@ let completeGoogleConnection;
 let setBrowserSession;
 let confirmAiAction;
 let disconnectGoogle;
+let sendWhatsAppText;
 
 before(async () => {
   globalThis.window = {
@@ -36,7 +37,7 @@ before(async () => {
   };
   ({ fetchAPI, setBrowserSession } = await import("../src/services/api.js"));
   ({ testIntegrationConnection, getIntegrationStatus } = await import("../src/services/integrations.service.js"));
-  ({ formatGoogleIntegrationError, completeGoogleConnection, disconnectGoogle } = await import("../src/services/operations-integrations.service.js"));
+  ({ formatGoogleIntegrationError, completeGoogleConnection, disconnectGoogle, sendWhatsAppText } = await import("../src/services/operations-integrations.service.js"));
   ({ confirmAiAction } = await import("../src/services/ai.service.js"));
 });
 
@@ -75,6 +76,35 @@ test("AI write confirmation posts only the opaque action ID through the authenti
   assert.equal(requests[0].options.method, "POST");
   assert.deepEqual(JSON.parse(requests[0].options.body), { confirmationId: actionId });
   assert.equal(requests[0].options.headers.Authorization, ["Bearer", "existing-browser-session"].join(" "));
+});
+
+test("WhatsApp outbound requests use the authenticated backend without provider credentials", async () => {
+  response = () => Response.json({ status: "success", data: { id: "wamid.test" } });
+  const result = await sendWhatsAppText("905550000000", "Merhaba");
+  assert.equal(result.data.id, "wamid.test");
+  assert.equal(requests.length, 1);
+  assert.match(requests[0].url, /\/api\/integrations\/whatsapp\/send$/);
+  assert.equal(requests[0].options.method, "POST");
+  assert.equal(requests[0].options.headers.Authorization, ["Bearer", "existing-browser-session"].join(" "));
+  assert.deepEqual(JSON.parse(requests[0].options.body), { to: "905550000000", text: "Merhaba" });
+});
+
+test("WhatsApp readiness and safe test failures are supplied by the backend without discarding the session", async () => {
+  response = () => Response.json({ data: {
+    whatsapp: { configured: false, connected: false, sendConfigured: true, webhookConfigured: false, status: "credentials_required" },
+  } });
+  const current = await getIntegrationStatus();
+  assert.equal(current.whatsapp.sendConfigured, true);
+  assert.equal(current.whatsapp.webhookConfigured, false);
+  assert.equal(current.whatsapp.connected, false);
+  response = () => Response.json({
+    status: "error", message: "WhatsApp provider request failed.",
+    data: { provider: "whatsapp", connected: false, testSucceeded: false },
+  }, { status: 502 });
+  await assert.rejects(testIntegrationConnection("whatsapp"), /WhatsApp provider request failed/);
+  assert.match(requests.at(-1).url, /\/api\/integrations\/test\/whatsapp$/);
+  assert.equal(storage.get("ddpro_browser_session"), "existing-browser-session");
+  assert.equal(requests.some(({ url }) => url.endsWith("/google/logout")), false);
 });
 
 test("OAuth exchange precedes concurrent Gmail and Calendar status reads and stores only the browser session", async () => {

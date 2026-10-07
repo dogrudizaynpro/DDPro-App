@@ -45,6 +45,18 @@ services:
         sync: false
       - key: AI_MODEL
         sync: false
+      - key: WHATSAPP_ACCESS_TOKEN
+        sync: false
+      - key: WHATSAPP_PHONE_NUMBER_ID
+        sync: false
+      - key: WHATSAPP_API_VERSION
+        value: v23.0
+      - key: WHATSAPP_APP_SECRET
+        sync: false
+      - key: WHATSAPP_VERIFY_TOKEN
+        sync: false
+      - key: WHATSAPP_AI_ACCOUNTS
+        value: "{}"
       - key: RESEARCH_API_URL
         sync: false
       - key: RESEARCH_API_KEY

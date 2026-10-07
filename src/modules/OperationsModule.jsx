@@ -352,13 +352,17 @@ function IntegrationSettings({ onNavigate, hubMode = false }) {
               <div>
                 <div className="integration-card-heading"><h3>{integration.title}</h3><span className={`integration-state${connection?.connected ? " is-connected" : connection?.status === "test_failed" ? " has-error" : ""}`}>{status ? statusLabel({ connected: connection?.connected, configured, status: connection?.status }) : "DURUM KONTROL EDİLİYOR"}</span></div>
                 <p>{integration.description}</p>
+                {integration.id === "whatsapp" && status ? (
+                  <p>Outbound: {connection?.sendConfigured ? "HAZIR" : "YAPILANDIRMA GEREKLİ"} · Webhook: {connection?.webhookConfigured ? "HAZIR" : "YAPILANDIRMA GEREKLİ"}</p>
+                ) : null}
                 <small><strong>Gerekli backend yapılandırması</strong><br />{integration.variables.join(" · ")}<br />
                   {connection?.lastTest?.testedAt ? `Son test: ${new Date(connection.lastTest.testedAt).toLocaleString("tr-TR")}` : "Henüz bağlantı testi çalıştırılmadı."}
                   {connection?.checkedAt ? <span className="integration-check-time">Son kontrol: {new Date(connection.checkedAt).toLocaleString("tr-TR")}</span> : null}
                   {connection?.lastTest?.error ? <span className="integration-error">{formatGoogleIntegrationError({ message: connection.lastTest.error, googleApiError: connection.lastTest.googleApiError })}</span> : null}
+                  {integration.id === "whatsapp" ? <span className="integration-secret-note">BAĞLI, sunucu yapılandırmasının tamamlandığını gösterir. Bağlantı testi Meta telefon kaydını doğrular; webhook teslimatı ve mesaj gönderimi ayrıca canlı sistemde sınanmalıdır. API sürümü belirtilmezse v23.0 kullanılır.</span> : null}
                   <div className="module-toolbar integration-actions">
                     {integration.requiresOAuth && !isGoogleConnected ? <button type="button" onClick={startGoogleOAuth}>Google hesabını bağla</button> : null}
-                    <button type="button" disabled={!configured || testing === integration.id || (integration.requiresOAuth && !isGoogleConnected)} onClick={() => runConnectionTest(integration.id)}>{testing === integration.id ? "Test ediliyor…" : "Bağlantıyı test et"}</button>
+                    <button type="button" disabled={!(integration.id === "whatsapp" ? connection?.sendConfigured : configured) || testing === integration.id || (integration.requiresOAuth && !isGoogleConnected)} onClick={() => runConnectionTest(integration.id)}>{testing === integration.id ? "Test ediliyor…" : "Bağlantıyı test et"}</button>
                     {integration.requiresOAuth && isGoogleConnected ? <button type="button" onClick={disconnectGoogleAccount}>Google bağlantısını kes (Gmail + Calendar)</button> : null}
                     <button type="button" onClick={() => onNavigate(integration.moduleId)}>{integration.moduleId === "ai-assistant" ? "AI TRADE'i aç" : "Modülü aç"}</button>
                   </div>

@@ -4,6 +4,7 @@ import { requestAiCompletion } from "./ai.service.js";
 import { requestWebsiteCms } from "./website-cms.service.js";
 import { testGoogleWorkspaceConnection } from "./google-workspace.service.js";
 import { searchResearchProvider } from "./research-provider.service.js";
+import { testWhatsAppConnection } from "./whatsapp.service.js";
 
 const recentTests = new Map();
 
@@ -41,31 +42,6 @@ const createAppleToken = () => {
   signer.end();
   const signature = signer.sign({ key: privateKey, dsaEncoding: "ieee-p1363" }).toString("base64url");
   return `${unsigned}.${signature}`;
-};
-
-const testWhatsApp = async () => {
-  const accessToken = process.env.WHATSAPP_ACCESS_TOKEN;
-  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
-  const version = process.env.WHATSAPP_API_VERSION || "v23.0";
-  if (!accessToken || !phoneNumberId || !/^v\d+\.\d+$/.test(version)) {
-    throw Object.assign(new Error("WhatsApp Cloud API credentials are not configured."), {
-      statusCode: 503,
-      expose: true,
-    });
-  }
-  const endpoint = new URL(`https://graph.facebook.com/${version}/${encodeURIComponent(phoneNumberId)}`);
-  endpoint.searchParams.set("fields", "id,display_phone_number");
-  const response = await fetch(endpoint, {
-    headers: { Authorization: ["Bearer", accessToken].join(" ") },
-    signal: AbortSignal.timeout(15_000),
-  });
-  if (!response.ok) {
-    throw Object.assign(new Error(`WhatsApp Cloud API connection test failed (HTTP ${response.status}).`), {
-      statusCode: 502,
-      expose: true,
-    });
-  }
-  await response.json();
 };
 
 const testApple = async () => {
@@ -126,7 +102,7 @@ const tests = {
   },
   gmail: async (_account) => testGoogleWorkspaceConnection(_account, "gmail"),
   googleCalendar: async (_account) => testGoogleWorkspaceConnection(_account, "calendar"),
-  whatsapp: testWhatsApp,
+  whatsapp: testWhatsAppConnection,
   crm: async () => testCrmAndSupabase("crm"),
   website: async () => {
     await requestWebsiteCms({ method: "GET", contentType: "pages" });

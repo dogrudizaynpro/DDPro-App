@@ -139,7 +139,10 @@ export const createCrmContact = async (body, options) => {
     if (lookupError) throw lookupError;
     if (existing) return { contact: existing, duplicate: true };
   }
-  const duplicate = await findNaturalDuplicate(client, payload);
+  // A WhatsApp lead represents an inbound message, not a unique phone number.
+  const duplicate = payload.source === "whatsapp" && payload.source_external_id
+    ? null
+    : await findNaturalDuplicate(client, payload);
   if (duplicate) return { contact: duplicate, duplicate: true };
   const { data, error } = await client
     .from("crm_contacts")

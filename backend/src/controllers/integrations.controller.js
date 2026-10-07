@@ -5,6 +5,7 @@ import {
 } from "../services/google-integration.service.js";
 import { websiteCmsConfigured } from "../services/website-cms.service.js";
 import { getIntegrationTestResult, testIntegrationConnection } from "../services/integration-health.service.js";
+import { getWhatsAppConfigurationStatus } from "../services/whatsapp.service.js";
 
 export const getIntegrationStatus = async (req, res, next) => {
  try {
@@ -14,12 +15,7 @@ export const getIntegrationStatus = async (req, res, next) => {
   const googleAccount = await getGoogleSessionAccount(req);
   const google = await getGoogleConfigurationStatus(googleAccount);
   const databaseConfigured = hasIntegrationAdmin();
-  const whatsappConfigured = Boolean(
-    process.env.WHATSAPP_ACCESS_TOKEN && process.env.WHATSAPP_PHONE_NUMBER_ID
-  );
-  const whatsappWebhookConfigured = Boolean(
-    process.env.WHATSAPP_APP_SECRET && process.env.WHATSAPP_VERIFY_TOKEN
-  );
+  const whatsapp = getWhatsAppConfigurationStatus();
   const websiteWebhookConfigured = Boolean(process.env.WEBSITE_WEBHOOK_SECRET);
   const cmsConfigured = websiteCmsConfigured();
   const websiteConfigured = cmsConfigured && websiteWebhookConfigured && databaseConfigured;
@@ -102,10 +98,11 @@ export const getIntegrationStatus = async (req, res, next) => {
         ...statusAfterTest("googleCalendar", googleConfigured, googleConnected),
       },
       whatsapp: {
-        configured: whatsappConfigured && whatsappWebhookConfigured,
-        sendConfigured: whatsappConfigured,
-        webhookConfigured: whatsappWebhookConfigured,
-        ...statusAfterTest("whatsapp", whatsappConfigured),
+        ...whatsapp,
+        connected: whatsapp.configured,
+        status: whatsapp.configured ? "connected" : "credentials_required",
+        lastTest: last("whatsapp"),
+        checkedAt,
       },
       research: {
         configured: Boolean(process.env.RESEARCH_API_URL && process.env.RESEARCH_API_KEY),
