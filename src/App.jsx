@@ -261,7 +261,7 @@ const moduleRouteMap = Object.fromEntries(
 );
 
 const routeModuleMap = Object.fromEntries(
-  modules.map((module) => [module.path, module.id])
+  modules.flatMap((module) => [[`/${module.id}`, module.id], [module.path, module.id]])
 );
 const moduleIds = new Set(modules.map((module) => module.id));
 const dashboardQuickAccessModuleIds = new Set([
@@ -944,7 +944,7 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, [offersReloadKey]);
+  }, [offersReloadKey, integrationState?.google?.connected]);
 
   useEffect(() => {
     if (offers.length === 0) {
@@ -1087,7 +1087,7 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [integrationState?.google?.connected]);
 
   useEffect(() => {
     localStorage.setItem(
@@ -1166,7 +1166,7 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [integrationState?.google?.connected]);
 
   const addLog = (message) => {
     const newLog = {

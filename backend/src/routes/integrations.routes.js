@@ -39,7 +39,10 @@ const integrationActionRateLimit = rateLimit({
   legacyHeaders: false,
 });
 
-router.get("/status", getIntegrationStatus);
+router.get("/status",
+  (_req, res, next) => { res.set("Cache-Control", "no-store"); next(); },
+  (req, res, next) => req.get("authorization") ? requireGoogleSession(req, res, next) : next(),
+  getIntegrationStatus);
 router.post(
   "/test/:provider",
   rateLimit({

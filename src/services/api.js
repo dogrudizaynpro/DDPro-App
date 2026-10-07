@@ -43,9 +43,13 @@ const API_BASE_URL = resolveApiBaseUrl();
 const SESSION_KEY = "ddpro_browser_session";
 let pendingSessionRestore;
 let sessionRestoreError;
+let sessionRestoreErrorExpiresAt = 0;
+let sessionRevision = 0;
 export const clearBrowserSession = () => {
   sessionStorage.removeItem(SESSION_KEY);
   sessionRestoreError = undefined;
+  sessionRestoreErrorExpiresAt = 0;
+  sessionRevision += 1;
 };
 export const setBrowserSession = (session) => {
   if (typeof session !== "string" || !session.trim()) {
@@ -53,17 +57,34 @@ export const setBrowserSession = (session) => {
   }
   sessionStorage.setItem(SESSION_KEY, session);
   sessionRestoreError = undefined;
+  sessionRestoreErrorExpiresAt = 0;
+  sessionRevision += 1;
 };
 
 export const restoreBrowserSession = () => {
   if (pendingSessionRestore) return pendingSessionRestore;
+  if (sessionRestoreError && Date.now() < sessionRestoreErrorExpiresAt) {
+    return Promise.reject(sessionRestoreError);
+  }
+  const revision = sessionRevision;
   const pending = fetchAPI("/api/integrations/google/restore", {
     method: "POST",
     body: JSON.stringify({}),
   }).then((response) => {
+    // A completed OAuth exchange or logout must win over an older restore response.
+    if (revision !== sessionRevision) {
+      if (sessionStorage.getItem(SESSION_KEY)) return;
+      throw Object.assign(new Error("Browser session changed during restoration."), {
+        status: 401, code: "BROWSER_SESSION_CHANGED",
+      });
+    }
     setBrowserSession(response.data?.session);
   }).catch((error) => {
-    if (error.status === 401) sessionRestoreError = error;
+    if (revision !== sessionRevision && sessionStorage.getItem(SESSION_KEY)) return;
+    if (error.status === 401 && revision === sessionRevision) {
+      sessionRestoreError = error;
+      sessionRestoreErrorExpiresAt = Date.now() + 5_000;
+    }
     throw error;
   });
   pendingSessionRestore = pending;
@@ -74,7 +95,7 @@ export const restoreBrowserSession = () => {
 };
 
 const requiresBrowserSession = (endpoint) => {
-  if (endpoint === "/api/integrations/status") return false;
+  if (endpoint.split("?")[0] === "/api/integrations/status") return false;
   const providerTest = endpoint.match(/^\/api\/integrations\/test\/([^/?]+)$/);
   return !providerTest || ["gmail", "googleCalendar", "crm"].includes(providerTest[1]);
 };
@@ -85,7 +106,7 @@ const prepareBrowserSession = async (endpoint) => {
   } catch (error) {
     if (![400, 401].includes(error.status)) throw error;
   }
-  if (!requiresBrowserSession(endpoint) && endpoint !== "/api/integrations/status") return;
+  if (!requiresBrowserSession(endpoint) && endpoint.split("?")[0] !== "/api/integrations/status") return;
   const session = sessionStorage.getItem(SESSION_KEY);
   if (session) {
     let expired = false;
@@ -100,10 +121,10 @@ const prepareBrowserSession = async (endpoint) => {
     clearBrowserSession();
   }
   try {
-    if (sessionRestoreError) throw sessionRestoreError;
     await restoreBrowserSession();
   } catch (error) {
-    if (error.status !== 401 || endpoint !== "/api/integrations/status") throw error;
+    if (error.status !== 401 || endpoint.split("?")[0] !== "/api/integrations/status") throw error;
+    return error;
   }
 };
 
@@ -141,21 +162,33 @@ export const fetchAPI = async (endpoint, options = {}) => {
     "/api/integrations/google/restore",
   ].includes(normalizedEndpoint);
   const needsSession = normalizedEndpoint.startsWith("/api/") && !sessionControl;
-  if (needsSession) await prepareBrowserSession(normalizedEndpoint);
+  let restoreError = needsSession ? await prepareBrowserSession(normalizedEndpoint) : undefined;
   const attemptedSession = sessionStorage.getItem(SESSION_KEY);
+  const isStatus = normalizedEndpoint.split("?")[0] === "/api/integrations/status";
+  const withRestoreDiagnostics = (response) => restoreError && isStatus
+    ? { ...response, data: { ...response.data, browserSession: {
+      status: "authorization_required", code: restoreError.code, message: restoreError.message,
+    } } }
+    : response;
   try {
-    return await requestAPI(normalizedEndpoint, options, sessionControl);
+    return withRestoreDiagnostics(await requestAPI(normalizedEndpoint, options, sessionControl));
   } catch (error) {
-    if (!needsSession || !requiresBrowserSession(normalizedEndpoint) || error.status !== 401) throw error;
+    if (!needsSession || (!requiresBrowserSession(normalizedEndpoint) && !isStatus) ||
+        error.status !== 401 || error.code === "GOOGLE_CONNECTION_REQUIRED") throw error;
     // Only DDPro authentication failures may restore/retry, never Google API failures.
     const currentSession = sessionStorage.getItem(SESSION_KEY);
     if (currentSession && currentSession !== attemptedSession) {
       return requestAPI(normalizedEndpoint, options);
     }
-    if (!currentSession && sessionRestoreError) throw sessionRestoreError;
-    clearBrowserSession();
-    await restoreBrowserSession();
-    return requestAPI(normalizedEndpoint, options);
+    if (!pendingSessionRestore && currentSession) clearBrowserSession();
+    try {
+      await restoreBrowserSession();
+      restoreError = undefined;
+    } catch (restoreFailure) {
+      if (!isStatus || restoreFailure.status !== 401) throw restoreFailure;
+      restoreError = restoreFailure;
+    }
+    return withRestoreDiagnostics(await requestAPI(normalizedEndpoint, options));
   }
 };
 
