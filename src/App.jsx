@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useId, useMemo, useRef, useState } from "react";
 import ddproMasterLogo from "./assets/DDPRO_LOGO_MASTER_V1_EXACT.png";
 import dashboardDesignReference from "./assets/DDPro-Dashboard-Referans.png";
+import DDProIcon from "./components/DDProIcon.jsx";
 import {
   createProject as createProjectRequest,
   deleteProject as deleteProjectRequest,
@@ -2792,9 +2793,11 @@ function App() {
                 }`}
                 onClick={() => handleModuleNavigation(module.id)}
               >
-                <span className="module-icon">
-                  {module.icon}
-                </span>
+                {module.id === "settings" ? (
+                  <DDProIcon name="settings" className="module-icon" />
+                ) : (
+                  <span className="module-icon">{module.icon}</span>
+                )}
 
                 <span className="module-text">
                   <strong>{module.title}</strong>

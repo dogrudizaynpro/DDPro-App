@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import DDProIcon from "../components/DDProIcon.jsx";
 import {
   beginGoogleConnection,
   createCrmContact,
@@ -175,7 +176,7 @@ function CRMModule({ projects = [], onNavigate, setAiInput }) {
         </select>
         <textarea name="notes" placeholder="CRM notları" maxLength={20000} />
         <div className="module-toolbar">
-          <button type="submit" disabled={saving}>{saving ? "Kaydediliyor…" : editingId ? "Güncelle" : "Müşteri ekle"}</button>
+          <button type="submit" disabled={saving}><DDProIcon name="save" />{saving ? "Kaydediliyor…" : editingId ? "Güncelle" : "Müşteri ekle"}</button>
           {editingId ? <button type="button" disabled={saving} onClick={() => {
             setEditingId("");
             document.getElementById("crm-contact-form")?.reset();
@@ -214,13 +215,13 @@ function CRMModule({ projects = [], onNavigate, setAiInput }) {
               <small>{contact.status || "Durum belirtilmedi"}{contact.area_m2 ? ` · ${contact.area_m2} m²` : ""}</small>
             </div>
             <div className="module-toolbar">
-              <button type="button" onClick={() => beginEdit(contact)}>Düzenle</button>
+              <button type="button" onClick={() => beginEdit(contact)}><DDProIcon name="edit" />Düzenle</button>
               <button type="button" onClick={() => {
                 setAiInput?.(`CRM kaydındaki müşteri talebini değerlendir; ihtiyaçları, belirsizlikleri ve önerilen sonraki adımları çıkar. CRM kaydında değişiklik yapma; önerileri onaya sun.\n\nMüşteri: ${contact.name}\nFirma: ${contact.company || "Belirtilmedi"}\nTalep: ${contact.request || "Talep metni yok"}\nProje: ${contact.project_id || "Belirtilmedi"}\nSistem: ${contact.system || "Belirtilmedi"}`);
                 onNavigate?.("ai-assistant");
               }}>Talebi AI ile analiz et</button>
               {contact.phone ? <button type="button" onClick={() => sendWhatsApp(contact)}>WhatsApp yanıtı gönder</button> : null}
-              <button type="button" onClick={() => removeContact(contact.id)}>Sil</button>
+              <button type="button" onClick={() => removeContact(contact.id)}><DDProIcon name="delete" />Sil</button>
             </div>
           </article>
         ))}

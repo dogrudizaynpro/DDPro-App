@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { getCrmContacts } from "../services/operations-integrations.service.js";
+import DDProIcon from "../components/DDProIcon.jsx";
 
 function ProjectsModule({
   showProjectForm,
@@ -101,7 +102,7 @@ function ProjectsModule({
                 </select>
               </label>
               {crmContactsError ? <small>CRM bağlantısı için Google yetkili oturumu gerekir.</small> : null}
-              <button type="submit">Proje ayrıntılarını kaydet</button>
+              <button type="submit"><DDProIcon name="save" />Proje ayrıntılarını kaydet</button>
             </form>
             {detailsStatus ? <p role="status">{detailsStatus}</p> : null}
             <div className="module-toolbar">
@@ -119,7 +120,7 @@ function ProjectsModule({
           type="button"
           onClick={() => setShowProjectForm((value) => !value)}
         >
-          {showProjectForm ? "Formu Kapat" : "+ Yeni Proje"}
+          {showProjectForm ? "Formu Kapat" : <><DDProIcon name="add" />Yeni Proje</>}
         </button>
       </div>
 
@@ -152,7 +153,7 @@ function ProjectsModule({
             <option>Tamamlandı</option>
           </select>
 
-          <button type="submit">Projeyi Kaydet</button>
+          <button type="submit"><DDProIcon name="save" />Projeyi Kaydet</button>
         </form>
       )}
 
@@ -174,7 +175,7 @@ function ProjectsModule({
                 type="button"
                 onClick={() => deleteProject(project.id)}
               >
-                Sil
+                <DDProIcon name="delete" />Sil
               </button>
             </div>
           ))
