@@ -358,7 +358,22 @@ select {
   pointer-events: none;
 }
 
+.ddpro-icon-medallion::before {
+  position: absolute;
+  inset: 3px;
+  border-radius: inherit;
+  background:
+    linear-gradient(60deg, transparent 47%, rgba(166, 206, 200, 0.34) 49%, transparent 52%) 0 0 / 13px 22px,
+    linear-gradient(-60deg, transparent 47%, rgba(166, 206, 200, 0.34) 49%, transparent 52%) 0 0 / 13px 22px;
+  content: "";
+  mask-image: linear-gradient(90deg, transparent 28%, #000 82%);
+  opacity: 0.55;
+  pointer-events: none;
+}
+
 .ddpro-icon-medallion svg {
+  position: relative;
+  z-index: 1;
   width: 76%;
   height: 76%;
   filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.9));
