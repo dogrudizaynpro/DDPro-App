@@ -4630,7 +4630,7 @@ textarea::placeholder {
   display: none;
 }
 
-.module-page button.ddpro-icon-action {
+:is(.module-page, .operations-module) button.ddpro-icon-action {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -4651,24 +4651,24 @@ textarea::placeholder {
   touch-action: manipulation;
 }
 
-.module-page button.ddpro-icon-action > .ddpro-icon-medallion {
+:is(.module-page, .operations-module) button.ddpro-icon-action > .ddpro-icon-medallion {
   margin: 0;
 }
 
-.module-page button.ddpro-icon-action:hover,
-.module-page button.ddpro-icon-action:focus-visible {
+:is(.module-page, .operations-module) button.ddpro-icon-action:hover,
+:is(.module-page, .operations-module) button.ddpro-icon-action:focus-visible {
   background: transparent;
   color: #25ebbc;
   opacity: 1;
 }
 
-.module-page button.ddpro-icon-action:focus-visible {
+:is(.module-page, .operations-module) button.ddpro-icon-action:focus-visible {
   outline: 2px solid #25ebbc;
   outline-offset: 2px;
 }
 
-.module-page button:not(:disabled):hover > .ddpro-icon-medallion,
-.module-page button:not(:disabled):focus-visible > .ddpro-icon-medallion {
+:is(.module-page, .operations-module) button:not(:disabled):hover > .ddpro-icon-medallion,
+:is(.module-page, .operations-module) button:not(:disabled):focus-visible > .ddpro-icon-medallion {
   box-shadow:
     0 0 0 2px rgba(0, 0, 0, 0.55),
     0 0 14px rgba(0, 230, 178, 0.32),
