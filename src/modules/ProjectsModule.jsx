@@ -117,10 +117,13 @@ function ProjectsModule({
 
       <div className="module-toolbar">
         <button
+          className="ddpro-icon-action"
           type="button"
+          aria-expanded={showProjectForm}
           onClick={() => setShowProjectForm((value) => !value)}
         >
-          {showProjectForm ? "Formu Kapat" : <><DDProIcon name="add" />Yeni Proje</>}
+          <DDProIcon name="add" />
+          <span>{showProjectForm ? "Formu Kapat" : "Yeni Proje"}</span>
         </button>
       </div>
 
@@ -172,10 +175,13 @@ function ProjectsModule({
               </button>
 
               <button
+                className="ddpro-icon-action"
                 type="button"
+                aria-label={`${project.name} projesini sil`}
+                title="Sil"
                 onClick={() => deleteProject(project.id)}
               >
-                <DDProIcon name="delete" />Sil
+                <DDProIcon name="delete" />
               </button>
             </div>
           ))
