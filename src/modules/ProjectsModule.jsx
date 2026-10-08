@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { getCrmContacts } from "../services/operations-integrations.service.js";
-import DDProIcon from "../components/DDProIcon.jsx";
+import DDProActionButton from "../components/DDProActionButton.jsx";
 
 function ProjectsModule({
   showProjectForm,
@@ -102,7 +102,7 @@ function ProjectsModule({
                 </select>
               </label>
               {crmContactsError ? <small>CRM bağlantısı için Google yetkili oturumu gerekir.</small> : null}
-              <button type="submit"><DDProIcon name="save" />Proje ayrıntılarını kaydet</button>
+              <DDProActionButton icon="save" label="Proje ayrıntılarını kaydet" type="submit" />
             </form>
             {detailsStatus ? <p role="status">{detailsStatus}</p> : null}
             <div className="module-toolbar">
@@ -116,15 +116,12 @@ function ProjectsModule({
       ) : null}
 
       <div className="module-toolbar">
-        <button
-          className="ddpro-icon-action"
-          type="button"
-          aria-expanded={showProjectForm}
+        <DDProActionButton
+          icon={showProjectForm ? "settings" : "add"}
+          label={showProjectForm ? "Proje formunu kapat" : "Yeni Proje"}
+          ariaExpanded={showProjectForm}
           onClick={() => setShowProjectForm((value) => !value)}
-        >
-          <DDProIcon name="add" />
-          <span>{showProjectForm ? "Formu Kapat" : "Yeni Proje"}</span>
-        </button>
+        />
       </div>
 
       {projectsError && (
@@ -156,7 +153,7 @@ function ProjectsModule({
             <option>Tamamlandı</option>
           </select>
 
-          <button type="submit"><DDProIcon name="save" />Projeyi Kaydet</button>
+          <DDProActionButton icon="save" label="Projeyi kaydet" type="submit" />
         </form>
       )}
 
@@ -174,15 +171,11 @@ function ProjectsModule({
                 <small>{project.status} · {project.date}</small>
               </button>
 
-              <button
-                className="ddpro-icon-action"
-                type="button"
-                aria-label={`${project.name} projesini sil`}
-                title="Sil"
+              <DDProActionButton
+                icon="delete"
+                label={`${project.name} projesini sil`}
                 onClick={() => deleteProject(project.id)}
-              >
-                <DDProIcon name="delete" />
-              </button>
+              />
             </div>
           ))
         )}
