@@ -1140,7 +1140,7 @@ function ReportsWorkspace({ projects = [], onReportsChanged }) {
             </div>
             <div className="module-toolbar">
               <button type="button" onClick={() => window.print()}><DDProIcon name="print" />Yazdır</button>
-              <button type="button" onClick={() => removeReport(report.id)}><DDProIcon name="delete" />Sil</button>
+              <button className="ddpro-icon-action" type="button" aria-label={`${report.title || "Rapor"} kaydını sil`} title="Sil" onClick={() => removeReport(report.id)}><DDProIcon name="delete" /></button>
             </div>
           </article>
         ))}
