@@ -41,6 +41,64 @@ const iconPaths = {
       <path className="ddpro-icon-accent" d="M12 5v14M5 12h14" />
     </>
   ),
+  refresh: (
+    <>
+      <path d="M19 8.5A7.5 7.5 0 0 0 5.8 6L4 8m0 0V4m0 4h4m-3 3.5A7.5 7.5 0 0 0 18.2 18l1.8-2m0 0v4m0-4h-4" />
+      <path className="ddpro-icon-accent" d="M7 8a6 6 0 0 1 9.8-1.8M17 16a6 6 0 0 1-9.8 1.8" />
+    </>
+  ),
+  search: (
+    <>
+      <circle cx="10.8" cy="10.8" r="6.6" />
+      <path d="m16 16 4.5 4.5" />
+      <path className="ddpro-icon-accent" d="M7.8 10.8h6" />
+    </>
+  ),
+  close: (
+    <>
+      <path d="m5 5 14 14M19 5 5 19" />
+      <path className="ddpro-icon-accent" d="m8 8 8 8" />
+    </>
+  ),
+  upload: (
+    <>
+      <path d="M4 15v5h16v-5M12 16V3m0 0L7.5 7.5M12 3l4.5 4.5" />
+      <path className="ddpro-icon-accent" d="M8.5 7.5 12 4l3.5 3.5" />
+    </>
+  ),
+  download: (
+    <>
+      <path d="M4 15v5h16v-5M12 3v13m0 0 4.5-4.5M12 16l-4.5-4.5" />
+      <path className="ddpro-icon-accent" d="m8.5 12.5 3.5 3.5 3.5-3.5" />
+    </>
+  ),
+  send: (
+    <>
+      <path d="m3 11 18-8-7.8 18-2.7-7.5L3 11Z" />
+      <path d="m10.5 13.5 5-5" />
+      <path className="ddpro-icon-accent" d="m10.5 13.5 5-5" />
+    </>
+  ),
+  check: (
+    <>
+      <path d="m4 12.5 5.2 5.2L20 6.8" />
+      <path className="ddpro-icon-accent" d="m5.5 12.5 3.7 3.7 8-8" />
+    </>
+  ),
+  view: (
+    <>
+      <path d="M2.5 12s3.4-6 9.5-6 9.5 6 9.5 6-3.4 6-9.5 6-9.5-6-9.5-6Z" />
+      <circle cx="12" cy="12" r="2.7" />
+      <path className="ddpro-icon-accent" d="M9.8 12a2.2 2.2 0 0 1 2.2-2.2" />
+    </>
+  ),
+  link: (
+    <>
+      <path d="m9.5 14.5-1.8 1.8a4 4 0 0 1-5.7-5.7l4-4a4 4 0 0 1 5.7 0M14.5 9.5l1.8-1.8a4 4 0 1 1 5.7 5.7l-4 4a4 4 0 0 1-5.7 0" />
+      <path d="m8.5 15.5 7-7" />
+      <path className="ddpro-icon-accent" d="m9.5 14.5 5-5" />
+    </>
+  ),
 };
 
 function DDProIcon({ name, className = "" }) {
