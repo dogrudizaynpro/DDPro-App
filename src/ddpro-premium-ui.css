@@ -1,0 +1,145 @@
+:root {
+  --ddpro-action-white: #ffffff;
+  --ddpro-action-metal: #cbd5d7;
+  --ddpro-action-emerald: #25ebbc;
+}
+
+.main-content .content-header h1,
+.module-page h1,
+.module-page h2,
+.module-page h3,
+.operations-module h1,
+.operations-module h2,
+.operations-module h3,
+.dashboard-module h1,
+.dashboard-module h2,
+.dashboard-module h3,
+.panel h1,
+.panel h2,
+.panel h3 {
+  color: var(--ddpro-action-white) !important;
+  font-weight: 700;
+  opacity: 1;
+}
+
+.module-page button:not(.project-detail-link):not(.ddpro-icon-action):not(.module-button):not(.stat-card):not(.quick-link-card):not(.dashboard-reference-hotspot):not(.ai-trade-role-hotspot),
+.operations-module button:not(.project-detail-link):not(.ddpro-icon-action):not(.module-button):not(.stat-card):not(.quick-link-card):not(.dashboard-reference-hotspot):not(.ai-trade-role-hotspot) {
+  min-height: 44px;
+  padding: 8px 15px;
+  border: 1px solid rgba(203, 213, 215, 0.48);
+  border-radius: 999px;
+  background:
+    radial-gradient(circle at 30% 0%, rgba(255, 255, 255, 0.12), transparent 42%),
+    linear-gradient(145deg, rgba(34, 42, 44, 0.98), rgba(7, 12, 14, 0.98));
+  color: var(--ddpro-action-white);
+  font-size: 12px;
+  font-weight: 650;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.62),
+    0 0 10px rgba(0, 239, 185, 0.15),
+    inset 0 1px rgba(255, 255, 255, 0.2),
+    inset 0 -2px 4px rgba(0, 0, 0, 0.72);
+  transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+  touch-action: manipulation;
+}
+
+.module-page button:not(:disabled):not(.project-detail-link):not(.ddpro-icon-action):not(.module-button):not(.stat-card):not(.quick-link-card):not(.dashboard-reference-hotspot):not(.ai-trade-role-hotspot):hover,
+.module-page button:not(:disabled):not(.project-detail-link):not(.ddpro-icon-action):not(.module-button):not(.stat-card):not(.quick-link-card):not(.dashboard-reference-hotspot):not(.ai-trade-role-hotspot):focus-visible,
+.operations-module button:not(:disabled):not(.project-detail-link):not(.ddpro-icon-action):not(.module-button):not(.stat-card):not(.quick-link-card):not(.dashboard-reference-hotspot):not(.ai-trade-role-hotspot):hover,
+.operations-module button:not(:disabled):not(.project-detail-link):not(.ddpro-icon-action):not(.module-button):not(.stat-card):not(.quick-link-card):not(.dashboard-reference-hotspot):not(.ai-trade-role-hotspot):focus-visible {
+  border-color: rgba(37, 235, 188, 0.86);
+  color: var(--ddpro-action-white);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.7),
+    0 0 16px rgba(0, 239, 185, 0.38),
+    inset 0 1px rgba(255, 255, 255, 0.28);
+}
+
+.module-page button:active:not(:disabled),
+.operations-module button:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.module-page button:disabled,
+.operations-module button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.module-page button.ddpro-icon-action,
+.operations-module button.ddpro-icon-action {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 48px;
+  width: 48px;
+  min-width: 48px;
+  height: 48px;
+  min-height: 48px;
+  padding: 5px;
+  border: 1px solid rgba(226, 237, 238, 0.84);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 32% 20%, rgba(255, 255, 255, 0.18), transparent 38%),
+    linear-gradient(145deg, #1c282a, #070c0e 76%);
+  color: var(--ddpro-action-white);
+  box-shadow:
+    0 0 0 2px rgba(0, 0, 0, 0.7),
+    0 0 12px rgba(0, 239, 185, 0.28),
+    inset 0 1px 3px rgba(255, 255, 255, 0.26),
+    inset 0 -3px 6px rgba(0, 0, 0, 0.82);
+  touch-action: manipulation;
+}
+
+.module-page button.ddpro-icon-action > .ddpro-icon-medallion,
+.operations-module button.ddpro-icon-action > .ddpro-icon-medallion {
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  margin: 0;
+}
+
+.module-page button.ddpro-icon-action:hover:not(:disabled),
+.module-page button.ddpro-icon-action:focus-visible,
+.operations-module button.ddpro-icon-action:hover:not(:disabled),
+.operations-module button.ddpro-icon-action:focus-visible {
+  border-color: var(--ddpro-action-emerald);
+  color: var(--ddpro-action-white);
+  box-shadow:
+    0 0 0 2px rgba(0, 0, 0, 0.76),
+    0 0 20px rgba(0, 239, 185, 0.54),
+    inset 0 1px 3px rgba(255, 255, 255, 0.32);
+}
+
+.module-page button.ddpro-icon-action:focus-visible,
+.operations-module button.ddpro-icon-action:focus-visible {
+  outline: 2px solid var(--ddpro-action-emerald);
+  outline-offset: 3px;
+}
+
+.module-page button.ddpro-icon-action:disabled,
+.operations-module button.ddpro-icon-action:disabled {
+  opacity: 0.55;
+}
+
+.module-page .module-toolbar,
+.module-page .offer-card-actions,
+.operations-module .module-toolbar,
+.operations-module .offer-card-actions,
+.operations-module .integration-actions {
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 9px;
+}
+
+@media (max-width: 640px) {
+  .module-page button:not(.project-detail-link):not(.ddpro-icon-action),
+  .operations-module button:not(.project-detail-link):not(.ddpro-icon-action) {
+    min-height: 44px;
+  }
+
+  .module-page .data-card > .module-toolbar,
+  .operations-module .data-card > .module-toolbar {
+    width: auto;
+    justify-content: flex-end;
+  }
+}
