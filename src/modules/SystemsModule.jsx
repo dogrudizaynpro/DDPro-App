@@ -1,4 +1,5 @@
 import { CatalogWorkspace } from "./OperationsModule.jsx";
+import DDProActionButton from "../components/DDProActionButton.jsx";
 
 function SystemsModule({
   showMemoryForm,
@@ -25,13 +26,12 @@ function SystemsModule({
       <div className="panel memory-panel">
         <div className="panel-header">
           <h2>Merkezi Hafıza</h2>
-
-          <button
-            type="button"
+          <DDProActionButton
+            icon={showMemoryForm ? "settings" : "add"}
+            label={showMemoryForm ? "Hafıza formunu kapat" : "Yeni kayıt"}
+            ariaExpanded={showMemoryForm}
             onClick={() => setShowMemoryForm((value) => !value)}
-          >
-            {showMemoryForm ? "Kapat" : "+ Yeni Kayıt"}
-          </button>
+          />
         </div>
 
         {showMemoryForm && (
@@ -49,7 +49,7 @@ function SystemsModule({
               onChange={(event) => setMemoryContent(event.target.value)}
             />
 
-            <button type="submit">Hafızaya Kaydet</button>
+            <DDProActionButton icon="save" label="Hafızaya kaydet" type="submit" />
           </form>
         )}
 
@@ -67,12 +67,11 @@ function SystemsModule({
                   <small>{item.date}</small>
                 </div>
 
-                <button
-                  type="button"
+                <DDProActionButton
+                  icon="delete"
+                  label={`${item.title} kaydını sil`}
                   onClick={() => deleteMemory(item.id)}
-                >
-                  Sil
-                </button>
+                />
               </div>
             ))
           )}
@@ -82,9 +81,11 @@ function SystemsModule({
       <div className="panel panel-content">
         <h2>Gerçek entegrasyon durumu</h2>
         <p>Bağlı olmayan servisler etkinmiş gibi gösterilmez.</p>
-        <button type="button" onClick={() => onNavigate("settings")}>
-          Entegrasyon ayarlarını görüntüle
-        </button>
+        <DDProActionButton
+          icon="settings"
+          label="Entegrasyon ayarlarını görüntüle"
+          onClick={() => onNavigate("settings")}
+        />
       </div>
     </div>
   );
