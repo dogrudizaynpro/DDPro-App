@@ -12,6 +12,7 @@ import {
 } from "../services/catalog.service.js";
 import { getProjects } from "../services/projects.service.js";
 import { createReport, deleteReport, getReports } from "../services/reports.service.js";
+import DDProIcon from "../components/DDProIcon.jsx";
 import {
   createFinanceCost,
   deleteFinanceCost,
@@ -1119,7 +1120,7 @@ function ReportsWorkspace({ projects = [], onReportsChanged }) {
           <label>Sorunlar / güvenlik notları<textarea name="issues" maxLength={10000} /></label>
           <label>Sonraki adımlar<textarea name="nextSteps" maxLength={10000} /></label>
         </> : null}
-        <button type="submit" disabled={saving}>{saving ? "Rapor hazırlanıyor…" : "Backend verilerinden rapor oluştur"}</button>
+        <button type="submit" disabled={saving}><DDProIcon name="save" />{saving ? "Rapor hazırlanıyor…" : "Backend verilerinden rapor oluştur"}</button>
       </form>
       {error ? <p className="status-banner warning" role="alert">{error}</p> : null}
       {notice ? <p className="status-banner info" role="status">{notice}</p> : null}
@@ -1137,7 +1138,10 @@ function ReportsWorkspace({ projects = [], onReportsChanged }) {
               <small>{reportTitles[report.report_type]} · {report.snapshot?.project?.name || "Tüm projeler"}</small>
               <details><summary>Kalıcı rapor snapshot'ını görüntüle</summary><pre>{JSON.stringify(report.snapshot, null, 2)}</pre></details>
             </div>
-            <button type="button" onClick={() => removeReport(report.id)}>Sil</button>
+            <div className="module-toolbar">
+              <button type="button" onClick={() => window.print()}><DDProIcon name="print" />Yazdır</button>
+              <button type="button" onClick={() => removeReport(report.id)}><DDProIcon name="delete" />Sil</button>
+            </div>
           </article>
         ))}
       </div>
