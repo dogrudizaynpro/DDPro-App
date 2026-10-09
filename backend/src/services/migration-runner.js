@@ -42,6 +42,7 @@ export const serviceRoleTables = [
   "ai_usage_events",
   "ai_tool_confirmations",
   "ai_file_imports",
+  "ai_operation_audit_events",
   "whatsapp_inbound_messages",
 ];
 // Tables that must exist with RLS enabled and no direct client access.
