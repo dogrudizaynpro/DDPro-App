@@ -5,6 +5,7 @@ export const formatGoogleIntegrationError = (error) => {
   if (!details) return error.message || "Bağlantı testi başarısız.";
   const explanations = {
     authorization: "Google API yetkilendirme/token hatası. Kayıtlı Google bağlantısı korunuyor.",
+    connection_invalid: "Google yetkilendirmesi artık geçerli değil. Hesabı yeniden bağlayın.",
     access_denied: "Google API erişimi reddetti (izin, politika veya kota kısıtlaması). Google OAuth bağlantısı korunuyor.",
     rate_limit: "Google API hız/kota sınırına ulaşıldı. Daha sonra tekrar deneyin; Google bağlantısı korunuyor.",
     api_error: "Google API isteği başarısız. Google bağlantısı korunuyor.",

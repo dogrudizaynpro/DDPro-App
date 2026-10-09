@@ -22,13 +22,22 @@ const safeGoogleText = (value, credentials = []) => {
 };
 
 export class GoogleApiError extends Error {
-  constructor(httpStatus, payload, credentials = [], provider = "google") {
+  constructor(httpStatus, payload, credentials = [], provider = "google", operation = "google.api.request") {
+    const reasons = Array.isArray(payload?.error?.errors)
+      ? [...new Set(payload.error.errors.slice(0, 20)
+        .map((error) => safeGoogleText(error?.reason, credentials).slice(0, 128)).filter(Boolean))]
+      : [];
+    const connectionInvalid = provider === "google" &&
+      operation === "oauth.token.refresh" && reasons.includes("invalid_grant");
     const message = safeGoogleText(payload?.error?.message, credentials) ||
-      `Google API request failed (HTTP ${httpStatus}).`;
+      (connectionInvalid
+        ? "Google authorization is no longer valid."
+        : `Google API request failed (HTTP ${httpStatus}).`);
     super(message);
     this.name = "GoogleApiError";
-    this.statusCode = httpStatus === 401 ? 502 : httpStatus;
-    this.code = httpStatus === 401 ? "GOOGLE_API_AUTH_ERROR"
+    this.statusCode = connectionInvalid ? 401 : httpStatus === 401 ? 502 : httpStatus;
+    this.code = connectionInvalid ? "GOOGLE_CONNECTION_REQUIRED"
+      : httpStatus === 401 ? "GOOGLE_API_AUTH_ERROR"
       : httpStatus === 403 ? "GOOGLE_API_ACCESS_DENIED"
         : httpStatus === 429 ? "GOOGLE_API_RATE_LIMIT" : "GOOGLE_API_ERROR";
     this.provider = provider;
@@ -36,14 +45,13 @@ export class GoogleApiError extends Error {
     this.expose = true;
     this.googleApiError = {
       httpStatus,
-      category: httpStatus === 401 ? "authorization"
+      operation,
+      category: connectionInvalid ? "connection_invalid"
+        : httpStatus === 401 ? "authorization"
         : httpStatus === 403 ? "access_denied"
           : httpStatus === 429 ? "rate_limit" : "api_error",
       message,
-      reasons: Array.isArray(payload?.error?.errors)
-        ? [...new Set(payload.error.errors.slice(0, 20)
-          .map((error) => safeGoogleText(error?.reason, credentials).slice(0, 128)).filter(Boolean))]
-        : [],
+      reasons,
     };
   }
 }
