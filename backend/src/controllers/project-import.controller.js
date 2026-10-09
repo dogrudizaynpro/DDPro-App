@@ -1,4 +1,6 @@
+import { createHash } from "node:crypto";
 import { getIntegrationAdmin } from "../config/integration-admin.js";
+import { createProjectRecord } from "./projects.controller.js";
 import { readProjectsSheet } from "../services/google-sheets.service.js";
 
 const headerAliases = {
@@ -86,6 +88,102 @@ const safeFailure = (error) => ({
   code: typeof error?.code === "string" ? error.code : "PROJECT_IMPORT_FAILED",
   message: error?.code === "23505" ? "A source row with this import key already exists." : "Project could not be imported.",
 });
+
+export const saveAiFileProjects = async (supabase, { sourceFingerprint, headers, rows }) => {
+  const { data: existingProjects, error: lookupError } = await supabase
+    .from("projects")
+    .select("id,name,import_source_key");
+  if (lookupError) throw lookupError;
+
+  const knownNames = new Set((existingProjects || []).map(({ name }) => comparableName(name)));
+  const existingKeys = new Set((existingProjects || [])
+    .map(({ import_source_key }) => import_source_key)
+    .filter(Boolean));
+  const added = [];
+  const existing = [];
+  const errors = [];
+  const incomplete = [];
+  let sourceRows = 0;
+
+  for (let index = 0; index < rows.length; index += 1) {
+    const row = rows[index];
+    if (!row.some((cell) => String(cell ?? "").trim())) continue;
+    sourceRows += 1;
+    const sheetRow = index + 2;
+    const mapped = mapProjectSheetRow(headers, row);
+    const missingFields = Object.entries(mapped.missing)
+      .filter(([, missing]) => missing)
+      .map(([field]) => field);
+    if (missingFields.length) incomplete.push({ row: sheetRow, missing: missingFields });
+    if (mapped.error) {
+      errors.push({ row: sheetRow, message: mapped.error, missing: missingFields });
+      continue;
+    }
+
+    const importSourceKey = createHash("sha256")
+      .update(`${sourceFingerprint}:${sheetRow}:${JSON.stringify(row)}`)
+      .digest("hex");
+    const projectName = comparableName(mapped.project.name);
+    if (existingKeys.has(importSourceKey) || knownNames.has(projectName)) {
+      existing.push({
+        row: sheetRow,
+        name: mapped.project.name,
+        missing: missingFields,
+      });
+      continue;
+    }
+
+    try {
+      const data = await createProjectRecord(supabase, mapped.project, importSourceKey);
+      added.push({
+        row: sheetRow,
+        id: data.id,
+        name: data.name,
+        missing: missingFields,
+      });
+      knownNames.add(projectName);
+      existingKeys.add(importSourceKey);
+    } catch (error) {
+      if (error.code === "23505") {
+        existing.push({ row: sheetRow, name: mapped.project.name, missing: missingFields });
+        existingKeys.add(importSourceKey);
+        continue;
+      }
+      errors.push({ row: sheetRow, name: mapped.project.name, ...safeFailure(error) });
+    }
+  }
+
+  return { sourceRows, added, existing, errors, incomplete };
+};
+
+export const importAiFileProjects = async (req, res, next) => {
+  try {
+    const { sourceFingerprint, headers, rows } = req.body || {};
+    if (
+      typeof sourceFingerprint !== "string" ||
+      !/^[\da-f]{64}$/i.test(sourceFingerprint) ||
+      !Array.isArray(headers) ||
+      headers.length < 1 ||
+      headers.length > 100 ||
+      headers.some((header) => typeof header !== "string" || header.length > 500) ||
+      !Array.isArray(rows) ||
+      rows.length > 300 ||
+      rows.some((row) => !Array.isArray(row) || row.length > 100 ||
+        row.some((value) => !["string", "number", "boolean"].includes(typeof value)))
+    ) {
+      return res.status(400).json({ status: "error", message: "The project file import is invalid." });
+    }
+
+    const supabase = getIntegrationAdmin();
+    if (!supabase) {
+      return res.status(503).json({ status: "error", message: "Database service-role configuration is required." });
+    }
+    const data = await saveAiFileProjects(supabase, { sourceFingerprint, headers, rows });
+    return res.json({ status: "success", data });
+  } catch (error) {
+    return next(error);
+  }
+};
 
 export const importGoogleProjects = async (req, res, next) => {
   try {

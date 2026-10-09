@@ -5,6 +5,9 @@ import { PDFParse } from "pdf-parse";
 
 export const MAX_AI_FILE_SIZE = 10 * 1024 * 1024;
 const MAX_EXTRACTED_TEXT = 60_000;
+const MAX_SPREADSHEET_ROWS = 300;
+const MAX_SPREADSHEET_COLUMNS = 100;
+const MAX_STRUCTURED_TABLE_SIZE = 700_000;
 const MAX_EXPANDED_ARCHIVE_SIZE = 20 * 1024 * 1024;
 const MAX_ARCHIVE_ENTRIES = 200;
 const ZIP_SIGNATURE = Buffer.from([0x50, 0x4b, 0x03, 0x04]);
@@ -135,6 +138,21 @@ const renderTable = (rows, name = "CSV") => {
     ...lines,
     ...(truncated ? ["Önizleme güvenlik sınırı nedeniyle kısaltıldı."] : []),
   ].join("\n");
+};
+
+const structuredTable = (rows, name) => {
+  const table = {
+    name,
+    headers: rows[0] || [],
+    rows: rows.slice(1, MAX_SPREADSHEET_ROWS + 1)
+      .map((row) => Array.from({ length: Math.min(MAX_SPREADSHEET_COLUMNS, Math.max(rows[0]?.length || 0, row.length)) }, (_, index) => row[index] ?? "")),
+  };
+  return {
+    ...table,
+    truncated: rows.length > MAX_SPREADSHEET_ROWS + 1 ||
+      rows.some((row) => row.length > MAX_SPREADSHEET_COLUMNS) ||
+      Buffer.byteLength(JSON.stringify(table)) > MAX_STRUCTURED_TABLE_SIZE,
+  };
 };
 
 const selectedArchiveEntry = (name, extension) => {
@@ -274,6 +292,7 @@ const parseXlsx = async (buffer) => {
   const sheets = asArray(workbook?.sheets?.sheet);
   if (!sheets.length) throw fail("The XLSX workbook contains no readable sheets.");
   const output = [];
+  const tables = [];
   for (const sheet of sheets.slice(0, 50)) {
     const path = relationTargets.get(sheet["@_r:id"]);
     const sheetXml = path ? entries.get(path)?.toString("utf8") : null;
@@ -301,12 +320,17 @@ const parseXlsx = async (buffer) => {
       }
       return cells;
     });
-    output.push(renderTable(rows, sheet["@_name"] || `Sayfa ${output.length + 1}`));
+    const name = sheet["@_name"] || `Sayfa ${output.length + 1}`;
+    output.push(renderTable(rows, name));
+    tables.push(structuredTable(rows, name));
   }
+  const content = output.join("\n\n");
   return {
     type: "spreadsheet",
-    content: output.join("\n\n").slice(0, MAX_EXTRACTED_TEXT),
-    truncated: output.join("\n\n").length > MAX_EXTRACTED_TEXT || sheets.length > 50,
+    content: content.slice(0, MAX_EXTRACTED_TEXT),
+    tables,
+    truncated: content.length > MAX_EXTRACTED_TEXT || sheets.length > 50 ||
+      tables.some((table) => table.truncated),
   };
 };
 
@@ -372,7 +396,13 @@ export const prepareAiAttachment = async (file) => {
   } else if (extension === ".csv") {
     const rows = parseCsvRows(decodeText(file.buffer));
     const content = renderTable(rows);
-    parsed = { type: "spreadsheet", content: content.slice(0, MAX_EXTRACTED_TEXT), truncated: content.length > MAX_EXTRACTED_TEXT };
+    const table = structuredTable(rows, "CSV");
+    parsed = {
+      type: "spreadsheet",
+      content: content.slice(0, MAX_EXTRACTED_TEXT),
+      tables: [table],
+      truncated: content.length > MAX_EXTRACTED_TEXT || table.truncated,
+    };
   } else if (extension === ".xlsx") {
     parsed = await parseXlsx(file.buffer);
   } else if (extension === ".docx") {
@@ -409,6 +439,8 @@ export const prepareAiAttachment = async (file) => {
     mimeType,
     extractedType: parsed.type,
     content: parsed.content + truncationNote,
+    ...(parsed.tables ? { tables: parsed.tables } : {}),
+    ...(parsed.truncated ? { truncated: true } : {}),
     ...(parsed.pages ? { pages: parsed.pages } : {}),
   };
 };

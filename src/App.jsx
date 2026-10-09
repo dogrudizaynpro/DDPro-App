@@ -6,6 +6,7 @@ import {
   createProject as createProjectRequest,
   deleteProject as deleteProjectRequest,
   getProjects,
+  importAiFileProjects,
   updateProject as updateProjectRequest,
 } from "./services/projects.service.js";
 import "./styles.css";
@@ -2090,6 +2091,7 @@ function App() {
           date: formatDate(),
           moduleSuggestion: suggestedModuleId,
           pendingAction: completion.pendingAction,
+          projectImport: completion.projectImport,
         },
       ]);
       addLog("DDPro AI isteği yapılandırılmış sağlayıcıya gönderildi.");
@@ -2158,6 +2160,59 @@ function App() {
           status: "unavailable",
         },
       ]);
+    } finally {
+      setAiSending(false);
+    }
+  };
+
+  const confirmAiProjectImport = async (messageId, projectImport) => {
+    if (aiSending || (projectImport?.result && projectImport.result.errors.length === 0)) return;
+    setAiSending(true);
+    try {
+      const result = await importAiFileProjects({
+        sourceFingerprint: projectImport.sourceFingerprint,
+        headers: projectImport.table.headers,
+        rows: projectImport.table.rows,
+      });
+      setAiMessages((currentMessages) => currentMessages.map((message) => {
+        if (message.id !== messageId) return message;
+        const previous = message.projectImport.result || { added: [], existing: [] };
+        const previousAddedRows = new Set(previous.added.map(({ row }) => row));
+        const previouslyReportedRows = new Set([
+          ...previousAddedRows,
+          ...previous.existing.map(({ row }) => row),
+        ]);
+        return {
+          ...message,
+          projectImport: {
+            ...message.projectImport,
+            importError: null,
+            result: {
+              ...result,
+              added: [...previous.added, ...result.added.filter(({ row }) => !previousAddedRows.has(row))],
+              existing: [
+                ...previous.existing,
+                ...result.existing.filter(({ row }) => !previouslyReportedRows.has(row)),
+              ],
+            },
+          },
+        };
+      }));
+      try {
+        const savedProjects = await getProjects();
+        setProjects(savedProjects);
+        setProjectsError(null);
+        setProjectsFetchState("success");
+      } catch (error) {
+        setProjectsError(`İçe aktarılan projeler yenilenemedi (${getApiFailureReason(error)}). Sayfayı yenileyerek tekrar deneyin.`);
+      }
+      addLog(`AI dosya aktarımı tamamlandı: ${result.added.length} proje kaydedildi, ${result.existing.length} mükerrer atlandı, ${result.errors.length} hata.`);
+    } catch (error) {
+      setAiMessages((currentMessages) => currentMessages.map((message) =>
+        message.id === messageId
+          ? { ...message, projectImport: { ...message.projectImport, importError: getApiFailureReason(error) } }
+          : message
+      ));
     } finally {
       setAiSending(false);
     }
@@ -2724,6 +2779,7 @@ function App() {
           onNavigate={handleModuleNavigation}
           aiSending={aiSending}
           onConfirmAction={confirmAiOperationalAction}
+          onConfirmProjectImport={confirmAiProjectImport}
         />
       );
     }

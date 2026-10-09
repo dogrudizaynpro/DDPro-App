@@ -6,6 +6,7 @@ import {
   readOperationalRecords,
 } from "./ai-tools.service.js";
 import { prepareAiAttachment } from "./ai-file.service.js";
+import { mapProjectSheetRow } from "../controllers/project-import.controller.js";
 
 const AI_API_URL = process.env.AI_API_URL;
 const AI_API_KEY = process.env.AI_API_KEY;
@@ -245,6 +246,36 @@ const removePriceFields = (value) => {
   );
 };
 
+const getProjectFilePreview = (file, sourceFingerprint) => {
+  if (
+    file?.extractedType !== "spreadsheet" ||
+    file.truncated ||
+    !Array.isArray(file.tables)
+  ) return null;
+  for (const table of file.tables) {
+    if (table.truncated || !Array.isArray(table.headers) || !Array.isArray(table.rows)) continue;
+    const records = table.rows.map((row, index) => {
+      const mapped = mapProjectSheetRow(table.headers, row);
+      return {
+        row: index + 2,
+        project: mapped.project || null,
+        missing: Object.entries(mapped.missing)
+          .filter(([, missing]) => missing)
+          .map(([field]) => field),
+        error: mapped.error || null,
+      };
+    });
+    if (records.some(({ project }) => project)) {
+      return {
+        sourceFingerprint,
+        table: { name: table.name, headers: table.headers, rows: table.rows },
+        records,
+      };
+    }
+  }
+  return null;
+};
+
 export const requestAiCompletion = async ({ message, context = {}, integrationAccount, attachment }) => {
   if (!AI_API_URL || !AI_API_KEY || !AI_MODEL) {
     const error = new Error("AI provider is not configured on the backend.");
@@ -258,6 +289,7 @@ export const requestAiCompletion = async ({ message, context = {}, integrationAc
   const fileFingerprint = attachment
     ? createHash("sha256").update(attachment.buffer).digest("hex")
     : null;
+  const projectImport = getProjectFilePreview(file, fileFingerprint);
   const requestsPriceOrCost =
     /fiyat|ücret|maliyet|bütçe|teklif tutarı|ne kadar|kaç para|kaç tl|price|cost|budget|how much/i.test(message.toLocaleLowerCase("tr-TR"));
   const requestsMutation =
@@ -305,7 +337,10 @@ export const requestAiCompletion = async ({ message, context = {}, integrationAc
       if (typeof assistantMessage?.content !== "string" || !assistantMessage.content.trim()) {
         throw createProviderError("AI provider returned no message.", "AI_PROVIDER_EMPTY_RESPONSE");
       }
-      return { answer: assistantMessage.content.trim() };
+      return {
+        answer: assistantMessage.content.trim(),
+        ...(projectImport ? { projectImport } : {}),
+      };
     }
 
     messages.push(assistantMessage);
@@ -314,6 +349,15 @@ export const requestAiCompletion = async ({ message, context = {}, integrationAc
       const name = toolCall?.function?.name;
       const args = parseToolArguments(toolCall);
       if (name === "prepare_write") {
+        if (projectImport) {
+          toolResults.push({
+            tool_call_id: toolCall.id,
+            content: JSON.stringify({
+              error: "Project spreadsheet rows are shown in a separate review and import flow.",
+            }),
+          });
+          continue;
+        }
         const pendingAction = await prepareOperationalWrite(integrationAccount, args, fileFingerprint);
         return {
           answer: "İşlem henüz yapılmadı. Devam etmeden önce aşağıdaki değişikliği inceleyip onaylayın.",

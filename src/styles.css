@@ -4399,6 +4399,43 @@ textarea::placeholder {
   margin-top: 8px;
 }
 
+.ai-project-import {
+  display: grid;
+  max-width: 100%;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.ai-project-import h4,
+.ai-project-import p {
+  margin: 0;
+}
+
+.ai-project-import-table-wrap {
+  max-width: 100%;
+  max-height: 320px;
+  overflow: auto;
+  margin-top: 8px;
+}
+
+.ai-project-import table {
+  border-collapse: collapse;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.ai-project-import th,
+.ai-project-import td {
+  padding: 6px 8px;
+  border: 1px solid rgba(203, 213, 215, 0.2);
+  text-align: left;
+}
+
+.ai-project-import-results ul {
+  margin: 4px 0 8px;
+  padding-left: 20px;
+}
+
 .ai-form button:disabled {
   cursor: wait;
   opacity: 0.65;

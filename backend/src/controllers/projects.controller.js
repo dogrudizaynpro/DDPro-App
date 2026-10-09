@@ -8,7 +8,17 @@ import { getIntegrationAdmin } from "../config/integration-admin.js";
 
 const DEFAULT_PROJECT_STATUS = "Aktif";
 
-const getProjectPayload = (body = {}) => {
+const optionalProjectText = (value, field, maxLength = 5000) => {
+  if (value === undefined || value === null || value === "") return null;
+  if (typeof value !== "string" || value.trim().length > maxLength) {
+    const error = new Error(`Project ${field} is invalid`);
+    error.statusCode = 400;
+    throw error;
+  }
+  return value.trim();
+};
+
+const getProjectPayload = (body = {}, preserveMissing = false) => {
   const name =
     typeof body.name === "string"
       ? body.name.trim()
@@ -22,8 +32,11 @@ const getProjectPayload = (body = {}) => {
     throw error;
   }
 
-  const projectType =
-    typeof body.project_type === "string" && body.project_type.trim()
+  const projectType = preserveMissing &&
+    Object.hasOwn(body, "project_type") &&
+    (body.project_type === null || body.project_type === "")
+    ? null
+    : typeof body.project_type === "string" && body.project_type.trim()
       ? body.project_type.trim()
       : typeof body.projectType === "string" && body.projectType.trim()
         ? body.projectType.trim()
@@ -36,11 +49,61 @@ const getProjectPayload = (body = {}) => {
       ? body.status.trim()
       : DEFAULT_PROJECT_STATUS;
 
+  const areaM2 = body.area_m2 === undefined || body.area_m2 === null || body.area_m2 === ""
+    ? null
+    : Number(body.area_m2);
+  if (areaM2 !== null && (!Number.isFinite(areaM2) || areaM2 < 0)) {
+    const error = new Error("Project area must be non-negative");
+    error.statusCode = 400;
+    throw error;
+  }
+  if (body.systems !== undefined && (
+    !Array.isArray(body.systems) ||
+    body.systems.length > 100 ||
+    body.systems.some((system) => typeof system !== "string" || system.length > 150)
+  )) {
+    const error = new Error("Project systems are invalid");
+    error.statusCode = 400;
+    throw error;
+  }
+  if (body.source_data !== undefined && (
+    !body.source_data ||
+    typeof body.source_data !== "object" ||
+    Array.isArray(body.source_data) ||
+    Buffer.byteLength(JSON.stringify(body.source_data)) > 20_000
+  )) {
+    const error = new Error("Project source data is invalid");
+    error.statusCode = 400;
+    throw error;
+  }
+
   return {
     name,
     project_type: projectType,
     status,
+    ...(body.customer !== undefined ? { customer: optionalProjectText(body.customer, "customer") } : {}),
+    ...(body.company !== undefined ? { company: optionalProjectText(body.company, "company") } : {}),
+    ...(body.location !== undefined ? { location: optionalProjectText(body.location, "location") } : {}),
+    ...(body.product !== undefined ? { product: optionalProjectText(body.product, "product") } : {}),
+    ...(body.area_m2 !== undefined ? { area_m2: areaM2 } : {}),
+    ...(body.systems !== undefined ? { systems: body.systems.map((system) => system.trim()).filter(Boolean) } : {}),
+    ...(body.start_date !== undefined ? { start_date: optionalProjectText(body.start_date, "start date", 100) } : {}),
+    ...(body.end_date !== undefined ? { end_date: optionalProjectText(body.end_date, "end date", 100) } : {}),
+    ...(body.notes !== undefined ? { notes: optionalProjectText(body.notes, "notes", 20_000) ?? "" } : {}),
+    ...(body.source_data !== undefined ? { source_data: body.source_data } : {}),
   };
+};
+
+export const createProjectRecord = async (supabase, body, importSourceKey = null) => {
+  const payload = getProjectPayload(body, Boolean(importSourceKey));
+  if (importSourceKey) payload.import_source_key = importSourceKey;
+  const { data, error } = await supabase
+    .from("projects")
+    .insert(payload)
+    .select("*")
+    .single();
+  if (error) throw error;
+  return data;
 };
 
 // ============================================================
@@ -143,18 +206,7 @@ export const createProject = async (req, res, next) => {
       });
     }
 
-    const payload = getProjectPayload(req.body);
-
-    const { data, error } = await supabase
-      .from("projects")
-      .insert(payload)
-      .select("*")
-      .single();
-
-    if (error) {
-      console.error("Error creating project:", error.message);
-      return next(error);
-    }
+    const data = await createProjectRecord(supabase, req.body);
 
     res.status(201).json({
       status: "success",

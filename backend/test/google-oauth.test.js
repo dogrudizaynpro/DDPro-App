@@ -341,6 +341,40 @@ test("one-time exchange authenticates browser status and real provider test rout
   });
   assert.equal((await repeatedImport.json()).data.added.length, 0);
   assert.equal(projectRows.filter(({ name }) => name === "Past project from Sheets").length, 1);
+  const aiFileHeaders = [
+    "Proje Adı", "Müşteri", "Firma", "Lokasyon", "Proje Türü", "Ürün",
+    "Metraj", "Sistem", "Durum", "Başlangıç Tarihi", "Bitiş Tarihi", "Notlar",
+  ];
+  const aiFileBody = {
+    sourceFingerprint: "b".repeat(64),
+    headers: aiFileHeaders,
+    rows: [["AI file project", "Customer", "Company", "İzmir", "Office", "Facade", "55", "Wall", "Aktif", "", "", "Retained source"]],
+  };
+  const aiFileImportUrl = `${baseUrl}/api/projects/import/ai-file`;
+  const aiFileImport = await originalFetch(aiFileImportUrl, {
+    method: "POST",
+    headers: importHeaders,
+    body: JSON.stringify(aiFileBody),
+  });
+  assert.equal(aiFileImport.status, 200);
+  const aiFileImportData = (await aiFileImport.json()).data;
+  assert.equal(aiFileImportData.added.length, 1);
+  const aiFileProject = projectRows.find(({ name }) => name === "AI file project");
+  assert.equal(aiFileProject.customer, "Customer");
+  assert.equal(aiFileProject.area_m2, 55);
+  assert.equal(aiFileProject.start_date, null);
+  assert.equal(aiFileProject.end_date, null);
+  assert.equal(aiFileProject.source_data.values[11], "Retained source");
+  const repeatedAiFileImport = await originalFetch(aiFileImportUrl, {
+    method: "POST",
+    headers: importHeaders,
+    body: JSON.stringify(aiFileBody),
+  });
+  assert.equal((await repeatedAiFileImport.json()).data.added.length, 0);
+  assert.equal(projectRows.filter(({ name }) => name === "AI file project").length, 1);
+  const refreshedProjects = await originalFetch(`${baseUrl}/api/projects`, { headers: importHeaders });
+  const refreshedProjectRecords = (await refreshedProjects.json()).data;
+  assert.ok(refreshedProjectRecords.some(({ name }) => name === "AI file project"));
   assert.equal((await originalFetch(`${baseUrl}/api/integrations/google/exchange`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Origin: "https://dogrudizaynpro.github.io" },

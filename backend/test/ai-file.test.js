@@ -59,6 +59,46 @@ test("XLSX workbook sheets, columns, and records are extracted", async () => {
   assert.match(result.content, /Chair \| 125/);
 });
 
+test("XLSX project rows preserve every header and cell through structured extraction", async () => {
+  const headers = [
+    "Project", "Customer", "Company", "Location", "Project type", "Product",
+    "Area m2", "System", "Status", "Start date", "End date", "Notes",
+  ];
+  const values = [headers];
+  for (let row = 1; row <= 18; row += 1) {
+    values.push([
+      `Project ${row}`, `Customer ${row}`, `Company ${row}`, `City ${row}`,
+      "Office", "Facade", `${row * 10}`, "Curtain wall", "Active",
+      "2026-01-01", "2026-12-31", `Source note ${row}`,
+    ]);
+  }
+  const sharedStrings = values.flat();
+  const columnName = (value) => {
+    let result = "";
+    for (let number = value; number > 0; number = Math.floor((number - 1) / 26)) {
+      result = String.fromCharCode(65 + ((number - 1) % 26)) + result;
+    }
+    return result;
+  };
+  const sheetRows = values.map((row, rowIndex) =>
+    `<row r="${rowIndex + 1}">${row.map((_, columnIndex) =>
+      `<c r="${columnName(columnIndex + 1)}${rowIndex + 1}" t="s"><v>${rowIndex * headers.length + columnIndex}</v></c>`
+    ).join("")}</row>`
+  ).join("");
+  const buffer = makeArchive({
+    "xl/workbook.xml": '<workbook xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Projects" sheetId="1" r:id="rId1"/></sheets></workbook>',
+    "xl/_rels/workbook.xml.rels": '<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>',
+    "xl/sharedStrings.xml": `<sst>${sharedStrings.map((value) => `<si><t>${value}</t></si>`).join("")}</sst>`,
+    "xl/worksheets/sheet1.xml": `<worksheet><sheetData>${sheetRows}</sheetData></worksheet>`,
+  });
+
+  const result = await prepareAiAttachment({ originalName: "projects.xlsx", buffer });
+  assert.equal(result.truncated, undefined);
+  assert.deepEqual(result.tables[0].headers, headers);
+  assert.equal(result.tables[0].rows.length, 18);
+  assert.equal(result.tables[0].rows[17][11], "Source note 18");
+});
+
 test("DOCX and PDF document text is extracted", async () => {
   const docx = makeArchive({
     "word/document.xml": "<w:document xmlns:w=\"urn:word\"><w:body><w:p><w:r><w:t>Word document text</w:t></w:r></w:p></w:body></w:document>",

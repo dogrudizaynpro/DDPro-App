@@ -76,6 +76,7 @@ function AIModule({
   messagesOnly = false,
   aiSending = false,
   onConfirmAction,
+  onConfirmProjectImport,
 }) {
   const promptFieldRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -246,6 +247,84 @@ function AIModule({
                     </button>
                     <small>Onay bağlantısı 5 dakika geçerlidir ve yalnızca bir kez kullanılabilir.</small>
                   </div>
+                ) : null}
+                {message.projectImport ? (
+                  <section className="ai-project-import">
+                    <h4>Proje aktarım önizlemesi</h4>
+                    <p>
+                      {message.projectImport.records.length} satır · {message.projectImport.table.headers.length} alan.
+                      Eksik alanlar boş bırakılır; hiçbir kayıt siz onaylamadan oluşturulmaz.
+                    </p>
+                    <details open>
+                      <summary>{message.projectImport.table.name} dosya içeriğini ve eşlenen kayıtları incele</summary>
+                      <div className="ai-project-import-table-wrap">
+                        <table>
+                          <thead>
+                            <tr>
+                              {message.projectImport.table.headers.map((header, index) => (
+                                <th key={`${header}-${index}`}>{header || `Alan ${index + 1}`}</th>
+                              ))}
+                              <th>Aktarım</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {message.projectImport.records.map((record) => (
+                              <tr key={record.row}>
+                                {message.projectImport.table.headers.map((_, index) => (
+                                  <td key={index}>{String(message.projectImport.table.rows[record.row - 2]?.[index] ?? "")}</td>
+                                ))}
+                                <td>
+                                  {record.error
+                                    ? record.error
+                                    : record.missing.length
+                                      ? `Eksik: ${record.missing.join(", ")}`
+                                      : "Hazır"}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </details>
+                    {(!message.projectImport.result || message.projectImport.result.errors.length > 0) ? (
+                      <button
+                        className="ai-module-suggestion"
+                        type="button"
+                        disabled={aiSending}
+                        onClick={() => onConfirmProjectImport?.(message.id, message.projectImport)}
+                      >
+                        {aiSending
+                          ? "Projeler aktarılıyor…"
+                          : message.projectImport.result
+                            ? "Başarısız satırları yeniden dene"
+                            : "Önizlemeyi onayla ve projeleri kaydet"}
+                      </button>
+                    ) : null}
+                    {message.projectImport.result ? (
+                      <div className="ai-project-import-results" role="status">
+                        <p>Kaydedildi: {message.projectImport.result.added.length}</p>
+                        {message.projectImport.result.added.length ? (
+                          <ul>{message.projectImport.result.added.map((record) => <li key={record.row}>{record.name}</li>)}</ul>
+                        ) : null}
+                        <p>Mükerrer olarak atlandı: {message.projectImport.result.existing.length}</p>
+                        {message.projectImport.result.existing.length ? (
+                          <ul>{message.projectImport.result.existing.map((record) => <li key={`${record.row}-${record.name}`}>{record.name}</li>)}</ul>
+                        ) : null}
+                        <p>Başarısız: {message.projectImport.result.errors.length}</p>
+                        {message.projectImport.result.errors.length ? (
+                          <ul>{message.projectImport.result.errors.map((record) => <li key={record.row}>Satır {record.row}: {record.message}</li>)}</ul>
+                        ) : null}
+                      </div>
+                    ) : null}
+                    {message.projectImport.importError ? (
+                      <p className="ai-file-error" role="alert">
+                        Aktarım yapılamadı, kayıtların değiştiği varsayılmadı: {message.projectImport.importError}
+                      </p>
+                    ) : null}
+                    {message.projectImport.result?.incomplete?.length ? (
+                      <p>Eksik tarih ve alanlar tahmin edilmeden boş bırakıldı ({message.projectImport.result.incomplete.length} satır).</p>
+                    ) : null}
+                  </section>
                 ) : null}
                 {message.moduleSuggestion && MODULE_TITLES[message.moduleSuggestion] ? (
                   <button

@@ -92,6 +92,68 @@ test("image attachments are sent to the configured provider as vision content", 
   assert.match(userMessage.content[1].image_url.url, /^data:image\/png;base64,/);
 });
 
+test("project spreadsheet data remains available in the AI transfer preview", async () => {
+  const headers = [
+    "Project", "Customer", "Company", "Location", "Project type", "Product",
+    "Area m2", "System", "Status", "Start date", "End date", "Notes",
+  ];
+  const rows = Array.from({ length: 18 }, (_, index) => [
+    `Project ${index + 1}`, `Customer ${index + 1}`, `Company ${index + 1}`,
+    `City ${index + 1}`, "Office", "Facade", `${index + 1}`, "Wall",
+    "Active", "2026-01-01", "2026-12-31", `Keep this ${index + 1}`,
+  ]);
+  responses.push(completion({ role: "assistant", content: "18 project rows were analyzed." }));
+
+  const result = await requestAiCompletion({
+    message: "Analyze this project spreadsheet.",
+    context: {},
+    attachment: {
+      originalName: "projects.csv",
+      buffer: Buffer.from([headers, ...rows].map((row) => row.join(",")).join("\n")),
+    },
+  });
+
+  assert.equal(result.projectImport.records.length, 18);
+  assert.equal(result.projectImport.table.headers.length, 12);
+  assert.equal(result.projectImport.records[17].project.name, "Project 18");
+  assert.equal(result.projectImport.records[17].project.source_data.values[11], "Keep this 18");
+  assert.equal(result.projectImport.records[17].project.area_m2, 18);
+  assert.equal(result.projectImport.records[17].project.start_date, "2026-01-01");
+  assert.equal(result.pendingAction, undefined);
+});
+
+test("file project analysis cannot prepare writes before separate import confirmation", async () => {
+  const csv = "Project,Status\nProject A,Active";
+  responses.push(
+    completion({
+      role: "assistant",
+      content: null,
+      tool_calls: [{
+        id: "call_file_write",
+        type: "function",
+        function: {
+          name: "prepare_write",
+          arguments: JSON.stringify({ resource: "projects", operation: "create", record: { name: "Project A" } }),
+        },
+      }],
+    }),
+    completion({ role: "assistant", content: "Project spreadsheet ready for review." })
+  );
+
+  const result = await requestAiCompletion({
+    message: "Analyze this project spreadsheet.",
+    context: {},
+    integrationAccount: "owner@example.com",
+    attachment: { originalName: "projects.csv", buffer: Buffer.from(csv) },
+  });
+
+  assert.equal(result.projectImport.records.length, 1);
+  assert.equal(result.pendingAction, undefined);
+  assert.deepEqual(JSON.parse(requests[1].body.messages.at(-1).content), {
+    error: "Project spreadsheet rows are shown in a separate review and import flow.",
+  });
+});
+
 test("AI provider connection test succeeds with the production request shape", async () => {
   responses.push(completion({ role: "assistant", content: "OK" }));
   const result = await testIntegrationConnection("ai");
