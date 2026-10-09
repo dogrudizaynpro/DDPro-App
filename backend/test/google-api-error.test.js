@@ -63,6 +63,7 @@ test("only an invalid Google refresh grant marks the stored connection invalid",
   assert.equal(revoked.statusCode, 401);
   assert.equal(revoked.code, "GOOGLE_CONNECTION_REQUIRED");
   assert.equal(revoked.googleApiError.category, "connection_invalid");
+  assert.doesNotMatch(revoked.message, /saved connection was kept/i);
 
   const missingScope = new GoogleApiError(403, {
     error: { errors: [{ reason: "insufficientPermissions" }] },

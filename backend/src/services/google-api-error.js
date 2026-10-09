@@ -30,7 +30,9 @@ export class GoogleApiError extends Error {
     const connectionInvalid = provider === "google" &&
       operation === "oauth.token.refresh" && reasons.includes("invalid_grant");
     const message = safeGoogleText(payload?.error?.message, credentials) ||
-      `Google API request failed (HTTP ${httpStatus}).`;
+      (connectionInvalid
+        ? "Google authorization is no longer valid."
+        : `Google API request failed (HTTP ${httpStatus}).`);
     super(message);
     this.name = "GoogleApiError";
     this.statusCode = connectionInvalid ? 401 : httpStatus === 401 ? 502 : httpStatus;
