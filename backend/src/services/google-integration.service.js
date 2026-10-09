@@ -27,11 +27,24 @@ export const GOOGLE_OPERATION_SCOPES = Object.freeze({
   calendar: "https://www.googleapis.com/auth/calendar.events",
   sheets: "https://www.googleapis.com/auth/spreadsheets.readonly",
 });
-export const getMissingGoogleScopes = (grantedScopes) => {
+const GOOGLE_SCOPE_ALTERNATIVES = {
+  [GOOGLE_OPERATION_SCOPES.gmail]: [
+    "https://www.googleapis.com/auth/gmail.modify",
+    "https://mail.google.com/",
+  ],
+  [GOOGLE_OPERATION_SCOPES.calendar]: ["https://www.googleapis.com/auth/calendar"],
+  [GOOGLE_OPERATION_SCOPES.sheets]: ["https://www.googleapis.com/auth/spreadsheets"],
+};
+export const hasGoogleOperationScope = (grantedScopes, requiredScope) => {
   const granted = new Set(
     (typeof grantedScopes === "string" ? grantedScopes : "").split(/\s+/).filter(Boolean)
   );
-  return Object.values(GOOGLE_OPERATION_SCOPES).filter((scope) => !granted.has(scope));
+  return [requiredScope, ...(GOOGLE_SCOPE_ALTERNATIVES[requiredScope] || [])]
+    .some((scope) => granted.has(scope));
+};
+export const getMissingGoogleScopes = (grantedScopes) => {
+  return Object.values(GOOGLE_OPERATION_SCOPES)
+    .filter((scope) => !hasGoogleOperationScope(grantedScopes, scope));
 };
 const GOOGLE_SCOPES = [
   "openid",
@@ -530,14 +543,17 @@ export const getGoogleAccessToken = async (
     requiredScope &&
     typeof token.scopes === "string" &&
     token.scopes.trim() &&
-    !token.scopes.split(/\s+/).includes(requiredScope)
+    !hasGoogleOperationScope(token.scopes, requiredScope)
   ) {
-    throw new GoogleApiError(403, {
+    const error = new GoogleApiError(403, {
       error: {
         message: "Google authorization is missing a required permission. The saved connection was kept; authorize again to grant the requested access.",
         errors: [{ reason: "insufficientPermissions" }],
       },
     }, [token.accessToken, token.refreshToken], provider, operation);
+    error.googleApiError.requestSent = false;
+    error.upstreamStatus = undefined;
+    throw error;
   }
   if (token.expiresAt > Date.now() + 60_000) return token.accessToken;
   if (!token.refreshToken) {
@@ -563,7 +579,8 @@ export const getGoogleAccessToken = async (
   } catch (error) {
     throw Object.assign(new Error(
       error.name === "TimeoutError" ? "Google token refresh timed out." : "Google token refresh is temporarily unreachable."
-    ), { statusCode: error.name === "TimeoutError" ? 504 : 502, expose: true });
+    ), { statusCode: error.name === "TimeoutError" ? 504 : 502, expose: true,
+      reachable: false, operation: "oauth.token.refresh" });
   }
   const refreshed = await response.json().catch(() => ({}));
   if (!response.ok || !refreshed.access_token) {

@@ -237,10 +237,10 @@ const formatCalendarDate = (value) =>
     : formatDateTime(value);
 
 const integrationProbes = (status) => [
-  ["gmail", status.gmail?.configured && status.google?.connected],
-  ["googleCalendar", status.googleCalendar?.configured && status.google?.connected],
+  ["gmail", status.gmail?.configured && status.google?.authenticated],
+  ["googleCalendar", status.googleCalendar?.configured && status.google?.authenticated],
   ["whatsapp", status.whatsapp?.sendConfigured],
-  ["crm", status.crm?.configured && status.google?.connected],
+  ["crm", status.crm?.configured && status.google?.authenticated],
   ["supabase", status.supabase?.configured],
   ["website", status.web?.managementConfigured && status.web?.inboundLeadConfigured],
   ["appStore", status.appStore?.configured],
@@ -255,8 +255,13 @@ const applyAiVerification = (status, testResult, testError) => {
     ai: {
       ...status.ai,
       connected,
-      status: connected ? "connected" : status.ai?.status || "test_failed",
-      lastTest: status.ai?.lastTest || {
+      working: connected,
+      authorized: connected ? true : status.ai?.authorized ?? null,
+      reachable: connected ? true : status.ai?.reachable ?? null,
+      status: connected ? "connected" : status.ai?.status === "connected"
+        ? "test_failed" : status.ai?.status || "test_failed",
+      lastTest: {
+        ...status.ai?.lastTest,
         connected,
         testSucceeded: connected,
         error: testError?.message || "",
@@ -299,8 +304,6 @@ function IntegrationSettings({ onNavigate, hubMode = false }) {
     setStatusLoading(true);
     try {
       let nextStatus = await getIntegrationStatus();
-      let aiTestResult;
-      let aiTestError;
       if (verifyAi) {
         const verification = await probeConfiguredIntegrations(nextStatus);
         nextStatus = verification.value;
@@ -364,6 +367,10 @@ function IntegrationSettings({ onNavigate, hubMode = false }) {
     if (state === "authorization_required") return "YETKİLENDİRME GEREKLİ";
     if (state === "token_refresh_failed") return "TOKEN YENİLEME BAŞARISIZ";
     if (state === "permission_required") return "GEREKLİ YETKİ EKSİK";
+    if (state === "api_disabled") return "GOOGLE CLOUD API ETKİN DEĞİL";
+    if (state === "scope_required") return "OAUTH KAPSAMI EKSİK";
+    if (state === "permission_denied") return "KULLANICI ERİŞİMİ REDDEDİLDİ";
+    if (state === "failed_precondition") return "SERVİS ÖNKOŞULU KARŞILANMADI";
     if (state === "service_unavailable") return "SERVİSE ERİŞİLEMİYOR";
     if (state === "request_rejected") return "API İSTEĞİ REDDEDİLDİ";
     if (state === "test_failed") return "BAĞLANTI TESTİ BAŞARISIZ";
@@ -376,7 +383,7 @@ function IntegrationSettings({ onNavigate, hubMode = false }) {
     }
     if (statusLoading) {
       if (integration.id === "ai") return "TEST EDİLİYOR";
-      if (integration.id === "crm") return "GOOGLE OTURUMU DOĞRULANIYOR";
+      if (integration.id === "crm") return "CRM VERİ ERİŞİMİ DOĞRULANIYOR";
       return "DURUM KONTROL EDİLİYOR";
     }
     if (!status) return "DURUM ALINAMADI";
@@ -409,6 +416,9 @@ function IntegrationSettings({ onNavigate, hubMode = false }) {
     setNotice("");
     try {
       const testResult = await testIntegrationConnection(provider);
+      if (testResult?.data?.connected !== true || testResult?.data?.testSucceeded !== true) {
+        throw new Error("Servis başarılı bağlantı doğrulaması döndürmedi.");
+      }
       setNotice(`${integrationCatalog.find((item) => item.id === provider)?.title || provider} bağlantı testi başarılı.`);
       await refresh({ aiTestResult: provider === "ai" ? testResult : undefined });
     } catch (testError) {
@@ -452,7 +462,7 @@ function IntegrationSettings({ onNavigate, hubMode = false }) {
               : integration.id === "whatsapp"
                 ? connection?.configured
                 : connection?.configured;
-          const isGoogleConnected = status?.google?.connected;
+          const isGoogleConnected = status?.google?.authenticated;
           const isChecking = statusLoading || testing === integration.id;
           const stateClass = connection?.connected && !isChecking
             ? " is-connected"
@@ -464,6 +474,7 @@ function IntegrationSettings({ onNavigate, hubMode = false }) {
               <div>
                 <div className="integration-card-heading"><h3>{integration.title}</h3><span className={`integration-state${stateClass}`}>{integrationStatusLabel(integration, connection, configured)}</span></div>
                 <p>{integration.description}</p>
+                {connection ? <p>Yapılandırma: {connection.configured ? "HAZIR" : "EKSİK"} · Servis yetkisi: {connection.authorized === true ? "DOĞRULANDI" : connection.authorized === false ? "GEREKLİ" : "DOĞRULANMADI"} · Erişim: {connection.reachable === true ? "ERİŞİLEBİLİR" : connection.reachable === false ? "ERİŞİLEMİYOR" : "DOĞRULANMADI"} · İşlev: {connection.working === true ? "DOĞRULANDI" : connection.working === false ? "BAŞARISIZ" : "TEST EDİLMEDİ"}</p> : null}
                 {integration.id === "whatsapp" && status ? (
                   <p>Outbound: {connection?.sendConfigured ? "HAZIR" : "YAPILANDIRMA GEREKLİ"} · Webhook: {connection?.webhookConfigured ? "HAZIR" : "YAPILANDIRMA GEREKLİ"}</p>
                 ) : null}
@@ -471,7 +482,7 @@ function IntegrationSettings({ onNavigate, hubMode = false }) {
                   {connection?.lastTest?.testedAt ? `Son test: ${formatDateTime(connection.lastTest.testedAt)}` : "Henüz bağlantı testi çalıştırılmadı."}
                   {connection?.checkedAt ? <span className="integration-check-time">Son kontrol: {formatDateTime(connection.checkedAt)}</span> : null}
                   {connection?.lastTest?.error ? <span className="integration-error">{formatGoogleIntegrationError({ message: connection.lastTest.error, googleApiError: connection.lastTest.googleApiError })}</span> : null}
-                  {integration.id === "whatsapp" ? <span className="integration-secret-note">BAĞLI, sunucu yapılandırmasının tamamlandığını gösterir. Bağlantı testi Meta telefon kaydını doğrular; webhook teslimatı ve mesaj gönderimi ayrıca canlı sistemde sınanmalıdır. API sürümü belirtilmezse v23.0 kullanılır.</span> : null}
+                  {integration.id === "whatsapp" ? <span className="integration-secret-note">BAĞLI, başarılı Meta telefon kaydı testini gösterir; yapılandırma tek başına yeterli değildir. Webhook teslimatı ve mesaj gönderimi ayrıca canlı sistemde sınanmalıdır. API sürümü belirtilmezse v23.0 kullanılır.</span> : null}
                   <div className="module-toolbar integration-actions">
                     {integration.requiresOAuth && !isGoogleConnected ? <button type="button" onClick={startGoogleOAuth}><DDProIcon name="settings" />Google hesabını bağla</button> : null}
                     {integration.requiresOAuth && isGoogleConnected ? <button type="button" onClick={startGoogleOAuth}><DDProIcon name="settings" />Google izinlerini yenile (Gmail + Calendar + Sheets)</button> : null}

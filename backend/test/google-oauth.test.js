@@ -33,6 +33,9 @@ let providerRequests = 0;
 let googleTokenUpserts = 0;
 let nextProjectId = 2;
 let beforeConditionalTokenUpdate;
+let crmStorageFailure = false;
+let gmailMessages = [];
+const storageProbeMethods = [];
 const calendarRequests = [];
 const calendarReadRequests = [];
 const projectRows = [{
@@ -121,10 +124,30 @@ before(async () => {
     }
     if (url.includes("/rest/v1/")) {
       const table = new URL(url).pathname.split("/").at(-1);
+      if (options.method === "HEAD") {
+        storageProbeMethods.push({ table, method: options.method });
+        if (table === "crm_contacts" && crmStorageFailure) {
+          return Response.json({ message: "storage-failure-secret", code: "42501" }, { status: 403 });
+        }
+      }
       const rows = {
         projects: projectRows, crm_contacts: crmRows, offers: [], research_items: [],
       }[table];
       if (rows) {
+        if (table === "crm_contacts") {
+          if (options.method === "POST") {
+            const row = { id: randomBytes(16).toString("hex"), ...JSON.parse(options.body) };
+            crmRows.push(row);
+            return Response.json(row, { status: 201 });
+          }
+          const query = new URL(url).searchParams;
+          const fields = ["email", "phone", "source", "source_external_id"]
+            .filter((field) => query.has(field));
+          if (fields.length) {
+            return Response.json(crmRows.filter((row) => fields.every((field) =>
+              row[field] === query.get(field).replace(/^eq\./, ""))));
+          }
+        }
         if (table === "projects") {
           const id = new URL(url).searchParams.get("id")?.replace(/^eq\./, "");
           const index = projectRows.findIndex((row) => row.id === id);
@@ -177,6 +200,11 @@ before(async () => {
     }
     if (url === "https://www.googleapis.com/oauth2/v2/userinfo") {
       return Response.json({ email: "owner@example.com", verified_email: true });
+    }
+    if (url.startsWith("https://www.googleapis.com/gmail/v1/users/me/messages")) {
+      const id = new URL(url).pathname.split("/")[6];
+      if (id) return Response.json(gmailMessages.find((message) => message.id === id));
+      return Response.json({ messages: gmailMessages.map(({ id }) => ({ id })) });
     }
     if (url === process.env.AI_API_URL) {
       assert.ok(options.headers.Authorization);
@@ -387,12 +415,15 @@ test("one-time exchange authenticates browser status and real provider test rout
   const headers = { Origin: "https://dogrudizaynpro.github.io", Authorization: ["Bearer", session].join(" ") };
   const status = await originalFetch(`${baseUrl}/api/integrations/status`, { headers });
   const data = (await status.json()).data;
-  assert.equal(data.google.connected, true);
+  assert.equal(data.google.authenticated, true);
+  assert.equal(data.google.connected, false);
+  assert.equal(data.google.status, "configured_not_tested");
   assert.equal(data.gmail.connected, false);
   assert.equal(data.googleCalendar.connected, false);
-  assert.equal(data.crm.connected, false);
-  assert.equal(data.crm.status, "configured_not_tested");
-  assert.equal(data.crm.lastTest, null);
+  assert.equal(data.crm.connected, true);
+  assert.equal(data.crm.status, "connected");
+  assert.equal(data.crm.lastTest.testSucceeded, true);
+  assert.equal(data.supabase.connected, true);
   for (const provider of ["gmail", "googleCalendar"]) {
     const tested = await originalFetch(`${baseUrl}/api/integrations/test/${provider}`, {
       method: "POST", headers: { ...headers, "Content-Type": "application/json" },
@@ -463,8 +494,12 @@ test("one-time exchange authenticates browser status and real provider test rout
     headers: { Authorization: ["Bearer", session].join(" "), Origin: "https://evil.example" },
   })).status, 403);
 
+  let providerTestNumber = 0;
   const testProvider = (provider = "gmail") => originalFetch(`${baseUrl}/api/integrations/test/${provider}`, {
-    method: "POST", headers: { ...headers, "Content-Type": "application/json" },
+    method: "POST", headers: {
+      ...headers, "Content-Type": "application/json",
+      "X-Forwarded-For": `192.0.2.${++providerTestNumber}`,
+    },
   });
   const getStatus = async () => (await (await originalFetch(`${baseUrl}/api/integrations/status`, { headers })).json()).data;
   const encryptedBefore = structuredClone(savedToken.encrypted_token);
@@ -489,7 +524,9 @@ test("one-time exchange authenticates browser status and real provider test rout
       }),
       (error) => {
         assert.equal(error.statusCode, 403);
-        assert.equal(error.googleApiError.category, "access_denied");
+        assert.equal(error.googleApiError.category, "scope_required");
+        assert.equal(error.googleApiError.requestSent, false);
+        assert.equal(error.upstreamStatus, undefined);
         assert.deepEqual(error.googleApiError.reasons, ["insufficientPermissions"]);
         return true;
       }
@@ -500,7 +537,10 @@ test("one-time exchange authenticates browser status and real provider test rout
 
     for (const [httpStatus, reason, category] of [
       [401, "authError", "authorization"],
-      [403, "accessNotConfigured", "access_denied"],
+      [403, "accessNotConfigured", "api_disabled"],
+      [403, "ACCESS_TOKEN_SCOPE_INSUFFICIENT", "scope_required"],
+      [403, "IAM_PERMISSION_DENIED", "permission_denied"],
+      [400, "failedPrecondition", "failed_precondition"],
       [429, "rateLimitExceeded", "rate_limit"],
       [400, "badRequest", "api_error"],
       [503, "backendError", "api_error"],
@@ -509,9 +549,15 @@ test("one-time exchange authenticates browser status and real provider test rout
         error: {
           code: httpStatus,
           message: `Google failure: ${reason}`,
-          errors: [{ reason }],
+          ...(/^[A-Z_]+$/.test(reason) ? {
+            details: [{
+              "@type": "type.googleapis.com/google.rpc.ErrorInfo",
+              reason,
+              metadata: { access_token: "test-access", refresh_token: "test-refresh" },
+            }],
+          } : { errors: [{ reason }] }),
           // Unrelated provider fields must never be forwarded.
-          details: [{ access_token: "test-access", refresh_token: "test-refresh" }],
+          internal: { access_token: "test-access", refresh_token: "test-refresh" },
         },
       }, { status: httpStatus });
       const failure = await testProvider();
@@ -535,10 +581,18 @@ test("one-time exchange authenticates browser status and real provider test rout
       assert.equal(current.gmail.connected, false);
       assert.equal(current.gmail.status, httpStatus === 503
         ? "service_unavailable"
-        : httpStatus === 403 ? "permission_required" : "request_rejected");
+        : category === "api_disabled" ? "api_disabled"
+        : ["scope_required", "permission_denied", "failed_precondition"].includes(category)
+          ? category : "request_rejected");
       assert.equal(current.gmail.lastTest.testSucceeded, false);
       assert.equal(current.gmail.lastTest.googleApiError.httpStatus, httpStatus);
-      assert.equal(current.google.connected, true);
+      assert.equal(current.google.authenticated, true);
+      assert.equal(current.google.connected, false);
+      assert.equal(current.google.working, false);
+      assert.equal(current.gmail.reachable, true);
+      assert.equal(current.gmail.authorized,
+        ["authorization", "scope_required", "permission_denied"].includes(category) ? false : null);
+      assert.equal(current.google.authorized, current.gmail.authorized === false ? false : null);
       assert.equal(current.googleCalendar.connected, true);
       assert.equal(current.googleCalendar.lastTest.testSucceeded, true);
       assert.equal(googleTokenDeletes, 0);
@@ -554,8 +608,9 @@ test("one-time exchange authenticates browser status and real provider test rout
     const anonymousStatus = (await (await originalFetch(`${baseUrl}/api/integrations/status`)).json()).data;
     assert.equal(anonymousStatus.gmail.lastTest, null);
     assert.equal(anonymousStatus.gmail.connected, false);
-    assert.equal(anonymousStatus.crm.connected, false);
-    assert.equal(anonymousStatus.crm.status, "authorization_required");
+    assert.equal(anonymousStatus.crm.connected, true);
+    assert.equal(anonymousStatus.crm.status, "connected");
+    assert.equal(anonymousStatus.supabase.connected, true);
 
     workspaceResponse = () => new Response("<html>Unavailable</html>", { status: 502 });
     const malformed = await testProvider();
@@ -566,22 +621,25 @@ test("one-time exchange authenticates browser status and real provider test rout
     const unavailable = await testProvider();
     assert.equal(unavailable.status, 502);
     assert.doesNotMatch(JSON.stringify(await unavailable.json()), /test-access/);
+    assert.equal((await getStatus()).gmail.reachable, false);
 
     workspaceResponse = () => Response.json({ error: { message: "Calendar access denied", errors: [{ reason: "forbidden" }] } }, { status: 403 });
     const failedCalendar = await testProvider("googleCalendar");
     assert.equal(failedCalendar.status, 403);
     assert.equal((await failedCalendar.json()).data.connected, false);
     const calendarFailure = await getStatus();
-    assert.equal(calendarFailure.googleCalendar.status, "request_rejected");
+    assert.equal(calendarFailure.googleCalendar.status, "permission_denied");
     assert.equal(calendarFailure.googleCalendar.connected, false);
     assert.equal(calendarFailure.googleCalendar.lastTest.testSucceeded, false);
     assert.equal(calendarFailure.gmail.connected, false);
-    assert.equal(calendarFailure.google.connected, true);
+    assert.equal(calendarFailure.google.authenticated, true);
+    assert.equal(calendarFailure.google.connected, false);
 
     workspaceResponse = null;
     savedToken.encrypted_token = encryptIntegrationToken({
       ...decryptIntegrationToken(savedToken.encrypted_token), expiresAt: Date.now() - 1,
     });
+
     const expiredToken = structuredClone(savedToken.encrypted_token);
     for (const httpStatus of [400, 401, 403, 429]) {
       refreshResponse = () => Response.json({
@@ -625,6 +683,13 @@ test("one-time exchange authenticates browser status and real provider test rout
       assert.equal(error.code, "GOOGLE_CONNECTION_REQUIRED");
       return true;
     });
+    const expiredAccessTest = await testProvider("googleCalendar");
+    assert.equal(expiredAccessTest.status, 401);
+    const expiredAccessHealth = await getStatus();
+    assert.equal(expiredAccessHealth.googleCalendar.status, "authorization_required");
+    assert.equal(expiredAccessHealth.googleCalendar.authenticated, true);
+    assert.equal(expiredAccessHealth.google.authenticated, true);
+    assert.equal(expiredAccessHealth.google.connected, false);
     assert.equal(googleTokenDeletes, 0);
     savedToken.encrypted_token = expiredToken;
     refreshResponse = null;
@@ -646,6 +711,88 @@ test("one-time exchange authenticates browser status and real provider test rout
     workspaceResponse = null;
     refreshedAccessToken = null;
     refreshResponse = null;
+  }
+});
+
+test("project Sheets import accepts the broader spreadsheets grant and still rejects missing scope", async () => {
+  const { decryptIntegrationToken, encryptIntegrationToken } =
+    await import("../src/services/integration-vault.service.js");
+  const encryptedBefore = structuredClone(savedToken.encrypted_token);
+  const rowsBefore = projectRows.length;
+  const valuesBefore = projectsSheetValues;
+  const token = decryptIntegrationToken(encryptedBefore);
+  const request = () => originalFetch(`${baseUrl}/api/projects/import/google-sheets`, {
+    method: "POST",
+    headers: {
+      Origin: "https://dogrudizaynpro.github.io",
+      Authorization: ["Bearer", browserSession].join(" "),
+      "Content-Type": "application/json",
+      "X-Forwarded-For": "192.0.2.91",
+    },
+    body: JSON.stringify({ spreadsheetId: "1Abcdefghijklmnopqrstuv12345" }),
+  });
+  try {
+    refreshedAccessToken = token.accessToken;
+    const broadScopes = token.scopes.replace(
+      "https://www.googleapis.com/auth/spreadsheets.readonly",
+      "https://www.googleapis.com/auth/spreadsheets"
+    );
+    savedToken.encrypted_token = encryptIntegrationToken({ ...token, scopes: broadScopes });
+    projectsSheetValues = [
+      ["Proje Adı", "Durum"],
+      ["Broader Sheets grant project", "Aktif"],
+    ];
+    const imported = await request();
+    assert.equal(imported.status, 200);
+    assert.equal((await imported.json()).data.added[0].name, "Broader Sheets grant project");
+    savedToken.encrypted_token = encryptIntegrationToken({
+      ...token, scopes: broadScopes.replace("https://www.googleapis.com/auth/spreadsheets", ""),
+    });
+    const denied = await request();
+    assert.equal(denied.status, 403);
+    assert.match((await denied.json()).message, /Google Sheets read-only permission is required/);
+    assert.ok(savedToken, "missing scope must not delete the Google token");
+  } finally {
+    savedToken.encrypted_token = encryptedBefore;
+    projectsSheetValues = valuesBefore;
+    projectRows.splice(rowsBefore);
+    refreshedAccessToken = null;
+  }
+});
+
+test("backend CRM and Supabase health use read-only storage checks without Google or an anon key", async () => {
+  const probesBefore = storageProbeMethods.length;
+  const providerRequestsBefore = providerRequests;
+  const response = await originalFetch(`${baseUrl}/api/integrations/status`);
+  const { data } = await response.json();
+  assert.equal(data.crm.configured, true);
+  assert.equal(data.crm.connected, true);
+  assert.equal(data.crm.authenticated, null);
+  assert.equal(data.crm.authorized, true);
+  assert.equal(data.supabase.configured, true);
+  assert.equal(data.supabase.connected, true);
+  assert.equal(data.supabase.authenticated, null);
+  assert.equal(data.supabase.authorized, true);
+  assert.equal(data.gmail.authenticated, false);
+  assert.equal(providerRequests, providerRequestsBefore);
+  assert.deepEqual(storageProbeMethods.slice(probesBefore).map(({ table }) => table).sort(),
+    ["crm_contacts", "offers", "projects", "research_items"]);
+  crmStorageFailure = true;
+  try {
+    const failed = await originalFetch(`${baseUrl}/api/integrations/status`);
+    const body = await failed.json();
+    assert.equal(body.data.crm.configured, true);
+    assert.equal(body.data.crm.connected, false);
+    assert.equal(body.data.crm.status, "service_unavailable");
+    assert.equal(body.data.crm.authenticated, null);
+    assert.equal(body.data.crm.authorized, null);
+    assert.equal(body.data.supabase.connected, false);
+    assert.equal(body.data.supabase.authenticated, null);
+    assert.equal(body.data.supabase.authorized, null);
+    assert.doesNotMatch(JSON.stringify(body), /storage-failure-secret/);
+    assert.equal(providerRequests, providerRequestsBefore);
+  } finally {
+    crmStorageFailure = false;
   }
 });
 
@@ -672,6 +819,7 @@ test("exchanged browser session persists while provider health remains independe
   const response = await originalFetch(`${baseUrl}/api/integrations/status`, { headers });
   assert.equal(response.status, 200);
   const { data } = await response.json();
+  assert.equal(data.google.authenticated, true);
   assert.equal(data.google.connected, true);
   assert.equal(data.gmail.connected, true);
   assert.equal(data.googleCalendar.connected, true);
@@ -679,6 +827,48 @@ test("exchanged browser session persists while provider health remains independe
   const anonymousData = (await anonymous.json()).data;
   assert.equal(anonymousData.gmail.connected, false);
   assert.equal(anonymousData.googleCalendar.connected, false);
+});
+
+test("Gmail import derives contact days in Istanbul from timestamps without shifting date-only values", async () => {
+  const rowsBefore = crmRows.length;
+  gmailMessages = [
+    { id: "gmail_midnight", internalDate: String(Date.parse("2026-10-09T22:30:00Z")),
+      headerDate: "Thu, 08 Oct 2026 10:00:00 +0000", expected: "2026-10-10" },
+    { id: "gmail_header", headerDate: "Fri, 09 Oct 2026 22:30:00 +0000", expected: "2026-10-10" },
+    { id: "gmail_invalid_internal", internalDate: "invalid",
+      headerDate: "Fri, 09 Oct 2026 22:30:00 +0000", expected: "2026-10-10" },
+    { id: "gmail_date_only", headerDate: "2026-10-09", expected: "2026-10-09" },
+  ].map((message) => ({
+    ...message,
+    payload: {
+      headers: [
+        { name: "From", value: `${message.id}@example.com` },
+        { name: "Date", value: message.headerDate },
+      ],
+    },
+  }));
+  try {
+    const response = await originalFetch(`${baseUrl}/api/integrations/gmail/import`, {
+      method: "POST",
+      headers: {
+        Origin: "https://dogrudizaynpro.github.io",
+        Authorization: ["Bearer", browserSession].join(" "),
+        "Content-Type": "application/json",
+        "X-Forwarded-For": "192.0.2.90",
+      },
+      body: JSON.stringify({ limit: 4 }),
+    });
+    assert.equal(response.status, 200);
+    const { data } = await response.json();
+    assert.equal(data.imported, 4);
+    assert.deepEqual(data.contacts.map(({ contact_date }) => contact_date),
+      gmailMessages.map(({ expected }) => expected));
+    assert.deepEqual(crmRows.slice(rowsBefore).map(({ contact_date }) => contact_date),
+      gmailMessages.map(({ expected }) => expected));
+  } finally {
+    gmailMessages = [];
+    crmRows.splice(rowsBefore);
+  }
 });
 
 test("failed Gmail 401 preserves the exchanged session, encrypted token and Calendar OAuth connection", async () => {
@@ -704,7 +894,11 @@ test("failed Gmail 401 preserves the exchanged session, encrypted token and Cale
     const status = await originalFetch(`${baseUrl}/api/integrations/status`, { headers });
     const { data } = await status.json();
     assert.equal(data.gmail.connected, false);
-    assert.equal(data.google.connected, true);
+    assert.equal(data.google.authenticated, true);
+    assert.equal(data.google.connected, false);
+    assert.equal(data.gmail.authorized, false);
+    assert.equal(data.googleCalendar.authorized, true);
+    assert.equal(data.google.authorized, false);
     assert.equal(data.gmail.lastTest.testSucceeded, false);
     assert.equal(googleTokenDeletes, deletesBefore);
     assert.deepEqual(savedToken.encrypted_token, encryptedBefore);
@@ -767,7 +961,8 @@ test("restoration survives backend restart, issues only a short private bearer a
     headers: { Origin: frontendOrigin, Authorization: ["Bearer", body.data.session].join(" ") },
   });
   const restoredStatus = (await status.json()).data;
-  assert.equal(restoredStatus.google.connected, true);
+  assert.equal(restoredStatus.google.authenticated, true);
+  assert.equal(restoredStatus.google.connected, false);
   assert.equal(restoredStatus.gmail.connected, false);
   for (const [path, rows] of [["/api/projects", projectRows], ["/api/crm", crmRows]]) {
     const response = await originalFetch(`${baseUrl}${path}`, {
@@ -939,7 +1134,7 @@ test("Chromium accepts the production-origin CHIPS cookie and restores after ref
         fetch(${JSON.stringify(apiOrigin)} + "/api/integrations/status", { credentials: "include", headers }).then(r => r.json())
       ]);
       window.result = {
-        projects: projects.data, google: status.data.google.connected,
+        projects: projects.data, google: status.data.google.authenticated,
         gmail: status.data.gmail.connected, calendar: status.data.googleCalendar.connected
       };
     })().catch(error => { window.result = { error: error.message }; });
@@ -1189,7 +1384,8 @@ test("session parsing rejects non-finite expiry while legacy signed bearers stil
         headers: { Origin: frontendOrigin, ...proof },
       });
       const { data } = (await response.json());
-      assert.equal(data.google.connected, true);
+      assert.equal(data.google.authenticated, true);
+      assert.equal(data.google.connected, false);
       assert.equal(data.gmail.connected, false);
       const protectedResponse = await originalFetch(`${baseUrl}/api/integrations/calendar/events/bad`, {
         headers: { Origin: frontendOrigin, "X-Forwarded-For": "192.0.2.70", ...proof },

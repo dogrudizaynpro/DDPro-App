@@ -33,3 +33,20 @@ test("datetime-local conversion rejects invalid dates and unsupported input shap
   assert.throws(() => fromDateTimeLocalInput("2026-02-30T11:00"), /geçerli değil/);
   assert.throws(() => fromDateTimeLocalInput("2026-10-09"), /Europe\/Istanbul/);
 });
+
+test("Istanbul midnight crosses UTC year boundaries without shifting all-day dates", () => {
+  assert.equal(formatDateTime("2026-12-31T21:00:00.000Z"), "01.01.2027 00:00");
+  assert.equal(toDateTimeLocalInput("2026-12-31T21:00:00.000Z"), "2027-01-01T00:00");
+  assert.equal(fromDateTimeLocalInput("2027-01-01T00:00"), "2026-12-31T21:00:00.000Z");
+  for (const timezone of ["UTC", "Pacific/Kiritimati", "America/Los_Angeles"]) {
+    const previous = process.env.TZ;
+    process.env.TZ = timezone;
+    try {
+      assert.equal(formatDateOnly("2026-12-31"), "31.12.2026");
+      assert.equal(formatDateOnly("2027-01-01"), "01.01.2027");
+    } finally {
+      if (previous === undefined) delete process.env.TZ;
+      else process.env.TZ = previous;
+    }
+  }
+});

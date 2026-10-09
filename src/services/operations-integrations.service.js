@@ -7,6 +7,10 @@ export const formatGoogleIntegrationError = (error) => {
     authorization: "Google API yetkilendirme/token hatası. Kayıtlı Google bağlantısı korunuyor.",
     connection_invalid: "Google yetkilendirmesi artık geçerli değil. Hesabı yeniden bağlayın.",
     access_denied: "Google API erişimi reddetti (izin, politika veya kota kısıtlaması). Google OAuth bağlantısı korunuyor.",
+    api_disabled: "Google Cloud projesinde ilgili API etkinleştirilmeli. Mevcut OAuth bağlantısı korunuyor.",
+    scope_required: "Gerekli Google OAuth kapsamı verilmemiş. Kullanıcı onayıyla eksik izinleri tamamlayın; mevcut bağlantı korunuyor.",
+    permission_denied: "Google kullanıcısının kaynak erişimi veya Workspace politikası isteği engelliyor. Mevcut bağlantı korunuyor.",
+    failed_precondition: "Google servisinin önkoşulu karşılanmadı. Gmail posta kutusu/hizmet durumunu ve aşağıdaki gerçek API nedenini kontrol edin; token sıfırlamak çözüm değildir.",
     rate_limit: "Google API hız/kota sınırına ulaşıldı. Daha sonra tekrar deneyin; Google bağlantısı korunuyor.",
     api_error: "Google API isteği başarısız. Google bağlantısı korunuyor.",
   };

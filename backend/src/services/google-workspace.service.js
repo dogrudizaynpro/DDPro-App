@@ -37,7 +37,8 @@ const googleRequest = async (account, endpoint, options = {}) => {
   } catch (error) {
     throw Object.assign(new Error(
       error.name === "TimeoutError" ? "Google API request timed out." : "Google API is temporarily unreachable."
-    ), { statusCode: error.name === "TimeoutError" ? 504 : 502, expose: true });
+    ), { statusCode: error.name === "TimeoutError" ? 504 : 502, expose: true,
+      reachable: false, operation: getGoogleOperation(endpoint) });
   }
   if (response.status === 204) return null;
   let payload;
@@ -45,7 +46,9 @@ const googleRequest = async (account, endpoint, options = {}) => {
     payload = await response.json();
   } catch {
     if (response.ok) {
-      throw Object.assign(new Error("Google API returned an invalid response."), { statusCode: 502, expose: true });
+      throw Object.assign(new Error("Google API returned an invalid response."), {
+        statusCode: 502, expose: true, reachable: true, operation: getGoogleOperation(endpoint),
+      });
     }
   }
   if (!response.ok) {
@@ -64,6 +67,23 @@ const decodeMessagePart = (part) => {
     if (value) return value;
   }
   return "";
+};
+
+const contactDateFormatter = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "Europe/Istanbul",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
+const getMessageContactDate = (internalDate, dateHeader) => {
+  let date = new Date(internalDate === undefined || internalDate === null || internalDate === ""
+    ? NaN : Number(internalDate));
+  if (Number.isNaN(date.getTime())) date = new Date(dateHeader);
+  if (Number.isNaN(date.getTime())) date = new Date();
+  const parts = Object.fromEntries(contactDateFormatter.formatToParts(date)
+    .map(({ type, value }) => [type, value]));
+  return `${parts.year}-${parts.month}-${parts.day}`;
 };
 
 export const importGmailMessages = async (account, requestedLimit) => {
@@ -93,11 +113,7 @@ export const importGmailMessages = async (account, requestedLimit) => {
         name: match?.[1]?.replace(/^"|"$/g, "").trim() || match?.[2] || sender,
         email: match?.[2] || sender,
         request: [subject, body].filter(Boolean).join("\n\n").slice(0, 20_000),
-        contact_date: Number(details.internalDate)
-          ? new Date(Number(details.internalDate)).toISOString().slice(0, 10)
-          : Number.isNaN(Date.parse(dateHeader))
-            ? new Date().toISOString().slice(0, 10)
-            : new Date(dateHeader).toISOString().slice(0, 10),
+        contact_date: getMessageContactDate(details.internalDate, dateHeader),
         source: "gmail",
         source_external_id: message.id,
         status: "Yeni",

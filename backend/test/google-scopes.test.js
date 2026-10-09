@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { getMissingGoogleScopes } from "../src/services/google-integration.service.js";
+import { getMissingGoogleScopes, hasGoogleOperationScope } from "../src/services/google-integration.service.js";
 
 const allScopes = [
   "https://www.googleapis.com/auth/gmail.readonly",
@@ -15,4 +15,15 @@ test("Google OAuth grants are checked for every supported service permission", (
     [allScopes[1]]
   );
   assert.deepEqual(getMissingGoogleScopes(""), allScopes);
+});
+
+test("broader Google grants satisfy supported operations without granting unrelated permissions", () => {
+  assert.deepEqual(getMissingGoogleScopes([
+    "https://www.googleapis.com/auth/gmail.modify",
+    "https://www.googleapis.com/auth/calendar",
+    "https://www.googleapis.com/auth/spreadsheets",
+  ].join(" ")), []);
+  assert.equal(hasGoogleOperationScope("https://mail.google.com/", allScopes[0]), true);
+  assert.equal(hasGoogleOperationScope(allScopes[0], allScopes[1]), false);
+  assert.equal(hasGoogleOperationScope("https://www.googleapis.com/auth/calendar.readonly", allScopes[1]), false);
 });

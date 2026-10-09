@@ -16,7 +16,7 @@ test("integration dashboard keeps initial status pending until the configured AI
   assert.match(source, /setStatus\(applyAiVerification\(nextStatus, aiTestResult, aiTestError\)\)/);
   assert.match(source, /aiTestResult: provider === "ai" \? testResult : undefined/);
   assert.match(source, /integration\.id === "ai"\) return "TEST EDİLİYOR"/);
-  assert.match(source, /integration\.id === "crm"\) return "GOOGLE OTURUMU DOĞRULANIYOR"/);
+  assert.match(source, /integration\.id === "crm"\) return "CRM VERİ ERİŞİMİ DOĞRULANIYOR"/);
   assert.match(source, /if \(!status\) return "DURUM ALINAMADI"/);
   assert.match(source, /Entegrasyon bağlantıları ve AI sağlayıcı yanıtı doğrulanıyor/);
   assert.match(source, /DURUM KONTROL EDİLİYOR/);
@@ -25,4 +25,18 @@ test("integration dashboard keeps initial status pending until the configured AI
   const labelBlock = source.match(/const integrationStatusLabel = \([\s\S]*?\n  };/)?.[0] || "";
   assert.ok(labelBlock.indexOf('testing === integration.id') < labelBlock.indexOf('if (statusLoading)'));
   assert.ok(labelBlock.indexOf('if (statusLoading)') < labelBlock.indexOf('if (!status)'));
+});
+
+test("service failures do not disable Google retries or masquerade as configuration success", () => {
+  assert.match(source, /const isGoogleConnected = status\?\.google\?\.authenticated/);
+  assert.match(source, /\["gmail", status\.gmail\?\.configured && status\.google\?\.authenticated\]/);
+  assert.match(source, /testResult\?\.data\?\.testSucceeded !== true/);
+  for (const category of ["api_disabled", "scope_required", "permission_denied", "failed_precondition"]) {
+    assert.ok(source.includes(`state === "${category}"`));
+  }
+  assert.match(source, /connection\.reachable === true/);
+  assert.match(source, /connection\.working === true/);
+  assert.match(source, /connection\.authorized === true/);
+  const refresh = source.match(/const refresh = async[\s\S]*?const startGoogleOAuth/)?.[0] || "";
+  assert.doesNotMatch(refresh, /let aiTestResult;/);
 });

@@ -69,7 +69,7 @@ test("only an invalid Google refresh grant marks the stored connection invalid",
     error: { errors: [{ reason: "insufficientPermissions" }] },
   }, [], "googleCalendar", "calendar.events");
   assert.equal(missingScope.statusCode, 403);
-  assert.equal(missingScope.googleApiError.category, "access_denied");
+  assert.equal(missingScope.googleApiError.category, "scope_required");
 });
 
 test("Gmail failedPrecondition stays a provider error with its actual safe reason", () => {
@@ -85,7 +85,7 @@ test("Gmail failedPrecondition stays a provider error with its actual safe reaso
   assert.deepEqual(error.googleApiError, {
     httpStatus: 400,
     operation: "gmail.profile",
-    category: "api_error",
+    category: "failed_precondition",
     message: "Gmail API precondition check failed.",
     reasons: ["failedPrecondition"],
   });
@@ -115,12 +115,53 @@ test("workspace error middleware forwards safe metadata and logs the provider op
       provider: "googleCalendar",
       operation: "calendar.events",
       upstreamStatus: 403,
-      category: "access_denied",
+      category: "api_disabled",
       reasons: ["accessNotConfigured"],
     }]]);
   } finally {
     console.error = originalLog;
   }
+});
+
+test("ErrorInfo reasons classify provider failures without retaining metadata or inventing a cause", () => {
+  for (const [reason, category] of [
+    ["SERVICE_DISABLED", "api_disabled"],
+    ["ACCESS_TOKEN_SCOPE_INSUFFICIENT", "scope_required"],
+    ["IAM_PERMISSION_DENIED", "permission_denied"],
+    ["FAILED_PRECONDITION", "failed_precondition"],
+    ["UNKNOWN_REASON", "access_denied"],
+  ]) {
+    const error = new GoogleApiError(403, {
+      error: {
+        details: [{
+          "@type": "type.googleapis.com/google.rpc.ErrorInfo",
+          reason,
+          metadata: { secret: "must-not-be-retained" },
+        }, { "@type": "unrelated", reason: "SERVICE_DISABLED" }],
+      },
+    });
+    assert.equal(error.googleApiError.category, category);
+    assert.deepEqual(error.googleApiError.reasons, [reason]);
+    assert.doesNotMatch(JSON.stringify(error), /must-not-be-retained|metadata|unrelated/);
+  }
+  const statusOnly = new GoogleApiError(400, { error: { status: "FAILED_PRECONDITION" } });
+  assert.equal(statusOnly.googleApiError.category, "failed_precondition");
+  assert.equal(statusOnly.googleApiError.providerStatus, "FAILED_PRECONDITION");
+  assert.deepEqual(statusOnly.googleApiError.reasons, []);
+});
+
+test("ErrorInfo reason and provider status are redacted like legacy error fields", () => {
+  const error = new GoogleApiError(403, {
+    error: {
+      status: "opaque-credential",
+      details: [{
+        "@type": "type.googleapis.com/google.rpc.ErrorInfo",
+        reason: "opaque-credential",
+        metadata: { token: "opaque-credential" },
+      }],
+    },
+  }, ["opaque-credential"]);
+  assert.doesNotMatch(JSON.stringify(error), /opaque-credential/);
 });
 
 test("workspace middleware maps Google 401 to 502 but keeps real session 401 unchanged", () => {
