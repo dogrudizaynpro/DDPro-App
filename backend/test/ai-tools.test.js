@@ -2,12 +2,30 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   consumeOperationalConfirmation,
+  createFileImportFingerprint,
   isRecordSnapshotCurrent,
   prepareOperationalWrite,
   readOperationalRecords,
 } from "../src/services/ai-tools.service.js";
 
 const uuid = "4bc6f5a6-0b6c-4ddb-b29b-208c84c344d0";
+
+test("file import fingerprints are stable for the same proposed row and scoped to module", () => {
+  const source = "a".repeat(64);
+  assert.equal(
+    createFileImportFingerprint(source, "projects", { name: "Chair", status: "Active" }),
+    createFileImportFingerprint(source, "projects", { status: "Active", name: "Chair" })
+  );
+  assert.notEqual(
+    createFileImportFingerprint(source, "projects", { name: "Chair" }),
+    createFileImportFingerprint(source, "projects", { name: "Table" })
+  );
+  assert.notEqual(
+    createFileImportFingerprint(source, "projects", { name: "Chair" }),
+    createFileImportFingerprint(source, "products", { name: "Chair" })
+  );
+  assert.equal(createFileImportFingerprint("invalid", "projects", {}), null);
+});
 
 test("AI operational tools reject unsupported resources and write operations", async () => {
   await assert.rejects(

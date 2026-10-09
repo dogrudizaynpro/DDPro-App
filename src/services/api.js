@@ -203,6 +203,7 @@ const requestAPI = async (endpoint, options, sessionControl = false) => {
       ? timeoutMs
       : DEFAULT_REQUEST_TIMEOUT_MS;
   const controller = new AbortController();
+  const isFormData = typeof FormData !== "undefined" && fetchOptions.body instanceof FormData;
   let requestTimedOut = false;
   const abortFromCaller = () => controller.abort(callerSignal?.reason);
   if (callerSignal?.aborted) {
@@ -224,7 +225,7 @@ const requestAPI = async (endpoint, options, sessionControl = false) => {
     const response = await fetch(url, {
       ...fetchOptions,
       headers: {
-        "Content-Type": "application/json",
+        ...(!isFormData ? { "Content-Type": "application/json" } : {}),
         ...(!sessionControl && sessionStorage.getItem(SESSION_KEY)
           ? { Authorization: ["Bearer", sessionStorage.getItem(SESSION_KEY)].join(" ") }
           : {}),

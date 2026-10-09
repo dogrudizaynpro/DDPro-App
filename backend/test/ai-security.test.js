@@ -39,6 +39,19 @@ test("AI chat requires an authenticated Google browser session", async () => {
   assert.equal((await response.json()).code, "BROWSER_SESSION_REQUIRED");
 });
 
+test("AI file uploads require the authenticated Google browser session", async () => {
+  const body = new FormData();
+  body.set("message", "Analyze this file.");
+  body.set("file", new Blob(["file contents"]), "notes.txt");
+  const response = await fetch(`${baseUrl}/api/ai/chat`, {
+    method: "POST",
+    headers: { Origin: "https://dogrudizaynpro.github.io" },
+    body,
+  });
+  assert.equal(response.status, 401);
+  assert.equal((await response.json()).code, "BROWSER_SESSION_REQUIRED");
+});
+
 test("AI usage count requires the authenticated Google browser session", async () => {
   const response = await fetch(`${baseUrl}/api/ai/usage`);
   assert.equal(response.status, 401);

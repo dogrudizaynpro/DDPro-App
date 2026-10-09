@@ -75,6 +75,23 @@ test("Chat Completions request omits sampling parameters unsupported by gpt-5.6-
   assert.deepEqual(body.tools.map((tool) => tool.function.name), ["read_records", "prepare_write"]);
 });
 
+test("image attachments are sent to the configured provider as vision content", async () => {
+  responses.push(completion({ role: "assistant", content: "Görsel analiz edildi." }));
+  const image = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/pXcAAAAASUVORK5CYII=", "base64");
+  const result = await requestAiCompletion({
+    message: "Bu görseli analiz et.",
+    context: {},
+    attachment: { originalName: "room.png", buffer: image },
+  });
+
+  assert.equal(result.answer, "Görsel analiz edildi.");
+  const userMessage = requests[0].body.messages.find((item) => item.role === "user");
+  assert.ok(Array.isArray(userMessage.content));
+  assert.match(userMessage.content[0].text, /room\.png/);
+  assert.equal(userMessage.content[1].type, "image_url");
+  assert.match(userMessage.content[1].image_url.url, /^data:image\/png;base64,/);
+});
+
 test("AI provider connection test succeeds with the production request shape", async () => {
   responses.push(completion({ role: "assistant", content: "OK" }));
   const result = await testIntegrationConnection("ai");

@@ -70,13 +70,33 @@ function AIModule({
   sendAiMessage,
   aiInput,
   setAiInput,
+  aiAttachment,
+  setAiAttachment,
   onNavigate,
   messagesOnly = false,
   aiSending = false,
   onConfirmAction,
 }) {
   const promptFieldRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const [fileError, setFileError] = useState("");
+  const [dragActive, setDragActive] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState("");
   const [providerStatus, setProviderStatus] = useState("checking");
+  const allowedFileExtensions = new Set(["png", "jpg", "jpeg", "webp", "xlsx", "csv", "pdf", "docx", "txt"]);
+  const maxFileSize = 10 * 1024 * 1024;
+  const isImageAttachment = (file) =>
+    file && ["png", "jpg", "jpeg", "webp"].includes(file.name.split(".").pop()?.toLowerCase());
+
+  useEffect(() => {
+    if (!isImageAttachment(aiAttachment)) {
+      setPreviewUrl("");
+      return undefined;
+    }
+    const url = URL.createObjectURL(aiAttachment);
+    setPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [aiAttachment]);
 
   useEffect(() => {
     let active = true;
@@ -107,6 +127,21 @@ function AIModule({
       return;
     }
     onNavigate(capability.moduleId);
+  };
+
+  const addAttachment = (file) => {
+    setFileError("");
+    if (!file) return;
+    const extension = file.name.split(".").pop()?.toLowerCase();
+    if (!allowedFileExtensions.has(extension)) {
+      setFileError("Desteklenmeyen dosya türü. PNG, JPG, WebP, XLSX, CSV, PDF, DOCX veya TXT seçin.");
+      return;
+    }
+    if (file.size < 1 || file.size > maxFileSize) {
+      setFileError("Dosya 1 bayt ile 10 MB arasında olmalıdır.");
+      return;
+    }
+    setAiAttachment(file);
   };
 
   return (
@@ -185,6 +220,13 @@ function AIModule({
                     : "Sen"}
                 </strong>
                 <p>{message.text}</p>
+                {message.attachments?.map((attachment) => (
+                  <div className="ai-message-attachment" key={attachment.name}>
+                    <span aria-hidden="true">▧</span>
+                    <span>{attachment.name}</span>
+                    <small>{attachment.status}</small>
+                  </div>
+                ))}
                 <small>{message.date}</small>
                 {message.pendingAction ? (
                   <div className="ai-action-confirmation">
@@ -217,7 +259,33 @@ function AIModule({
               </div>
             ))}
           </div>
-          <form className="ai-form" onSubmit={sendAiMessage}>
+          <form
+            className={`ai-form${dragActive ? " ai-form-drag-active" : ""}`}
+            onSubmit={sendAiMessage}
+            onDragOver={(event) => {
+              event.preventDefault();
+              setDragActive(true);
+            }}
+            onDragLeave={(event) => {
+              if (!event.currentTarget.contains(event.relatedTarget)) setDragActive(false);
+            }}
+            onDrop={(event) => {
+              event.preventDefault();
+              setDragActive(false);
+              addAttachment(event.dataTransfer.files?.[0]);
+            }}
+          >
+            <input
+              ref={fileInputRef}
+              className="ai-file-input"
+              type="file"
+              accept=".png,.jpg,.jpeg,.webp,.xlsx,.csv,.pdf,.docx,.txt,image/png,image/jpeg,image/webp,text/csv,application/pdf"
+              aria-label="Eklenecek dosyayı seç"
+              onChange={(event) => {
+                addAttachment(event.target.files?.[0]);
+                event.target.value = "";
+              }}
+            />
             <textarea
               ref={promptFieldRef}
               aria-label="DDPro AI mesajı"
@@ -226,10 +294,38 @@ function AIModule({
               onChange={(event) => setAiInput(event.target.value)}
               disabled={aiSending}
             />
-            <button type="submit" disabled={aiSending || !aiInput.trim()}>
-              <span>{aiSending ? "Yanıt bekleniyor…" : "Analizi başlat"}</span>
+            <button
+              className="ai-attach-button"
+              type="button"
+              aria-label="Dosya veya görsel ekle"
+              title="Dosya veya görsel ekle"
+              disabled={aiSending}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <span aria-hidden="true">＋</span>
+            </button>
+            <button type="submit" disabled={aiSending || (!aiInput.trim() && !aiAttachment)}>
+              <span>{aiSending ? (aiAttachment ? "Yükleniyor ve analiz ediliyor…" : "Yanıt bekleniyor…") : "Analizi başlat"}</span>
               <span aria-hidden="true">→</span>
             </button>
+            {aiAttachment ? (
+              <div className="ai-attachment-preview">
+                {previewUrl ? <img src={previewUrl} alt={`${aiAttachment.name} önizlemesi`} /> : <span aria-hidden="true">▧</span>}
+                <span>
+                  <strong>{aiAttachment.name}</strong>
+                  <small>{(aiAttachment.size / (1024 * 1024)).toFixed(2)} MB · Gönderilmeye hazır</small>
+                </span>
+                <button
+                  type="button"
+                  aria-label="Eklenen dosyayı kaldır"
+                  disabled={aiSending}
+                  onClick={() => setAiAttachment(null)}
+                >
+                  Kaldır
+                </button>
+              </div>
+            ) : null}
+            {fileError ? <p className="ai-file-error" role="alert">{fileError}</p> : null}
           </form>
         </section>
       </div>
