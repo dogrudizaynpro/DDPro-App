@@ -1,6 +1,8 @@
 import { createHash } from "node:crypto";
 import { getIntegrationAdmin } from "../config/integration-admin.js";
 import {
+  AI_TOOL_DEFINITIONS,
+  AI_TOOL_NAMES,
   confirmOperationalWrite,
   prepareOperationalWrite,
   readOperationalRecords,
@@ -65,79 +67,6 @@ const SYSTEM_INSTRUCTIONS = [
   "Never claim to have searched the web or sent Gmail. Calendar and application record writes require confirmation.",
 ].join(" ");
 
-const TOOL_DEFINITIONS = [
-  {
-    type: "function",
-    function: {
-      name: "read_records",
-      description: "Read up to 50 current authorized DDPro records. Price analysis returns verified records only.",
-      parameters: {
-        type: "object",
-        properties: {
-          resource: {
-            type: "string",
-            enum: [
-              "projects",
-              "customers",
-              "products",
-              "systems",
-              "price-analysis",
-              "material-analysis",
-              "offers",
-              "procurement",
-              "reports",
-              "calendar",
-            ],
-          },
-          filters: {
-            type: "object",
-            properties: {
-              id: { type: "string" },
-              start: { type: "string" },
-              end: { type: "string" },
-            },
-            additionalProperties: false,
-          },
-        },
-        required: ["resource"],
-        additionalProperties: false,
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "prepare_write",
-      description: "Prepare a create, update, or delete. Explicit user confirmation is required before execution.",
-      parameters: {
-        type: "object",
-        properties: {
-          resource: {
-            type: "string",
-            enum: [
-              "projects",
-              "customers",
-              "products",
-              "systems",
-              "price-analysis",
-              "material-analysis",
-              "offers",
-              "procurement",
-              "reports",
-              "calendar",
-            ],
-          },
-          operation: { type: "string", enum: ["create", "update", "delete"] },
-          id: { type: "string" },
-          record: { type: "object" },
-        },
-        required: ["resource", "operation"],
-        additionalProperties: false,
-      },
-    },
-  },
-];
-
 const createProviderError = (message, code) => {
   const error = new Error(message);
   error.statusCode = 502;
@@ -146,7 +75,7 @@ const createProviderError = (message, code) => {
   return error;
 };
 
-const requestProviderCompletion = async (messages, includeTools) => {
+const requestProviderCompletion = async (messages) => {
   let providerUrl;
   try {
     providerUrl = new URL(AI_API_URL);
@@ -180,7 +109,8 @@ const requestProviderCompletion = async (messages, includeTools) => {
       body: JSON.stringify({
         model: AI_MODEL,
         messages,
-        ...(includeTools ? { tools: TOOL_DEFINITIONS, tool_choice: "auto" } : {}),
+        tools: AI_TOOL_DEFINITIONS,
+        tool_choice: "auto",
       }),
       signal: AbortSignal.timeout(30_000),
     });
@@ -314,18 +244,15 @@ export const requestAiCompletion = async ({ message, context = {}, integrationAc
     },
     { role: "user", content: userContent },
   ];
-  let includeTools = true;
-
   for (let turn = 0; turn < 4; turn += 1) {
-    let { response, data } = await requestProviderCompletion(messages, includeTools);
-    if (!response.ok && includeTools && [400, 422].includes(response.status)) {
-      includeTools = false;
-      ({ response, data } = await requestProviderCompletion(messages, false));
-    }
+    const { response, data } = await requestProviderCompletion(messages);
     if (!response.ok) {
+      const toolRejected = [400, 422].includes(response.status);
       throw createProviderError(
-        `AI provider request failed (HTTP ${response.status}).`,
-        "AI_PROVIDER_REQUEST_FAILED"
+        toolRejected
+          ? `AI provider rejected the request containing DDPro operational tools (HTTP ${response.status}).`
+          : `AI provider request failed (HTTP ${response.status}).`,
+        toolRejected ? "AI_PROVIDER_TOOL_REQUEST_REJECTED" : "AI_PROVIDER_REQUEST_FAILED"
       );
     }
 
@@ -348,7 +275,7 @@ export const requestAiCompletion = async ({ message, context = {}, integrationAc
     for (const toolCall of toolCalls) {
       const name = toolCall?.function?.name;
       const args = parseToolArguments(toolCall);
-      if (name === "prepare_write") {
+      if (name === AI_TOOL_NAMES.prepareWrite) {
         if (projectImport) {
           toolResults.push({
             tool_call_id: toolCall.id,
@@ -364,23 +291,24 @@ export const requestAiCompletion = async ({ message, context = {}, integrationAc
           pendingAction,
         };
       }
-      if (name !== "read_records") {
-        toolResults.push({
-          tool_call_id: toolCall.id,
-          content: JSON.stringify({ error: "Tool is not available." }),
-        });
-        continue;
+      if (name !== AI_TOOL_NAMES.readRecords) {
+        throw createProviderError(
+          "AI provider requested an unavailable DDPro operational tool.",
+          "AI_TOOL_UNAVAILABLE"
+        );
       }
       try {
         const records = await readOperationalRecords(integrationAccount, args);
         toolResults.push({ tool_call_id: toolCall.id, content: JSON.stringify({ data: records }) });
       } catch (error) {
-        toolResults.push({
-          tool_call_id: toolCall.id,
-          content: JSON.stringify({
-            error: error.expose ? error.message : "Records are unavailable.",
-          }),
-        });
+        throw Object.assign(
+          new Error(error.expose ? error.message : "The requested records are unavailable."),
+          {
+            statusCode: error.statusCode || 502,
+            code: "AI_TOOL_EXECUTION_FAILED",
+            expose: true,
+          }
+        );
       }
     }
     messages.push(...toolResults.map(({ tool_call_id, content }) => ({

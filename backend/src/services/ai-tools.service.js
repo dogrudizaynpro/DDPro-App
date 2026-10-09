@@ -110,6 +110,57 @@ const CONTROLLERS = {
   },
 };
 
+export const AI_TOOL_NAMES = Object.freeze({
+  readRecords: "read_records",
+  prepareWrite: "prepare_write",
+});
+
+const operationalResources = Object.keys(CONTROLLERS);
+export const AI_TOOL_DEFINITIONS = [
+  {
+    type: "function",
+    function: {
+      name: AI_TOOL_NAMES.readRecords,
+      description: "Read up to 50 current authorized DDPro records. Price analysis returns verified records only.",
+      parameters: {
+        type: "object",
+        properties: {
+          resource: { type: "string", enum: operationalResources },
+          filters: {
+            type: "object",
+            properties: {
+              id: { type: "string" },
+              start: { type: "string" },
+              end: { type: "string" },
+            },
+            additionalProperties: false,
+          },
+        },
+        required: ["resource"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: AI_TOOL_NAMES.prepareWrite,
+      description: "Prepare a create, update, or delete. Explicit user confirmation is required before execution.",
+      parameters: {
+        type: "object",
+        properties: {
+          resource: { type: "string", enum: operationalResources },
+          operation: { type: "string", enum: ["create", "update", "delete"] },
+          id: { type: "string" },
+          record: { type: "object" },
+        },
+        required: ["resource", "operation"],
+        additionalProperties: false,
+      },
+    },
+  },
+];
+
 const getAdmin = () => {
   const admin = getIntegrationAdmin();
   if (!admin) {
