@@ -23,6 +23,19 @@
   width: 33px;
   height: 33px;
   min-width: 33px;
+  border: 0;
+  border-radius: 50%;
+  background-color: transparent;
+  background-image: var(--ddpro-icon-reference);
+  box-shadow: none;
+}
+
+.module-button.active .ddpro-icon-reference.module-icon {
+  border: 0;
+  border-radius: 50%;
+  background-color: transparent;
+  background-image: var(--ddpro-icon-reference);
+  box-shadow: none;
 }
 
 .ddpro-icon-reference.stat-icon {
@@ -36,4 +49,12 @@ button.ddpro-icon-action > .ddpro-icon-reference {
   height: 34px;
   min-width: 34px;
   margin: 0;
+}
+
+button > .ddpro-icon-reference {
+  margin-right: 7px;
+}
+
+button.ddpro-icon-action > .ddpro-icon-reference {
+  margin-right: 0;
 }

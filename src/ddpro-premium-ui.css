@@ -90,8 +90,8 @@
   touch-action: manipulation;
 }
 
-.module-page button.ddpro-icon-action > .ddpro-icon-medallion,
-.operations-module button.ddpro-icon-action > .ddpro-icon-medallion {
+.module-page button.ddpro-icon-action > .ddpro-icon-reference,
+.operations-module button.ddpro-icon-action > .ddpro-icon-reference {
   width: 34px;
   height: 34px;
   min-width: 34px;

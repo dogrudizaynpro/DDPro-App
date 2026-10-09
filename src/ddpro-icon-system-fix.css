@@ -1,0 +1,59 @@
+.module-button .ddpro-icon-reference.module-icon,
+.module-button.active .ddpro-icon-reference.module-icon {
+  border: 0;
+  border-radius: 50%;
+  background-color: transparent;
+  background-image: var(--ddpro-icon-reference);
+  box-shadow: none;
+}
+
+.module-page button.ddpro-icon-action,
+.operations-module button.ddpro-icon-action {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 48px;
+  align-self: flex-start;
+  width: 48px;
+  min-width: 48px;
+  height: 48px;
+  min-height: 48px;
+  padding: 5px;
+  border: 1px solid rgba(226, 237, 238, 0.84);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 32% 20%, rgba(255, 255, 255, 0.18), transparent 38%),
+    linear-gradient(145deg, #1c282a, #070c0e 76%);
+  color: #ffffff;
+  box-shadow:
+    0 0 0 2px rgba(0, 0, 0, 0.7),
+    0 0 12px rgba(0, 239, 185, 0.28),
+    inset 0 1px 3px rgba(255, 255, 255, 0.26),
+    inset 0 -3px 6px rgba(0, 0, 0, 0.82);
+  touch-action: manipulation;
+}
+
+.module-page button.ddpro-icon-action > .ddpro-icon-reference,
+.operations-module button.ddpro-icon-action > .ddpro-icon-reference {
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  margin: 0;
+}
+
+.module-page button.ddpro-icon-action:hover:not(:disabled),
+.module-page button.ddpro-icon-action:focus-visible,
+.operations-module button.ddpro-icon-action:hover:not(:disabled),
+.operations-module button.ddpro-icon-action:focus-visible {
+  border-color: #25ebbc;
+  color: #ffffff;
+  box-shadow:
+    0 0 0 2px rgba(0, 0, 0, 0.76),
+    0 0 20px rgba(0, 239, 185, 0.54),
+    inset 0 1px 3px rgba(255, 255, 255, 0.32);
+}
+
+.module-page button.ddpro-icon-action:focus-visible,
+.operations-module button.ddpro-icon-action:focus-visible {
+  outline: 2px solid #25ebbc;
+  outline-offset: 3px;
+}

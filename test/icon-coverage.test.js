@@ -8,7 +8,10 @@ const [iconSource, buttonSource, iconStyles] = await Promise.all([
   read("../src/components/DDProActionButton.jsx"),
   read("../src/ddpro-premium-ui.css"),
 ]);
+const referenceStyles = await read("../src/components/ddpro-reference-icons.css");
 const applicationStyles = await read("../src/styles.css");
+const iconSystemStyles = await read("../src/ddpro-icon-system-fix.css");
+const applicationEntry = await read("../src/main.jsx");
 
 test("approved icon crops use the reference image's native dimensions and actual action areas", async () => {
   const reference = await readFile(new URL("../IMG_9199.png", import.meta.url));
@@ -36,17 +39,27 @@ test("icon action buttons preserve accessible names, native keyboard support, an
   assert.match(buttonSource, /title=\{label\}/);
   assert.match(iconStyles, /width: 48px/);
   assert.match(iconStyles, /min-height: 48px/);
+  assert.match(iconSystemStyles, /button\\.ddpro-icon-action \\{[\\s\\S]*?width: 48px;[\\s\\S]*?min-height: 48px;/);
   assert.match(iconStyles, /:focus-visible/);
 });
 
+test("reference sprite remains visible with module and action button styles", () => {
+  assert.match(referenceStyles, /\\.ddpro-icon-reference \\{[\\s\\S]*?background-image: var\\(--ddpro-icon-reference\\)/);
+  assert.match(iconSystemStyles, /\\.module-button\\.active \\.ddpro-icon-reference\\.module-icon \\{[\\s\\S]*?background-image: var\\(--ddpro-icon-reference\\)/);
+  assert.match(iconStyles, /button\\.ddpro-icon-action > \\.ddpro-icon-reference/);
+  assert.doesNotMatch(iconStyles, /ddpro-icon-medallion/);
+  assert.ok(applicationEntry.indexOf('import App from "./App.jsx"') < applicationEntry.indexOf('import "./ddpro-icon-system-fix.css"'));
+  assert.match(applicationStyles, /:is\\(\\.module-page, \\.operations-module\\) button\\.ddpro-icon-action \\{[\\s\\S]*?background: transparent/);
+});
+
 test("module action buttons use the metal/emerald palette instead of legacy bronze rectangles", () => {
-  const dataCardActions = applicationStyles.match(/\.data-card button,[\s\S]*?\n}\n/)?.[0] || "";
-  const offerActions = applicationStyles.match(/\.offers-toolbar-actions button:not\(\.ddpro-icon-action\) \{[\s\S]*?\n}\n/)?.[0] || "";
-  assert.match(dataCardActions, /background:[\s\S]*linear-gradient\(145deg, rgba\(34, 42, 44/);
-  assert.match(offerActions, /border: 1px solid rgba\(203, 213, 215/);
-  assert.doesNotMatch(`${dataCardActions}\n${offerActions}`, /#584433|#342719|#403526|#211c15|#e3c394/);
-  assert.match(applicationStyles, /\.module-action-link,[\s\S]*?min-height: 44px/);
-  assert.match(applicationStyles, /\.dashboard-reference-return \{[\s\S]*?min-height: 44px/);
+  const dataCardActions = applicationStyles.match(/\\.data-card button,[\\s\\S]*?\\n}\\n/)?.[0] || "";
+  const offerActions = applicationStyles.match(/\\.offers-toolbar-actions button:not\\(\\.ddpro-icon-action\\) \\{[\\s\\S]*?\\n}\\n/)?.[0] || "";
+  assert.match(dataCardActions, /background:[\\s\\S]*linear-gradient\\(145deg, rgba\\(34, 42, 44/);
+  assert.match(offerActions, /border: 1px solid rgba\\(203, 213, 215/);
+  assert.doesNotMatch(`${dataCardActions}\\n${offerActions}`, /#584433|#342719|#403526|#211c15|#e3c394/);
+  assert.match(applicationStyles, /\\.module-action-link,[\\s\\S]*?min-height: 44px/);
+  assert.match(applicationStyles, /\\.dashboard-reference-return \\{[\\s\\S]*?min-height: 44px/);
 });
 
 test("catalog, CRM, offers, procurement, documents, messages, calendar, finance, and reports use icon actions", async () => {
@@ -61,7 +74,7 @@ test("catalog, CRM, offers, procurement, documents, messages, calendar, finance,
     "../src/modules/OperationsModule.jsx",
   ];
   const sources = await Promise.all(modules.map(read));
-  const combined = sources.join("\n");
+  const combined = sources.join("\\n");
   for (const icon of ["edit", "delete", "save", "print", "settings", "add"]) {
     assert.ok(
       combined.includes(`icon="${icon}"`) ||
