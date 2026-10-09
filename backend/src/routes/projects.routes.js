@@ -6,6 +6,7 @@
 // ============================================================
 
 import express from "express";
+import rateLimit from "express-rate-limit";
 import { requireGoogleSession } from "../services/google-integration.service.js";
 import {
   createProject,
@@ -14,6 +15,7 @@ import {
   getProjects,
   updateProject,
 } from "../controllers/projects.controller.js";
+import { importGoogleProjects } from "../controllers/project-import.controller.js";
 
 const router = express.Router();
 
@@ -25,6 +27,14 @@ router.use(requireGoogleSession);
 
 // GET / - Get all projects
 router.get("/", getProjects);
+
+// POST /import/google-sheets - Import the authenticated user's Projects sheet
+router.post("/import/google-sheets", rateLimit({
+  windowMs: 60_000,
+  limit: 5,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+}), importGoogleProjects);
 
 // GET /:id - Get project by ID
 router.get("/:id", getProjectById);

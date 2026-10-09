@@ -26,6 +26,7 @@ const GOOGLE_SCOPES = [
   "email",
   "https://www.googleapis.com/auth/gmail.readonly",
   "https://www.googleapis.com/auth/calendar.events",
+  "https://www.googleapis.com/auth/spreadsheets.readonly",
 ];
 const getOAuthConfig = () => ({
   clientId: process.env.GOOGLE_CLIENT_ID,
@@ -316,7 +317,9 @@ export const completeGoogleOAuth = async (req, res, next) => {
       account: email,
       value: {
         accessToken: token.access_token,
-        refreshToken: token.refresh_token || null,
+        refreshToken: token.refresh_token ||
+          (await readIntegrationToken({ provider: "google", account: email }))?.refreshToken ||
+          null,
         expiresAt: Date.now() + (Number(token.expires_in) || 3600) * 1000,
         scopes: token.scope || "",
         sessionVersion,

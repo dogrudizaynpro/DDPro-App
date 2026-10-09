@@ -19,6 +19,14 @@ CREATE TABLE IF NOT EXISTS projects (
   area_m2 NUMERIC CHECK (area_m2 IS NULL OR area_m2 >= 0),
   systems JSONB NOT NULL DEFAULT '[]'::jsonb,
   notes TEXT NOT NULL DEFAULT '',
+  customer TEXT,
+  company TEXT,
+  location TEXT,
+  product TEXT,
+  start_date TEXT,
+  end_date TEXT,
+  source_data JSONB NOT NULL DEFAULT '{}'::jsonb,
+  import_source_key TEXT,
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()
 );
