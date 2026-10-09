@@ -1901,11 +1901,11 @@ function App() {
   };
 
 
-  const sendAiMessage = async (event) => {
+  const sendAiMessage = async (event, messageOverride = "") => {
     event.preventDefault();
 
     const attachment = aiAttachment;
-    const message = aiInput.trim() || (attachment
+    const message = messageOverride.trim() || aiInput.trim() || (attachment
       ? "Ekli dosyayı analiz et, önemli bilgileri çıkar ve uygun DDPro modülünü öner. Herhangi bir kaydı kendiliğinden oluşturma veya değiştirme."
       : "");
 
