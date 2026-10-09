@@ -583,8 +583,8 @@ test("one-time exchange authenticates browser status and real provider test rout
       ...decryptIntegrationToken(expiredToken), refreshToken: "",
     });
     await assert.rejects(getGoogleAccessToken("owner@example.com"), (error) => {
-      assert.equal(error.statusCode, 502);
-      assert.equal(error.code, "GOOGLE_API_AUTH_ERROR");
+      assert.equal(error.statusCode, 401);
+      assert.equal(error.code, "GOOGLE_CONNECTION_REQUIRED");
       return true;
     });
     assert.equal(googleTokenDeletes, 0);
@@ -611,7 +611,7 @@ test("one-time exchange authenticates browser status and real provider test rout
   }
 });
 
-test("integration status does not treat a cached AI provider test as live connectivity", async () => {
+test("integration status reports a recent successful AI provider health test", async () => {
   const { testIntegrationConnection } = await import("../src/services/integration-health.service.js");
   const testData = await testIntegrationConnection("ai");
   assert.equal(testData.connected, true);
@@ -620,8 +620,8 @@ test("integration status does not treat a cached AI provider test as live connec
     headers: { Origin: "https://dogrudizaynpro.github.io" },
   });
   const body = await status.json();
-  assert.equal(body.data.ai.connected, false);
-  assert.equal(body.data.ai.status, "configured_not_tested");
+  assert.equal(body.data.ai.connected, true);
+  assert.equal(body.data.ai.status, "connected");
   assert.equal(body.data.ai.lastTest.connected, true);
   assert.doesNotMatch(JSON.stringify(body), /test-ai-provider-key/);
 });
@@ -661,10 +661,10 @@ test("failed Gmail 401 preserves the exchanged session, encrypted token and Cale
     assert.equal(failed.headers.get("set-cookie"), null);
     const failure = await failed.json();
     assert.equal(failure.code, "GOOGLE_API_AUTH_ERROR");
-    assert.equal(failure.data.connected, true);
+    assert.equal(failure.data.connected, false);
     const status = await originalFetch(`${baseUrl}/api/integrations/status`, { headers });
     const { data } = await status.json();
-    assert.equal(data.gmail.connected, true);
+    assert.equal(data.gmail.connected, false);
     assert.equal(data.googleCalendar.connected, true);
     assert.equal(data.gmail.lastTest.testSucceeded, false);
     assert.equal(googleTokenDeletes, deletesBefore);

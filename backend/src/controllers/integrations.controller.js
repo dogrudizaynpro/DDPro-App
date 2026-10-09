@@ -4,7 +4,11 @@ import {
   getGoogleSessionAccount,
 } from "../services/google-integration.service.js";
 import { websiteCmsConfigured } from "../services/website-cms.service.js";
-import { getIntegrationTestResult, testIntegrationConnection } from "../services/integration-health.service.js";
+import {
+  getIntegrationHealthStatus,
+  getIntegrationTestResult,
+  testIntegrationConnection,
+} from "../services/integration-health.service.js";
 import { getWhatsAppConfigurationStatus } from "../services/whatsapp.service.js";
 
 export const getIntegrationStatus = async (req, res, next) => {
@@ -46,27 +50,16 @@ export const getIntegrationStatus = async (req, res, next) => {
   const statusAfterTest = (provider, configured, sessionReady = false) => {
     const result = last(provider);
     const checkedAt = new Date().toISOString();
-    const testIsFresh =
-      result && Date.now() - Date.parse(result.testedAt) < 5 * 60 * 1000;
-    if (!configured) return { connected: false, status: "credentials_required", lastTest: result, checkedAt };
-    if (sessionReady && ["gmail", "googleCalendar", "google"].includes(provider)) {
-      return { connected: true, status: "connected", lastTest: result, checkedAt };
-    }
-    if (result && !result.connected && testIsFresh) {
-      return { connected: false, status: "test_failed", lastTest: result, checkedAt };
-    }
     const requiresGoogleSession = ["gmail", "googleCalendar", "crm"].includes(provider);
-    if (
-      provider !== "ai" &&
-      result?.connected &&
-      testIsFresh &&
-      (!requiresGoogleSession || sessionReady)
-    ) {
-      return { connected: true, status: "connected", lastTest: result, checkedAt };
-    }
+    const state = getIntegrationHealthStatus({
+      configured,
+      result,
+      requiresSession: requiresGoogleSession,
+      sessionReady,
+    });
     return {
-      connected: false,
-      status: result && !result.connected ? "test_failed" : "configured_not_tested",
+      connected: state === "connected",
+      status: state,
       lastTest: result,
       checkedAt,
     };
@@ -83,7 +76,16 @@ export const getIntegrationStatus = async (req, res, next) => {
   );
   const googleConnected = googleConfigured && google.connected && Boolean(googleAccount);
   const supabaseConnected = coreDataConnected && crmStorageConnected;
-  const crmConnected = crmStorageConnected && googleConnected;
+  const supabaseStatus = !supabaseConfigured
+    ? "credentials_required"
+    : supabaseConnected ? "connected" : "service_unavailable";
+  const supabaseCheckedAt = new Date().toISOString();
+  const supabaseLastTest = {
+    connected: supabaseConnected,
+    testSucceeded: supabaseConnected,
+    testedAt: supabaseCheckedAt,
+    error: supabaseConnected ? "" : "Supabase core data or integration storage could not be reached.",
+  };
   const checkedAt = new Date().toISOString();
 
   res.status(200).json({
@@ -105,10 +107,7 @@ export const getIntegrationStatus = async (req, res, next) => {
       },
       whatsapp: {
         ...whatsapp,
-        connected: whatsapp.configured,
-        status: whatsapp.configured ? "connected" : "credentials_required",
-        lastTest: last("whatsapp"),
-        checkedAt,
+        ...statusAfterTest("whatsapp", whatsapp.configured),
       },
       research: {
         configured: Boolean(process.env.RESEARCH_API_URL && process.env.RESEARCH_API_KEY),
@@ -122,20 +121,16 @@ export const getIntegrationStatus = async (req, res, next) => {
       supabase: {
         configured: supabaseConfigured,
         connected: supabaseConfigured && supabaseConnected,
+        status: supabaseStatus,
+        lastTest: supabaseLastTest,
+        checkedAt: supabaseCheckedAt,
         coreDataConnected,
         integrationStorageConfigured: databaseConfigured,
         integrationStorageConnected: crmStorageConnected,
       },
       crm: {
         configured: crmStorageConnected,
-        connected: crmConnected,
-        status: !crmStorageConnected
-          ? "credentials_required"
-          : crmConnected
-            ? "connected"
-            : "authorization_required",
-        lastTest: last("crm"),
-        checkedAt,
+        ...statusAfterTest("crm", crmStorageConnected, googleConnected),
       },
       backendApi: { configured: true, connected: true, status: "connected", checkedAt },
       web: {
@@ -178,7 +173,7 @@ export const postIntegrationTest = async (req, res, next) => {
           upstreamStatus: error.upstreamStatus,
           googleApiError: error.googleApiError,
         }),
-        data: { provider, connected: ["gmail", "googleCalendar"].includes(provider) && Boolean(account), testSucceeded: false },
+        data: { provider, connected: false, testSucceeded: false },
       });
     }
     return next(error);
