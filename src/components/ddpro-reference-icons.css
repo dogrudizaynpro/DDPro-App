@@ -1,0 +1,39 @@
+.ddpro-icon-reference {
+  display: inline-block;
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  flex: 0 0 auto;
+  overflow: hidden;
+  border-radius: 50%;
+  background-image: var(--ddpro-icon-reference);
+  background-repeat: no-repeat;
+  background-size: 480% 320%;
+  background-position: var(--ddpro-icon-x) var(--ddpro-icon-y);
+  vertical-align: middle;
+}
+
+.ddpro-icon-reference::before,
+.ddpro-icon-reference::after {
+  display: none;
+  content: none;
+}
+
+.ddpro-icon-reference.module-icon {
+  width: 33px;
+  height: 33px;
+  min-width: 33px;
+}
+
+.ddpro-icon-reference.stat-icon {
+  width: 48px;
+  height: 48px;
+  min-width: 48px;
+}
+
+button.ddpro-icon-action > .ddpro-icon-reference {
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  margin: 0;
+}
