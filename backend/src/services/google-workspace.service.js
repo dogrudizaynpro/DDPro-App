@@ -2,6 +2,17 @@ import { getGoogleAccessToken } from "./google-integration.service.js";
 import { createCrmContact } from "./crm.service.js";
 import { GoogleApiError } from "./google-api-error.js";
 
+const getGoogleOperation = (endpoint) => {
+  const path = endpoint.split("?")[0];
+  if (path === "/gmail/v1/users/me/profile") return "gmail.profile";
+  if (path === "/gmail/v1/users/me/messages") return "gmail.messages.list";
+  if (/^\/gmail\/v1\/users\/me\/messages\/[^/]+$/.test(path)) return "gmail.messages.get";
+  if (path === "/calendar/v3/users/me/calendarList") return "calendar.list";
+  if (path === "/calendar/v3/calendars/primary/events") return "calendar.events";
+  if (/^\/calendar\/v3\/calendars\/primary\/events\/[^/]+$/.test(path)) return "calendar.events.get";
+  return "google.api.request";
+};
+
 const googleRequest = async (account, endpoint, options = {}) => {
   const accessToken = await getGoogleAccessToken(account);
   let response;
@@ -31,7 +42,7 @@ const googleRequest = async (account, endpoint, options = {}) => {
   }
   if (!response.ok) {
     throw new GoogleApiError(response.status, payload, [accessToken],
-      endpoint.startsWith("/gmail/") ? "gmail" : "googleCalendar");
+      endpoint.startsWith("/gmail/") ? "gmail" : "googleCalendar", getGoogleOperation(endpoint));
   }
   return payload;
 };

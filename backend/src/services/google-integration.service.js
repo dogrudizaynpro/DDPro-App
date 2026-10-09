@@ -538,7 +538,7 @@ export const getGoogleAccessToken = async (account) => {
         message: refreshed.error_description || "Google access refresh failed. The saved connection was kept.",
         errors: typeof refreshed.error === "string" ? [{ reason: refreshed.error }] : [],
       },
-    }, [token.accessToken, token.refreshToken]);
+    }, [token.accessToken, token.refreshToken], "google", "oauth.token.refresh");
   }
   const updated = {
     ...token,

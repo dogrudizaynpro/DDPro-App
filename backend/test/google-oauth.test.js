@@ -447,7 +447,8 @@ test("one-time exchange authenticates browser status and real provider test rout
           : httpStatus === 429 ? "GOOGLE_API_RATE_LIMIT" : "GOOGLE_API_ERROR");
       assert.equal(failureBody.message, `Google failure: ${reason}`);
       assert.deepEqual(failureBody.googleApiError, {
-        httpStatus, category, message: `Google failure: ${reason}`, reasons: [reason],
+        httpStatus, operation: "gmail.profile", category,
+        message: `Google failure: ${reason}`, reasons: [reason],
       });
       assert.equal(failureBody.data.connected, true);
       assert.equal(failureBody.data.testSucceeded, false);
@@ -467,6 +468,7 @@ test("one-time exchange authenticates browser status and real provider test rout
       const workspaceBody = await workspaceFailure.json();
       assert.equal(workspaceBody.provider, "googleCalendar");
       assert.equal(workspaceBody.upstreamStatus, httpStatus);
+      assert.equal(workspaceBody.googleApiError.operation, "calendar.events");
     }
 
     const anonymousStatus = (await (await originalFetch(`${baseUrl}/api/integrations/status`)).json()).data;
@@ -512,6 +514,7 @@ test("one-time exchange authenticates browser status and real provider test rout
       const body = await refreshFailure.json();
       assert.equal(body.upstreamStatus, httpStatus);
       assert.ok(body.googleApiError);
+      assert.equal(body.googleApiError.operation, "oauth.token.refresh");
       assert.doesNotMatch(JSON.stringify(body), /test-refresh|test-access|test-secret/);
       assert.deepEqual(savedToken.encrypted_token, expiredToken);
       assert.equal(googleTokenDeletes, 0);
@@ -525,6 +528,7 @@ test("one-time exchange authenticates browser status and real provider test rout
       assert.equal(error.statusCode, 502);
       assert.equal(error.code, "GOOGLE_API_AUTH_ERROR");
       assert.equal(error.upstreamStatus, 401);
+      assert.equal(error.googleApiError.operation, "oauth.token.refresh");
       assert.doesNotMatch(error.message, /test-refresh/);
       return true;
     });

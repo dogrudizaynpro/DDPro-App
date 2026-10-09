@@ -20,6 +20,7 @@ test("Google API errors separate upstream 401 from session 401 and preserve safe
       : status === 403 ? "GOOGLE_API_ACCESS_DENIED"
         : status === 429 ? "GOOGLE_API_RATE_LIMIT" : "GOOGLE_API_ERROR");
     assert.equal(error.googleApiError.httpStatus, status);
+    assert.equal(error.googleApiError.operation, "google.api.request");
     assert.equal(error.message, "Gmail API has not been used in project before or it is disabled.");
     assert.deepEqual(error.googleApiError.reasons, ["accessNotConfigured", "forbidden"]);
     assert.equal(error.expose, true);
@@ -55,8 +56,10 @@ test("missing or malformed Google error bodies retain the real HTTP status", () 
   }
 });
 
-test("workspace error middleware forwards safe metadata and logs only upstream status/category", () => {
-  const error = new GoogleApiError(429, { error: { message: "Rate limit exceeded", errors: [{ reason: "rateLimitExceeded" }] } });
+test("workspace error middleware forwards safe metadata and logs the provider operation", () => {
+  const error = new GoogleApiError(403, {
+    error: { message: "Calendar access denied", errors: [{ reason: "accessNotConfigured" }] },
+  }, [], "googleCalendar", "calendar.events");
   const originalLog = console.error;
   const logs = [];
   console.error = (...args) => logs.push(args);
@@ -67,13 +70,19 @@ test("workspace error middleware forwards safe metadata and logs only upstream s
       status(value) { httpStatus = value; return this; },
       json(value) { body = value; },
     }, () => {});
-    assert.equal(httpStatus, 429);
+    assert.equal(httpStatus, 403);
     assert.deepEqual(body.googleApiError, error.googleApiError);
-    assert.equal(body.message, "Rate limit exceeded");
-    assert.equal(body.code, "GOOGLE_API_RATE_LIMIT");
-    assert.equal(body.upstreamStatus, 429);
-    assert.equal(body.provider, "google");
-    assert.deepEqual(logs, [["Google API error:", { upstreamStatus: 429, category: "rate_limit" }]]);
+    assert.equal(body.message, "Calendar access denied");
+    assert.equal(body.code, "GOOGLE_API_ACCESS_DENIED");
+    assert.equal(body.upstreamStatus, 403);
+    assert.equal(body.provider, "googleCalendar");
+    assert.deepEqual(logs, [["Google API error:", {
+      provider: "googleCalendar",
+      operation: "calendar.events",
+      upstreamStatus: 403,
+      category: "access_denied",
+      reasons: ["accessNotConfigured"],
+    }]]);
   } finally {
     console.error = originalLog;
   }

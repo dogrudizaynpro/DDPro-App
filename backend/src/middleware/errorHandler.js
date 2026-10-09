@@ -11,8 +11,11 @@ export const errorHandler = (err, req, res, next) => {
 
   if (err.googleApiError) {
     console.error("Google API error:", {
+      provider: err.provider,
+      operation: err.googleApiError.operation,
       upstreamStatus: err.googleApiError.httpStatus,
       category: err.googleApiError.category,
+      reasons: err.googleApiError.reasons,
     });
   } else if (isDevelopment) {
     console.error("Error:", {
