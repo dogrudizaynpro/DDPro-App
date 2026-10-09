@@ -7,12 +7,50 @@ import { searchResearchProvider } from "./research-provider.service.js";
 import { testWhatsAppConnection } from "./whatsapp.service.js";
 
 const recentTests = new Map();
+const testResultLifetime = 5 * 60 * 1000;
 
 const resultKey = (provider, account) =>
   ["gmail", "googleCalendar"].includes(provider) ? `${provider}:${account}` : provider;
 
 export const getIntegrationTestResult = (provider, account = "") =>
   recentTests.get(resultKey(provider, account)) || null;
+
+export const getIntegrationHealthStatus = ({
+  configured,
+  result,
+  requiresSession = false,
+  sessionReady = false,
+  now = Date.now(),
+}) => {
+  if (!configured) return "credentials_required";
+  const testedAt = Date.parse(result?.testedAt || "");
+  const testAge = now - testedAt;
+  const fresh = Number.isFinite(testedAt) && testAge >= 0 && testAge < testResultLifetime;
+  if (fresh && result.connected) return "connected";
+  if (fresh && !result.connected) {
+    if (result.googleApiError?.operation === "oauth.token.refresh") {
+      return result.googleApiError.category === "connection_invalid"
+        ? "authorization_required"
+        : "token_refresh_failed";
+    }
+    if (result.googleApiError?.category === "access_denied") {
+      const reasons = result.googleApiError.reasons || [];
+      return reasons.some((reason) => /insufficientPermissions|insufficient_scope|accessNotConfigured/i.test(reason))
+        ? "permission_required"
+        : "request_rejected";
+    }
+    if (result.googleApiError?.category === "authorization") return "request_rejected";
+    if (["GOOGLE_CONNECTION_REQUIRED", "BROWSER_SESSION_REQUIRED"].includes(result.code)) {
+      return "authorization_required";
+    }
+    if ([502, 503, 504].includes(result.statusCode)) return "service_unavailable";
+    if (result.statusCode === 401) return "authorization_required";
+    if ([400, 403, 429].includes(result.statusCode)) return "request_rejected";
+    return "test_failed";
+  }
+  if (requiresSession && !sessionReady) return "authorization_required";
+  return "configured_not_tested";
+};
 
 const recordResult = (provider, account, result) => {
   const value = { ...result, testedAt: new Date().toISOString() };
@@ -130,6 +168,8 @@ export const testIntegrationConnection = async (provider, account = "") => {
       connected: false,
       testSucceeded: false,
       error: error.expose ? error.message : "Provider connection test failed.",
+      ...(error.code && { code: error.code }),
+      ...(error.statusCode && { statusCode: error.statusCode }),
       ...(error.googleApiError && { googleApiError: error.googleApiError }),
     });
     throw error;

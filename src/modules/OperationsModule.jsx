@@ -226,25 +226,26 @@ const readRecords = (key) => {
 
 const timestamp = () => new Date().toISOString();
 
-const applyAiVerification = (status, testResult, testError) => {
-  if (!status?.ai || (!testResult && !testError)) return status;
-  const connected = !testError && testResult?.data?.connected === true;
-  return {
-    ...status,
-    ai: {
-      ...status.ai,
-      connected,
-      status: connected ? "connected" : "test_failed",
-      lastTest: testError
-        ? {
-            connected: false,
-            testSucceeded: false,
-            testedAt: new Date().toISOString(),
-            error: testError.message || "AI sağlayıcı bağlantı testi başarısız.",
-          }
-        : testResult.data,
-    },
-  };
+const integrationProbes = (status) => [
+  ["ai", status.ai?.configured],
+  ["gmail", status.gmail?.configured && status.google?.connected],
+  ["googleCalendar", status.googleCalendar?.configured && status.google?.connected],
+  ["whatsapp", status.whatsapp?.sendConfigured],
+  ["crm", status.crm?.configured && status.google?.connected],
+  ["supabase", status.supabase?.configured],
+  ["website", status.web?.managementConfigured && status.web?.inboundLeadConfigured],
+  ["appStore", status.appStore?.configured],
+  ["research", status.research?.configured],
+].filter(([, configured]) => configured).map(([provider]) => provider);
+
+const probeConfiguredIntegrations = async (status) => {
+  const staleProviders = integrationProbes(status).filter((provider) => {
+    const testedAt = Date.parse(status[provider === "website" ? "web" : provider]?.lastTest?.testedAt || "");
+    const age = Date.now() - testedAt;
+    return !Number.isFinite(testedAt) || age < 0 || age >= 5 * 60 * 1000;
+  });
+  await Promise.allSettled(staleProviders.map((provider) => testIntegrationConnection(provider)));
+  return getIntegrationStatus();
 };
 
 function IntegrationSettings({ onNavigate, hubMode = false }) {
@@ -260,19 +261,9 @@ function IntegrationSettings({ onNavigate, hubMode = false }) {
     setStatusLoading(true);
     try {
       let nextStatus = await getIntegrationStatus();
-      if (verifyAi && nextStatus.ai?.configured) {
-        try {
-          aiTestResult = await testIntegrationConnection("ai");
-          aiTestError = undefined;
-        } catch (error) {
-          aiTestError = error;
-        }
-        nextStatus = await getIntegrationStatus();
-      }
-      setStatus(applyAiVerification(nextStatus, aiTestResult, aiTestError));
-      if (aiTestError) {
-        setError(aiTestError.message || "AI sağlayıcı bağlantı testi başarısız.");
-      }
+      if (verifyAi) nextStatus = await probeConfiguredIntegrations(nextStatus);
+      setStatus(nextStatus);
+      if (aiTestError) setError(aiTestError.message || "AI sağlayıcı bağlantı testi başarısız.");
     } catch (statusError) {
       setError(statusError.message || "Entegrasyon durumu backend'den alınamadı.");
     } finally {
@@ -298,20 +289,10 @@ function IntegrationSettings({ onNavigate, hubMode = false }) {
     const load = async () => {
       setStatusLoading(true);
       try {
-        let value = await getIntegrationStatus();
-        let aiTestResult;
-        let aiTestError;
-        if (value.ai?.configured) {
-          try {
-            aiTestResult = await testIntegrationConnection("ai");
-          } catch (error) {
-            aiTestError = error;
-            if (active) setError(error.message || "AI sağlayıcı bağlantı testi başarısız.");
-          }
-          value = await getIntegrationStatus();
-        }
+        const initialStatus = await getIntegrationStatus();
+        const value = await probeConfiguredIntegrations(initialStatus);
         if (active) {
-          setStatus(applyAiVerification(value, aiTestResult, aiTestError));
+          setStatus(value);
           if (oauthResult.get("integration") === "google_connected" &&
               value.gmail?.connected && value.googleCalendar?.connected) {
             setNotice("Google hesabı güvenli OAuth akışıyla bağlandı. Gmail ve Google Calendar durumları backend'den doğrulandı.");
@@ -332,8 +313,13 @@ function IntegrationSettings({ onNavigate, hubMode = false }) {
   const statusLabel = ({ connected = false, configured = false, status: state = "" } = {}) => {
     if (connected) return "BAĞLI";
     if (!configured) return "YAPILANDIRMA GEREKLİ";
+    if (state === "configured_not_tested") return "YAPILANDIRILDI · TEST EDİLMEDİ";
+    if (state === "authorization_required") return "YETKİLENDİRME GEREKLİ";
+    if (state === "token_refresh_failed") return "TOKEN YENİLEME BAŞARISIZ";
+    if (state === "permission_required") return "GEREKLİ YETKİ EKSİK";
+    if (state === "service_unavailable") return "SERVİSE ERİŞİLEMİYOR";
+    if (state === "request_rejected") return "API İSTEĞİ REDDEDİLDİ";
     if (state === "test_failed") return "BAĞLANTI TESTİ BAŞARISIZ";
-    if (state === "authorization_required") return "GOOGLE OTURUMU GEREKLİ";
     return "BAĞLI DEĞİL · bağlantı testi/oturum bekleniyor";
   };
 

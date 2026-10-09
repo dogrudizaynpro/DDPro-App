@@ -509,9 +509,10 @@ export const getGoogleAccessToken = async (account) => {
   if (!token) throw Object.assign(new Error("Google account is not connected."), { statusCode: 401, expose: true });
   if (token.expiresAt > Date.now() + 60_000) return token.accessToken;
   if (!token.refreshToken) {
-    throw new GoogleApiError(401, {
-      error: { message: "Google access expired and cannot be refreshed. The saved connection was kept." },
-    });
+    throw Object.assign(
+      new Error("Google access expired and cannot be refreshed. The saved connection was kept."),
+      { statusCode: 401, code: "GOOGLE_CONNECTION_REQUIRED", expose: true }
+    );
   }
 
   let response;

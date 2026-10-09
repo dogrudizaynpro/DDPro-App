@@ -85,6 +85,13 @@ function AIModule({
   const [dragActive, setDragActive] = useState(false);
   const [previewUrl, setPreviewUrl] = useState("");
   const [providerStatus, setProviderStatus] = useState("checking");
+  const [voiceListening, setVoiceListening] = useState(false);
+  const [voiceError, setVoiceError] = useState("");
+  const recognitionRef = useRef(null);
+  const voiceResponseStartRef = useRef(null);
+  const SpeechRecognition = typeof window === "undefined"
+    ? null
+    : window.SpeechRecognition || window.webkitSpeechRecognition;
   const allowedFileExtensions = new Set(["png", "jpg", "jpeg", "webp", "xlsx", "csv", "pdf", "docx", "txt"]);
   const maxFileSize = 10 * 1024 * 1024;
   const isImageAttachment = (file) =>
@@ -113,6 +120,77 @@ function AIModule({
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    const responseStart = voiceResponseStartRef.current;
+    if (responseStart === null || aiSending) return;
+    const response = aiMessages.find((message, index) =>
+      index >= responseStart && message.role === "assistant"
+    );
+    if (!response) return;
+    voiceResponseStartRef.current = null;
+    if (!response.text?.trim() || !window.speechSynthesis || !window.SpeechSynthesisUtterance) return;
+    const utterance = new window.SpeechSynthesisUtterance(response.text);
+    utterance.lang = "tr-TR";
+    window.speechSynthesis.speak(utterance);
+  }, [aiMessages, aiSending]);
+
+  useEffect(() => () => {
+    recognitionRef.current?.abort();
+    window.speechSynthesis?.cancel();
+  }, []);
+
+  const toggleVoiceInput = () => {
+    if (voiceListening) {
+      recognitionRef.current?.stop();
+      return;
+    }
+    if (!SpeechRecognition) {
+      setVoiceError("Bu tarayıcı sesli komutları desteklemiyor. Yazılı mesaj gönderebilirsiniz.");
+      return;
+    }
+    if (aiSending) return;
+    setVoiceError("");
+    window.speechSynthesis?.cancel();
+    const recognition = new SpeechRecognition();
+    recognition.lang = "tr-TR";
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+    recognition.onresult = (event) => {
+      const transcript = Array.from(event.results || [])
+        .map((result) => result[0]?.transcript || "")
+        .join(" ")
+        .trim();
+      if (!transcript) {
+        setVoiceError("Sesli komut anlaşılamadı. Tekrar deneyin veya mesajınızı yazın.");
+        return;
+      }
+      setAiInput(transcript);
+      voiceResponseStartRef.current = aiMessages.length + 1;
+      sendAiMessage({ preventDefault() {} }, transcript);
+    };
+    recognition.onerror = (event) => {
+      const errors = {
+        "not-allowed": "Mikrofon izni verilmedi. Tarayıcı izinlerini kontrol edin.",
+        "no-speech": "Ses algılanmadı. Tekrar deneyin.",
+        "audio-capture": "Mikrofon kullanılamıyor.",
+      };
+      setVoiceError(errors[event.error] || "Sesli komut alınamadı. Tekrar deneyin.");
+    };
+    recognition.onend = () => {
+      recognitionRef.current = null;
+      setVoiceListening(false);
+    };
+    recognitionRef.current = recognition;
+    try {
+      recognition.start();
+      setVoiceListening(true);
+    } catch {
+      recognitionRef.current = null;
+      setVoiceListening(false);
+      setVoiceError("Ses tanıma başlatılamadı. Tekrar deneyin.");
+    }
+  };
 
   const activateRole = (prompt) => {
     setAiInput(prompt);
@@ -440,6 +518,17 @@ function AIModule({
             >
               <span aria-hidden="true">＋</span>
             </button>
+            <button
+              className={`ai-voice-button${voiceListening ? " is-listening" : ""}`}
+              type="button"
+              aria-label={voiceListening ? "Sesli komutu durdur" : "Sesli komut başlat"}
+              aria-pressed={voiceListening}
+              disabled={aiSending}
+              onClick={toggleVoiceInput}
+            >
+              <span aria-hidden="true">🎙</span>
+              {voiceListening ? "Dinleniyor…" : "Sesli komut"}
+            </button>
             <button type="submit" disabled={aiSending || (!aiInput.trim() && !aiAttachment)}>
               <span>{aiSending ? (aiAttachment ? "Yükleniyor ve analiz ediliyor…" : "Yanıt bekleniyor…") : "Analizi başlat"}</span>
               <span aria-hidden="true">→</span>
@@ -462,6 +551,12 @@ function AIModule({
               </div>
             ) : null}
             {fileError ? <p className="ai-file-error" role="alert">{fileError}</p> : null}
+            {voiceError ? <p className="ai-voice-status" role="alert">{voiceError}</p> : null}
+            {!voiceError ? (
+              <p className="ai-voice-status">
+                Sesli komutlar yazılı mesajlarla aynı güvenli AI akışını kullanır. Ses tanıma tarayıcı tarafından işlenir.
+              </p>
+            ) : null}
           </form>
         </section>
       </div>
