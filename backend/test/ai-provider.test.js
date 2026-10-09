@@ -164,7 +164,7 @@ test("AI provider connection test succeeds with the production request shape", a
   assert.ok(Array.isArray(requests[0].body.tools));
 });
 
-test("tool calls are executed through the Chat Completions tool message loop", async () => {
+test("unavailable provider tools return an explicit error instead of a fabricated answer", async () => {
   responses.push(
     completion({
       role: "assistant",
@@ -174,21 +174,22 @@ test("tool calls are executed through the Chat Completions tool message loop", a
         type: "function",
         function: { name: "unknown_tool", arguments: "{}" },
       }],
-    }),
-    completion({ role: "assistant", content: "Done." })
+    })
   );
-  const result = await requestAiCompletion({ message: "List projects.", context: {} });
+  await assert.rejects(
+    requestAiCompletion({ message: "List projects.", context: {} }),
+    (error) => {
+      assert.equal(error.statusCode, 502);
+      assert.equal(error.code, "AI_TOOL_UNAVAILABLE");
+      assert.match(error.message, /unavailable/);
+      return true;
+    }
+  );
 
-  assert.deepEqual(result, { answer: "Done." });
-  assert.equal(requests.length, 2);
-  const followUp = requests[1].body.messages;
-  assert.equal(followUp.at(-2).tool_calls[0].id, "call_1");
-  assert.deepEqual(followUp.at(-1), {
-    role: "tool",
-    tool_call_id: "call_1",
-    content: JSON.stringify({ error: "Tool is not available." }),
-  });
-  assert.equal("temperature" in requests[1].body, false);
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].body.tools.some(({ function: tool }) =>
+    tool.name === "read_records"
+  ), true);
 });
 
 test("prepare_write never executes a write and still requires explicit confirmation storage", async () => {
@@ -214,21 +215,20 @@ test("prepare_write never executes a write and still requires explicit confirmat
 
 test("HTTP 400 from the provider surfaces a safe error without exposing the API key", async () => {
   const badRequest = { status: 400, body: { error: { message: "Bad request" } } };
-  responses.push(badRequest, badRequest);
+  responses.push(badRequest);
 
   await assert.rejects(
     requestAiCompletion({ message: "Connection check.", context: {} }),
     (error) => {
       assert.equal(error.statusCode, 502);
-      assert.equal(error.code, "AI_PROVIDER_REQUEST_FAILED");
-      assert.equal(error.message, "AI provider request failed (HTTP 400).");
+      assert.equal(error.code, "AI_PROVIDER_TOOL_REQUEST_REJECTED");
+      assert.equal(error.message, "AI provider rejected the request containing DDPro operational tools (HTTP 400).");
       assert.equal(error.message.includes(TEST_API_KEY), false);
       return true;
     }
   );
-  assert.equal(requests.length, 2);
+  assert.equal(requests.length, 1);
   assert.ok(requests[0].body.tools);
-  assert.equal("tools" in requests[1].body, false);
   for (const { body } of requests) assert.equal("temperature" in body, false);
 });
 
