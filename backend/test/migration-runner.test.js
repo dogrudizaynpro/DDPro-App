@@ -84,7 +84,7 @@ test("all migrations are applied in numeric order in one locked transaction", as
     skipped: [],
   });
   assert.equal(result.applied[0], "001_base_schema");
-  assert.equal(result.applied.at(-1), "016_whatsapp_inbound");
+  assert.equal(result.applied.at(-1), "017_project_sheet_import");
   assert.equal(pool.options.ssl.rejectUnauthorized, true);
   assert.equal(pool.queries[0], "BEGIN");
   assert.match(pool.queries[1], /pg_advisory_xact_lock/);
@@ -153,7 +153,7 @@ test("previously applied migrations are skipped and modified ones fail closed", 
     connectionString: "postgresql://example.invalid/ddpro",
     PoolClass: HistoryPool,
   });
-  assert.deepEqual(result.applied, ["016_whatsapp_inbound"]);
+  assert.deepEqual(result.applied, ["017_project_sheet_import"]);
   assert.equal(result.skipped.length, migrations.length - 1);
   for (const migration of migrations.slice(0, -1)) {
     assert.ok(!pool.queries.includes(migration.sql));
