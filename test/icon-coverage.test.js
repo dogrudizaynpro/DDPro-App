@@ -8,6 +8,7 @@ const [iconSource, buttonSource, iconStyles] = await Promise.all([
   read("../src/components/DDProActionButton.jsx"),
   read("../src/ddpro-premium-ui.css"),
 ]);
+const applicationStyles = await read("../src/styles.css");
 
 test("approved icon crops use the reference image's native dimensions and actual action areas", async () => {
   const reference = await readFile(new URL("../IMG_9199.png", import.meta.url));
@@ -36,6 +37,16 @@ test("icon action buttons preserve accessible names, native keyboard support, an
   assert.match(iconStyles, /width: 48px/);
   assert.match(iconStyles, /min-height: 48px/);
   assert.match(iconStyles, /:focus-visible/);
+});
+
+test("module action buttons use the metal/emerald palette instead of legacy bronze rectangles", () => {
+  const dataCardActions = applicationStyles.match(/\.data-card button,[\s\S]*?\n}\n/)?.[0] || "";
+  const offerActions = applicationStyles.match(/\.offers-toolbar-actions button:not\(\.ddpro-icon-action\) \{[\s\S]*?\n}\n/)?.[0] || "";
+  assert.match(dataCardActions, /background:[\s\S]*linear-gradient\(145deg, rgba\(34, 42, 44/);
+  assert.match(offerActions, /border: 1px solid rgba\(203, 213, 215/);
+  assert.doesNotMatch(`${dataCardActions}\n${offerActions}`, /#584433|#342719|#403526|#211c15|#e3c394/);
+  assert.match(applicationStyles, /\.module-action-link,[\s\S]*?min-height: 44px/);
+  assert.match(applicationStyles, /\.dashboard-reference-return \{[\s\S]*?min-height: 44px/);
 });
 
 test("catalog, CRM, offers, procurement, documents, messages, calendar, finance, and reports use icon actions", async () => {

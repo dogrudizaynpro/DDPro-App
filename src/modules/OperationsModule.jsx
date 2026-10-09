@@ -313,6 +313,19 @@ function IntegrationSettings({ onNavigate, hubMode = false }) {
     return "BAĞLI DEĞİL · bağlantı testi/oturum bekleniyor";
   };
 
+  const integrationStatusLabel = (integration, connection, configured) => {
+    if (testing === integration.id) {
+      return integration.id === "ai" ? "TEST EDİLİYOR" : "BAĞLANTI TEST EDİLİYOR";
+    }
+    if (statusLoading) {
+      if (integration.id === "ai") return "TEST EDİLİYOR";
+      if (integration.id === "crm") return "GOOGLE OTURUMU DOĞRULANIYOR";
+      return "DURUM KONTROL EDİLİYOR";
+    }
+    if (!status) return "DURUM ALINAMADI";
+    return statusLabel({ connected: connection?.connected, configured, status: connection?.status });
+  };
+
   const startGoogleOAuth = async () => {
     try {
       await beginGoogleConnection();
@@ -383,10 +396,16 @@ function IntegrationSettings({ onNavigate, hubMode = false }) {
                 ? connection?.configured
                 : connection?.configured;
           const isGoogleConnected = status?.google?.connected;
+          const isChecking = statusLoading || testing === integration.id;
+          const stateClass = connection?.connected && !isChecking
+            ? " is-connected"
+            : !isChecking && (connection?.status === "test_failed" || (!status && error))
+              ? " has-error"
+              : "";
           return (
             <article className="data-card integration-card" key={integration.id}>
               <div>
-                <div className="integration-card-heading"><h3>{integration.title}</h3><span className={`integration-state${connection?.connected ? " is-connected" : connection?.status === "test_failed" ? " has-error" : ""}`}>{statusLoading || !status ? "DURUM KONTROL EDİLİYOR" : statusLabel({ connected: connection?.connected, configured, status: connection?.status })}</span></div>
+                <div className="integration-card-heading"><h3>{integration.title}</h3><span className={`integration-state${stateClass}`}>{integrationStatusLabel(integration, connection, configured)}</span></div>
                 <p>{integration.description}</p>
                 {integration.id === "whatsapp" && status ? (
                   <p>Outbound: {connection?.sendConfigured ? "HAZIR" : "YAPILANDIRMA GEREKLİ"} · Webhook: {connection?.webhookConfigured ? "HAZIR" : "YAPILANDIRMA GEREKLİ"}</p>

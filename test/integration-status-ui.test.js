@@ -11,6 +11,10 @@ test("integration dashboard keeps initial status pending until the configured AI
   assert.match(source, /const \[statusLoading, setStatusLoading\] = useState\(true\)/);
   assert.match(source, /if \(value\.ai\?\.configured\)\s*\{\s*try\s*\{\s*await testIntegrationConnection\("ai"\)/);
   assert.match(source, /value = await getIntegrationStatus\(\)/);
+  assert.match(source, /integration\.id === "ai"\) return "TEST EDİLİYOR"/);
+  assert.match(source, /integration\.id === "crm"\) return "GOOGLE OTURUMU DOĞRULANIYOR"/);
+  assert.match(source, /if \(!status\) return "DURUM ALINAMADI"/);
   assert.match(source, /Entegrasyon bağlantıları ve AI sağlayıcı yanıtı doğrulanıyor/);
   assert.match(source, /DURUM KONTROL EDİLİYOR/);
+  assert.match(source, /status === "authorization_required"/);
 });
