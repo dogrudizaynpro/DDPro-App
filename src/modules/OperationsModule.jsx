@@ -13,6 +13,7 @@ import {
 import { getProjects } from "../services/projects.service.js";
 import { createReport, deleteReport, getReports } from "../services/reports.service.js";
 import DDProIcon from "../components/DDProIcon.jsx";
+import DDProActionButton from "../components/DDProActionButton.jsx";
 import {
   createFinanceCost,
   deleteFinanceCost,
@@ -227,16 +228,34 @@ const timestamp = () => new Date().toISOString();
 
 function IntegrationSettings({ onNavigate, hubMode = false }) {
   const [status, setStatus] = useState(null);
+  const [statusLoading, setStatusLoading] = useState(true);
   const [error, setError] = useState("");
   const [testing, setTesting] = useState("");
   const [notice, setNotice] = useState("");
 
-  const refresh = async () => {
+  const refresh = async ({ verifyAi = false } = {}) => {
     setError("");
+    setStatus(null);
+    setStatusLoading(true);
     try {
-      setStatus(await getIntegrationStatus());
+      let nextStatus = await getIntegrationStatus();
+      let aiTestError;
+      if (verifyAi && nextStatus.ai?.configured) {
+        try {
+          await testIntegrationConnection("ai");
+        } catch (testError) {
+          aiTestError = testError;
+        }
+        nextStatus = await getIntegrationStatus();
+      }
+      setStatus(nextStatus);
+      if (aiTestError) {
+        setError(aiTestError.message || "AI sağlayıcı bağlantı testi başarısız.");
+      }
     } catch (statusError) {
       setError(statusError.message || "Entegrasyon durumu backend'den alınamadı.");
+    } finally {
+      setStatusLoading(false);
     }
   };
 
@@ -255,8 +274,18 @@ function IntegrationSettings({ onNavigate, hubMode = false }) {
       };
       setError(reasons[oauthResult.get("reason")] || "Google OAuth bağlantısı tamamlanamadı.");
     }
-    getIntegrationStatus()
-      .then((value) => {
+    const load = async () => {
+      setStatusLoading(true);
+      try {
+        let value = await getIntegrationStatus();
+        if (value.ai?.configured) {
+          try {
+            await testIntegrationConnection("ai");
+          } catch (testError) {
+            if (active) setError(testError.message || "AI sağlayıcı bağlantı testi başarısız.");
+          }
+          value = await getIntegrationStatus();
+        }
         if (active) {
           setStatus(value);
           if (oauthResult.get("integration") === "google_connected" &&
@@ -264,10 +293,13 @@ function IntegrationSettings({ onNavigate, hubMode = false }) {
             setNotice("Google hesabı güvenli OAuth akışıyla bağlandı. Gmail ve Google Calendar durumları backend'den doğrulandı.");
           }
         }
-      })
-      .catch((loadError) => {
+      } catch (loadError) {
         if (active) setError(loadError.message || "Entegrasyon durumu backend'den alınamadı.");
-      });
+      } finally {
+        if (active) setStatusLoading(false);
+      }
+    };
+    load();
     return () => {
       active = false;
     };
@@ -277,6 +309,7 @@ function IntegrationSettings({ onNavigate, hubMode = false }) {
     if (connected) return "BAĞLI";
     if (!configured) return "YAPILANDIRMA GEREKLİ";
     if (state === "test_failed") return "BAĞLANTI TESTİ BAŞARISIZ";
+    if (state === "authorization_required") return "GOOGLE OTURUMU GEREKLİ";
     return "BAĞLI DEĞİL · bağlantı testi/oturum bekleniyor";
   };
 
@@ -326,7 +359,7 @@ function IntegrationSettings({ onNavigate, hubMode = false }) {
       {hubMode ? (
         <div className="panel-header integration-hub-heading">
           <div><h2>ENTEGRASYON MERKEZİ</h2><p>Sunucu bağlantılarını sınayın ve gerçek durumlarını görüntüleyin.</p></div>
-          <button type="button" onClick={refresh}>Durumları yenile</button>
+          <button type="button" disabled={statusLoading} onClick={() => refresh({ verifyAi: true })}><DDProIcon name="settings" />{statusLoading ? "Kontrol ediliyor…" : "Durumları yenile"}</button>
         </div>
       ) : (
         <div className="panel-header integration-settings-link">
@@ -335,6 +368,7 @@ function IntegrationSettings({ onNavigate, hubMode = false }) {
         </div>
       )}
       <p className="status-banner info">API anahtarı, OAuth secret veya token bu arayüze girilmez. Credential değerlerini yalnızca backend environment variables üzerinden yönetin. Environment ile yönetilen servislerin bağlantısını kesmek için ilgili değişkenleri kaldırıp backend'i yeniden başlatın.</p>
+      {statusLoading ? <p className="status-banner info" role="status" aria-live="polite">Entegrasyon bağlantıları ve AI sağlayıcı yanıtı doğrulanıyor…</p> : null}
       {error ? <p className="status-banner warning">{error}</p> : null}
       {status?.browserSession ? <p className="status-banner warning">{status.browserSession.message} ({status.browserSession.code})</p> : null}
       {notice ? <p className="status-banner success">{notice}</p> : null}
@@ -352,7 +386,7 @@ function IntegrationSettings({ onNavigate, hubMode = false }) {
           return (
             <article className="data-card integration-card" key={integration.id}>
               <div>
-                <div className="integration-card-heading"><h3>{integration.title}</h3><span className={`integration-state${connection?.connected ? " is-connected" : connection?.status === "test_failed" ? " has-error" : ""}`}>{status ? statusLabel({ connected: connection?.connected, configured, status: connection?.status }) : "DURUM KONTROL EDİLİYOR"}</span></div>
+                <div className="integration-card-heading"><h3>{integration.title}</h3><span className={`integration-state${connection?.connected ? " is-connected" : connection?.status === "test_failed" ? " has-error" : ""}`}>{statusLoading || !status ? "DURUM KONTROL EDİLİYOR" : statusLabel({ connected: connection?.connected, configured, status: connection?.status })}</span></div>
                 <p>{integration.description}</p>
                 {integration.id === "whatsapp" && status ? (
                   <p>Outbound: {connection?.sendConfigured ? "HAZIR" : "YAPILANDIRMA GEREKLİ"} · Webhook: {connection?.webhookConfigured ? "HAZIR" : "YAPILANDIRMA GEREKLİ"}</p>
@@ -363,9 +397,9 @@ function IntegrationSettings({ onNavigate, hubMode = false }) {
                   {connection?.lastTest?.error ? <span className="integration-error">{formatGoogleIntegrationError({ message: connection.lastTest.error, googleApiError: connection.lastTest.googleApiError })}</span> : null}
                   {integration.id === "whatsapp" ? <span className="integration-secret-note">BAĞLI, sunucu yapılandırmasının tamamlandığını gösterir. Bağlantı testi Meta telefon kaydını doğrular; webhook teslimatı ve mesaj gönderimi ayrıca canlı sistemde sınanmalıdır. API sürümü belirtilmezse v23.0 kullanılır.</span> : null}
                   <div className="module-toolbar integration-actions">
-                    {integration.requiresOAuth && !isGoogleConnected ? <button type="button" onClick={startGoogleOAuth}>Google hesabını bağla</button> : null}
-                    <button type="button" disabled={!(integration.id === "whatsapp" ? connection?.sendConfigured : configured) || testing === integration.id || (integration.requiresOAuth && !isGoogleConnected)} onClick={() => runConnectionTest(integration.id)}>{testing === integration.id ? "Test ediliyor…" : "Bağlantıyı test et"}</button>
-                    {integration.requiresOAuth && isGoogleConnected ? <button type="button" onClick={disconnectGoogleAccount}>Google bağlantısını kes (Gmail + Calendar)</button> : null}
+                    {integration.requiresOAuth && !isGoogleConnected ? <button type="button" onClick={startGoogleOAuth}><DDProIcon name="settings" />Google hesabını bağla</button> : null}
+                    <button type="button" disabled={statusLoading || !(integration.id === "whatsapp" ? connection?.sendConfigured : configured) || testing === integration.id || (integration.requiresOAuth && !isGoogleConnected)} onClick={() => runConnectionTest(integration.id)}><DDProIcon name="settings" />{testing === integration.id ? "Test ediliyor…" : "Bağlantıyı test et"}</button>
+                    {integration.requiresOAuth && isGoogleConnected ? <button type="button" onClick={disconnectGoogleAccount}><DDProIcon name="settings" />Google bağlantısını kes (Gmail + Calendar)</button> : null}
                     <button type="button" onClick={() => onNavigate(integration.moduleId)}>{integration.moduleId === "ai-assistant" ? "AI TRADE'i aç" : "Modülü aç"}</button>
                   </div>
                   <span className="integration-secret-note">Credential alanları yalnızca sunucu environment variables üzerinden tanımlanır; secret değeri uygulamada gösterilmez.</span>
@@ -557,7 +591,7 @@ function CalendarWorkspace() {
         <label>Bitiş<input name="end" type="datetime-local" defaultValue={editingEvent?.endValue || ""} required /></label>
         <label>Açıklama<textarea name="description" rows={3} defaultValue={editingEvent?.description || ""} maxLength={5000} /></label>
         <div className="module-toolbar">
-          <button type="submit" disabled={busy}>{busy ? "Kaydediliyor…" : editingEvent ? "Güncelle" : remote ? "Google Calendar'a kaydet" : "Yerel taslak kaydet"}</button>
+          <button type="submit" disabled={busy}><DDProIcon name="save" />{busy ? "Kaydediliyor…" : editingEvent ? "Güncelle" : remote ? "Google Calendar'a kaydet" : "Yerel taslak kaydet"}</button>
           {editingEvent ? <button type="button" disabled={busy} onClick={() => setEditingEvent(null)}>Düzenlemeyi iptal et</button> : null}
         </div>
       </form>
@@ -566,8 +600,8 @@ function CalendarWorkspace() {
           <article className="data-card" key={event.id || `${event.title}-${event.date}`}>
             <div><h3>{event.summary || event.title || "Takvim etkinliği"}</h3><p>{event.start?.dateTime || event.start?.date || event.date}</p><small>Google Calendar · {event.status || "Canlı etkinlik"}</small></div>
             <div className="module-toolbar">
-              {event.start?.dateTime && event.end?.dateTime ? <button type="button" disabled={busy} onClick={() => beginEditEvent(event, false)}>Düzenle</button> : null}
-              <button type="button" disabled={busy} onClick={() => removeCalendarEvent(event, false)}>Sil</button>
+              {event.start?.dateTime && event.end?.dateTime ? <DDProActionButton icon="edit" label={`${event.summary || "Takvim etkinliği"} etkinliğini düzenle`} disabled={busy} onClick={() => beginEditEvent(event, false)} /> : null}
+              <DDProActionButton icon="delete" label={`${event.summary || "Takvim etkinliği"} etkinliğini sil`} disabled={busy} onClick={() => removeCalendarEvent(event, false)} />
             </div>
           </article>
         )) : <p className="empty-state">{remote ? "Google Calendar'da etkinlik yok." : "Google Calendar bağlantısı kurulduğunda gerçek etkinlikler burada görünür."}</p>}
@@ -577,8 +611,8 @@ function CalendarWorkspace() {
             <article className="data-card" key={event.id}>
               <div><h3>{event.title || "Yerel etkinlik"}</h3><p>{event.date}</p><small>{event.source === "google_calendar" ? "Google Calendar'dan yerel kopya · provider kaydını değiştirmez" : "Yalnızca bu tarayıcıda saklanan taslak"}</small></div>
               <div className="module-toolbar">
-                <button type="button" disabled={busy} onClick={() => beginEditEvent(event, true)}>Düzenle</button>
-                <button type="button" disabled={busy} onClick={() => removeCalendarEvent(event, true)}>Sil</button>
+                <DDProActionButton icon="edit" label={`${event.title || "Yerel etkinlik"} taslağını düzenle`} disabled={busy} onClick={() => beginEditEvent(event, true)} />
+                <DDProActionButton icon="delete" label={`${event.title || "Yerel etkinlik"} taslağını sil`} disabled={busy} onClick={() => removeCalendarEvent(event, true)} />
               </div>
             </article>
           ))}
@@ -767,7 +801,7 @@ function CrmWorkspace({ onNavigate, setAiInput }) {
         <p>Kaynak: {editing?.source || "manual"} (yalnızca doğrulanmış entegrasyonlar kaynak atayabilir)</p>
         <label>Notlar<textarea name="notes" rows={3} defaultValue={editing?.notes || ""} /></label>
         <div className="module-toolbar">
-          <button type="submit" disabled={busy}>{busy ? "Kaydediliyor…" : remoteMode || !CAN_USE_LOCAL_FALLBACK ? "CRM'e kaydet" : "Yerel taslak kaydet"}</button>
+          <button type="submit" disabled={busy}><DDProIcon name="save" />{busy ? "Kaydediliyor…" : remoteMode || !CAN_USE_LOCAL_FALLBACK ? "CRM'e kaydet" : "Yerel taslak kaydet"}</button>
           {editing ? <button type="button" onClick={() => setEditing(null)}>Düzenlemeyi iptal et</button> : null}
         </div>
       </form>
@@ -780,13 +814,13 @@ function CrmWorkspace({ onNavigate, setAiInput }) {
               <p>{contact.request}</p>
               <small>Kaynak: {contact.source || "manual"} · {contact.status} · {contact.contact_date || contact.date || contact.created_at}</small>
               <div className="module-toolbar">
-                <button type="button" onClick={() => setEditing(contact)}>Düzenle</button>
+                <DDProActionButton icon="edit" label={`${contact.name} CRM kaydını düzenle`} onClick={() => setEditing(contact)} />
                 <button type="button" onClick={() => {
                   setAiInput(`CRM kaydındaki gelen talebi değerlendir ve müşterinin ihtiyacını, belirsiz noktaları ve önerilen sonraki adımları çıkar. Otomatik CRM değişikliği yapma; önerilen alanları kullanıcı onayına sun.\n\nKaynak: ${contact.source || "manual"}\nFirma: ${contact.company || "Belirtilmedi"}\nTalep: ${contact.request || "Talep metni yok"}\nProje: ${contact.project_id || "Belirtilmedi"}\nSistem: ${contact.system || "Belirtilmedi"}`);
                   onNavigate("ai-assistant");
                 }}>Talebi AI ile analiz et</button>
                 {contact.phone ? <button type="button" onClick={() => sendWhatsApp(contact)}>WhatsApp yanıtı gönder</button> : null}
-                <button type="button" onClick={() => removeContact(contact)}>Sil</button>
+                <DDProActionButton icon="delete" label={`${contact.name} CRM kaydını sil`} onClick={() => removeContact(contact)} />
               </div>
             </div>
           </article>
@@ -966,7 +1000,7 @@ function FinanceWorkspace({ projects = [], onCostsChanged }) {
         <input name="materialAnalysisId" defaultValue={editing?.material_analysis_id || ""} placeholder="Malzeme analizi UUID (isteğe bağlı)" />
         <textarea name="notes" defaultValue={editing?.notes || ""} placeholder="Notlar" maxLength={10000} />
         <div className="module-toolbar">
-          <button type="submit" disabled={saving || !projectRequired}>{saving ? "Kaydediliyor…" : editing ? "Güncelle" : "Maliyet ekle"}</button>
+          <button type="submit" disabled={saving || !projectRequired}><DDProIcon name="save" />{saving ? "Kaydediliyor…" : editing ? "Güncelle" : "Maliyet ekle"}</button>
           {editing ? <button type="button" onClick={() => { setEditing(null); setVerificationStatus("UNVERIFIED"); }}>İptal et</button> : null}
         </div>
       </form>
@@ -996,8 +1030,8 @@ function FinanceWorkspace({ projects = [], onCostsChanged }) {
               {record.notes ? <p>{record.notes}</p> : null}
             </div>
             <div className="module-toolbar">
-              <button type="button" onClick={() => beginEdit(record)}>Düzenle</button>
-              <button type="button" onClick={() => removeCost(record.id)}>Sil</button>
+              <DDProActionButton icon="edit" label={`${record.name} maliyet kaydını düzenle`} onClick={() => beginEdit(record)} />
+              <DDProActionButton icon="delete" label={`${record.name} maliyet kaydını sil`} onClick={() => removeCost(record.id)} />
             </div>
           </article>
         ))}
@@ -1140,7 +1174,7 @@ function ReportsWorkspace({ projects = [], onReportsChanged }) {
             </div>
             <div className="module-toolbar">
               <button type="button" onClick={() => window.print()}><DDProIcon name="print" />Yazdır</button>
-              <button className="ddpro-icon-action" type="button" aria-label={`${report.title || "Rapor"} kaydını sil`} title="Sil" onClick={() => removeReport(report.id)}><DDProIcon name="delete" /></button>
+              <DDProActionButton icon="delete" label={`${report.title || "Rapor"} kaydını sil`} onClick={() => removeReport(report.id)} />
             </div>
           </article>
         ))}
@@ -1291,9 +1325,13 @@ export function CatalogWorkspace({ moduleId, definition = moduleDefinitions[modu
     <div className="operations-module">
       <p className="status-banner info">{definition.notice}</p>
       <div className="module-toolbar">
-        <button type="button" disabled={busy} onClick={() => { setEditing(null); setFormOpen((open) => !open); }}>
-          {formOpen ? "Formu kapat" : `+ ${definition.title} kaydı ekle`}
-        </button>
+        <DDProActionButton
+          icon={formOpen ? "settings" : "add"}
+          label={formOpen ? `${definition.title} formunu kapat` : `${definition.title} kaydı ekle`}
+          ariaExpanded={formOpen}
+          disabled={busy}
+          onClick={() => { setEditing(null); setFormOpen((open) => !open); }}
+        />
         <button type="button" disabled={loading || busy} onClick={refresh}>Yenile</button>
       </div>
       {error ? <p className="status-banner warning" role="alert">{error}</p> : null}
@@ -1337,7 +1375,7 @@ export function CatalogWorkspace({ moduleId, definition = moduleDefinitions[modu
             );
           })}
           <div className="module-toolbar">
-            <button type="submit" disabled={busy}>{busy ? "Kaydediliyor…" : "Kaydı sakla"}</button>
+            <button type="submit" disabled={busy}><DDProIcon name="save" />{busy ? "Kaydediliyor…" : "Kaydı sakla"}</button>
             {editing ? <button type="button" disabled={busy} onClick={() => { setEditing(null); setFormOpen(false); }}>Düzenlemeyi iptal et</button> : null}
           </div>
         </form>
@@ -1360,8 +1398,8 @@ export function CatalogWorkspace({ moduleId, definition = moduleDefinitions[modu
                 <small>{record.created_at ? new Date(record.created_at).toLocaleString("tr-TR") : ""}</small>
               </div>
               <div className="module-toolbar">
-                <button type="button" disabled={busy} onClick={() => { setEditing(record); setFormOpen(true); }}>Düzenle</button>
-                <button type="button" disabled={busy} onClick={() => remove(record)}>Sil</button>
+                <DDProActionButton icon="edit" label={`${record.name} kaydını düzenle`} disabled={busy} onClick={() => { setEditing(record); setFormOpen(true); }} />
+                <DDProActionButton icon="delete" label={`${record.name} kaydını sil`} disabled={busy} onClick={() => remove(record)} />
               </div>
             </article>
           )) : <p className="empty-state">Bu modülde henüz kayıt yok.</p>}
@@ -1446,9 +1484,12 @@ export default function OperationsModule({
     <div className="operations-module">
       <p className="status-banner info">{definition.notice}</p>
       <div className="module-toolbar">
-        <button type="button" onClick={() => setFormOpen((open) => !open)}>
-          {formOpen ? "Formu kapat" : `+ ${definition.title} kaydı ekle`}
-        </button>
+        <DDProActionButton
+          icon={formOpen ? "settings" : "add"}
+          label={formOpen ? `${definition.title} formunu kapat` : `${definition.title} kaydı ekle`}
+          ariaExpanded={formOpen}
+          onClick={() => setFormOpen((open) => !open)}
+        />
       </div>
       {formOpen ? (
         <form className="data-form" onSubmit={addRecord}>
@@ -1462,7 +1503,7 @@ export default function OperationsModule({
               )}
             </label>
           ))}
-          <button type="submit">Kaydı sakla</button>
+          <button type="submit"><DDProIcon name="save" />Kaydı sakla</button>
         </form>
       ) : null}
       {error ? <p className="status-banner warning">{error}</p> : null}
@@ -1474,7 +1515,7 @@ export default function OperationsModule({
               {definition.fields.filter((item) => item.name !== "name" && item.name !== "title").map((item) => record[item.name] ? <p key={item.name}><strong>{item.label}:</strong> {record[item.name]}</p> : null)}
               <small>{record.createdAt ? new Date(record.createdAt).toLocaleString("tr-TR") : ""}</small>
             </div>
-            <button type="button" onClick={() => removeRecord(record.id)}>Sil</button>
+            <DDProActionButton icon="delete" label={`${record.name || record.title || definition.title} kaydını sil`} onClick={() => removeRecord(record.id)} />
           </article>
         )) : <p className="empty-state">Bu modülde henüz kayıt yok.</p>}
       </div>

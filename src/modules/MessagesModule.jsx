@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { getProjects } from "../services/projects.service.js";
 import { getCrmContacts } from "../services/operations-integrations.service.js";
+import DDProIcon from "../components/DDProIcon.jsx";
+import DDProActionButton from "../components/DDProActionButton.jsx";
 import {
   createConversation,
   createMessage,
@@ -161,7 +163,7 @@ export default function MessagesModule() {
             </select>
           </label>
           <div className="module-toolbar">
-            <button type="submit" disabled={busy}>{busy ? "Kaydediliyor…" : editing ? "Konuşmayı güncelle" : "Konuşma oluştur"}</button>
+            <button type="submit" disabled={busy}><DDProIcon name="save" />{busy ? "Kaydediliyor…" : editing ? "Konuşmayı güncelle" : "Konuşma oluştur"}</button>
             {editing ? <button type="button" onClick={() => setEditing(null)}>İptal</button> : null}
           </div>
         </form>
@@ -173,8 +175,8 @@ export default function MessagesModule() {
             <article className="data-card" key={conversation.id}>
               <button type="button" onClick={() => selectConversation(conversation.id)}>{conversation.title}</button>
               <div className="module-toolbar">
-                <button type="button" onClick={() => setEditing(conversation)}>Düzenle</button>
-                <button type="button" disabled={busy} onClick={() => removeConversation(conversation.id)}>Sil</button>
+                <DDProActionButton icon="edit" label={`${conversation.title} konuşmasını düzenle`} onClick={() => setEditing(conversation)} />
+                <DDProActionButton icon="delete" label={`${conversation.title} konuşmasını sil`} disabled={busy} onClick={() => removeConversation(conversation.id)} />
               </div>
             </article>
           )) : <p className="empty-state">Henüz kalıcı konuşma yok.</p>}
@@ -190,7 +192,7 @@ export default function MessagesModule() {
                   <div><p>{message.content}</p><small>{message.direction === "INBOUND" ? `Gelen · ${message.read_at ? "Okundu" : "Okunmadı"}` : "Giden"} · {new Date(message.created_at).toLocaleString("tr-TR")}</small></div>
                   <div className="module-toolbar">
                     {message.direction === "INBOUND" && !message.read_at ? <button type="button" onClick={() => toggleRead(message)}>Okundu işaretle</button> : null}
-                    <button type="button" onClick={() => deleteMessage(selectedId, message.id).then(() => setMessages((items) => items.filter((item) => item.id !== message.id))).catch((actionError) => setError(actionError.message))}>Sil</button>
+                    <DDProActionButton icon="delete" label="Mesajı sil" onClick={() => deleteMessage(selectedId, message.id).then(() => setMessages((items) => items.filter((item) => item.id !== message.id))).catch((actionError) => setError(actionError.message))} />
                   </div>
                 </article>
               )) : <p className="empty-state">Bu konuşmada henüz mesaj yok.</p>}
@@ -198,7 +200,7 @@ export default function MessagesModule() {
             <form className="data-form" onSubmit={sendMessage}>
               <label>Yön<select name="direction"><option value="OUTBOUND">Giden kayıt</option><option value="INBOUND">Gelen kayıt</option></select></label>
               <label>Mesaj<textarea name="content" rows={3} required maxLength={10000} /></label>
-              <button type="submit" disabled={busy}>{busy ? "Kaydediliyor…" : "Mesajı kaydet"}</button>
+              <button type="submit" disabled={busy}><DDProIcon name="save" />{busy ? "Kaydediliyor…" : "Mesajı kaydet"}</button>
             </form>
           </> : <p className="empty-state">Mesajları görüntülemek için bir konuşma seçin.</p>}
         </section>

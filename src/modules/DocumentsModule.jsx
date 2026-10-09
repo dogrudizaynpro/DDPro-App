@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { getProjects } from "../services/projects.service.js";
 import { getCrmContacts } from "../services/operations-integrations.service.js";
+import DDProIcon from "../components/DDProIcon.jsx";
+import DDProActionButton from "../components/DDProActionButton.jsx";
 import {
   deleteDocument,
   getDocumentDownload,
@@ -116,7 +118,7 @@ export default function DocumentsModule() {
               {contacts.map((contact) => <option key={contact.id} value={contact.id}>{contact.name}</option>)}
             </select>
           </label>
-          <button type="submit" disabled={busy}>{busy ? "Yükleniyor…" : "Güvenli alana yükle"}</button>
+          <button type="submit" disabled={busy}><DDProIcon name="save" />{busy ? "Yükleniyor…" : "Güvenli alana yükle"}</button>
         </form>
       </section>
       <section className="panel">
@@ -133,7 +135,12 @@ export default function DocumentsModule() {
               </div>
               <div className="module-toolbar">
                 <button type="button" onClick={() => download(document)}>Güvenli indir</button>
-                <button type="button" disabled={busy} onClick={() => remove(document)}>Sil</button>
+                <DDProActionButton
+                  icon="delete"
+                  label={`${document.original_name} belgesini sil`}
+                  disabled={busy}
+                  onClick={() => remove(document)}
+                />
               </div>
             </article>
           ))}</div>

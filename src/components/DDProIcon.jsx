@@ -1,6 +1,9 @@
 import referenceImage from "../../IMG_9199.png";
 import "./ddpro-reference-icons.css";
 
+const referenceImageSize = { width: 1536, height: 1024 };
+const cropSize = { width: 320, height: 320 };
+
 const iconCrops = {
   add: [1038, 516],
   "ai-assistant": [608, 516],
@@ -53,8 +56,8 @@ function DDProIcon({ name, className = "" }) {
       className={`ddpro-icon-reference ${className}`.trim()}
       style={{
         "--ddpro-icon-reference": `url("${referenceImage}")`,
-        "--ddpro-icon-x": `${(x / 1216) * 100}%`,
-        "--ddpro-icon-y": `${(y / 704) * 100}%`,
+        "--ddpro-icon-x": `${(x / (referenceImageSize.width - cropSize.width)) * 100}%`,
+        "--ddpro-icon-y": `${(y / (referenceImageSize.height - cropSize.height)) * 100}%`,
       }}
       aria-hidden="true"
     />

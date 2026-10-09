@@ -283,6 +283,9 @@ test("one-time exchange authenticates browser status and real provider test rout
   const data = (await status.json()).data;
   assert.equal(data.gmail.connected, true);
   assert.equal(data.googleCalendar.connected, true);
+  assert.equal(data.crm.connected, true);
+  assert.equal(data.crm.status, "connected");
+  assert.equal(data.crm.lastTest, null);
   for (const provider of ["gmail", "googleCalendar"]) {
     const tested = await originalFetch(`${baseUrl}/api/integrations/test/${provider}`, {
       method: "POST", headers: { ...headers, "Content-Type": "application/json" },
@@ -408,6 +411,8 @@ test("one-time exchange authenticates browser status and real provider test rout
     const anonymousStatus = (await (await originalFetch(`${baseUrl}/api/integrations/status`)).json()).data;
     assert.equal(anonymousStatus.gmail.lastTest, null);
     assert.equal(anonymousStatus.gmail.connected, false);
+    assert.equal(anonymousStatus.crm.connected, false);
+    assert.equal(anonymousStatus.crm.status, "authorization_required");
 
     workspaceResponse = () => new Response("<html>Unavailable</html>", { status: 502 });
     const malformed = await testProvider();

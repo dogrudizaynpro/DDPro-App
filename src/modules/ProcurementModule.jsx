@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { runResearchAgent } from "../services/research.service.js";
+import DDProIcon from "../components/DDProIcon.jsx";
+import DDProActionButton from "../components/DDProActionButton.jsx";
 
 function ProcurementModule({
   showProcurementForm,
@@ -67,17 +69,17 @@ function ProcurementModule({
             {/^https?:\/\//i.test(result.url || "") ? <p><a href={result.url} target="_blank" rel="noopener noreferrer">Kaynağı aç ↗</a></p> : null}
             <small>{result.date} · {result.status}</small>
           </div>
-          <button type="button" onClick={() => saveResearchResult({ ...result, projectId: researchProjectId })}>Araştırma kaydına ekle</button>
+          <button type="button" onClick={() => saveResearchResult({ ...result, projectId: researchProjectId })}><DDProIcon name="add" />Araştırma kaydına ekle</button>
         </article>
       ))}
 
       <div className="module-toolbar">
-        <button
-          type="button"
+        <DDProActionButton
+          icon={showProcurementForm ? "settings" : "add"}
+          label={showProcurementForm ? "Tedarik formunu kapat" : "Yeni Tedarik Kaydı"}
+          ariaExpanded={showProcurementForm}
           onClick={() => setShowProcurementForm((value) => !value)}
-        >
-          {showProcurementForm ? "Formu Kapat" : "+ Yeni Tedarik Kaydı"}
-        </button>
+        />
       </div>
 
       {showProcurementForm && (
@@ -124,7 +126,7 @@ function ProcurementModule({
             <option value="CANCELLED">İptal</option>
           </select>
 
-          <button type="submit">Kaydet</button>
+          <button type="submit"><DDProIcon name="save" />Kaydet</button>
         </form>
       )}
 
@@ -199,16 +201,15 @@ function ProcurementModule({
                     <option value="RECEIVED">Teslim alındı</option>
                     <option value="CANCELLED">İptal</option>
                   </select>
-                  <button type="submit">Güncelle</button>
+                  <button type="submit"><DDProIcon name="save" />Güncelle</button>
                 </form>
               </details>
 
-              <button
-                type="button"
+              <DDProActionButton
+                icon="delete"
+                label={`${item.name} tedarik kaydını sil`}
                 onClick={() => deleteProcurement(item.id)}
-              >
-                Sil
-              </button>
+              />
             </div>
           ))
         )}
