@@ -54,7 +54,8 @@ export const errorHandler = (err, req, res, next) => {
       googleApiError: err.googleApiError,
     }),
     ...(typeof err.code === "string" &&
-      /^AI_OPERATION_AUDIT_[A-Z_]+$/.test(err.code) && { code: err.code }),
+      (/^AI_OPERATION_AUDIT_[A-Z_]+$/.test(err.code) ||
+        /^AI_(?:PROVIDER|TOOL)_[A-Z_]+$/.test(err.code)) && { code: err.code }),
     ...(isDevelopment && { details: err.message }),
   });
 };

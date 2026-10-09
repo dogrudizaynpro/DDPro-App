@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
+import { errorHandler } from "../src/middleware/errorHandler.js";
 
 const envKeys = ["AI_API_URL", "AI_API_KEY", "AI_MODEL", "SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"];
 const savedEnv = Object.fromEntries(envKeys.map((key) => [key, process.env[key]]));
@@ -126,6 +127,18 @@ test("Projects API errors fail the AI request instead of being hidden by a gener
       assert.equal(error.statusCode, 502);
       assert.equal(error.code, "AI_TOOL_EXECUTION_FAILED");
       assert.equal(error.message, "The requested records are unavailable.");
+      let responseStatus;
+      let responseBody;
+      errorHandler(error, {}, {
+        status(status) { responseStatus = status; return this; },
+        json(body) { responseBody = body; },
+      }, () => {});
+      assert.equal(responseStatus, 502);
+      assert.deepEqual(responseBody, {
+        status: "error",
+        message: "The requested records are unavailable.",
+        code: "AI_TOOL_EXECUTION_FAILED",
+      });
       return true;
     }
   );
