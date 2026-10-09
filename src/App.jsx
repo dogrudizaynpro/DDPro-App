@@ -2196,14 +2196,22 @@ function App() {
         headers: projectImport.table.headers,
         rows: projectImport.table.rows,
       });
+      const previousResult = projectImport.result || { added: [], existing: [] };
+      const previousAddedRows = new Set(previousResult.added.map(({ row }) => row));
+      const previouslyReportedRows = new Set([
+        ...previousAddedRows,
+        ...previousResult.existing.map(({ row }) => row),
+      ]);
+      const cumulativeAdded = [
+        ...previousResult.added,
+        ...result.added.filter(({ row }) => !previousAddedRows.has(row)),
+      ];
+      const cumulativeExisting = [
+        ...previousResult.existing,
+        ...result.existing.filter(({ row }) => !previouslyReportedRows.has(row)),
+      ];
       setAiMessages((currentMessages) => currentMessages.map((message) => {
         if (message.id !== messageId) return message;
-        const previous = message.projectImport.result || { added: [], existing: [] };
-        const previousAddedRows = new Set(previous.added.map(({ row }) => row));
-        const previouslyReportedRows = new Set([
-          ...previousAddedRows,
-          ...previous.existing.map(({ row }) => row),
-        ]);
         return {
           ...message,
           projectImport: {
@@ -2211,11 +2219,8 @@ function App() {
             importError: null,
             result: {
               ...result,
-              added: [...previous.added, ...result.added.filter(({ row }) => !previousAddedRows.has(row))],
-              existing: [
-                ...previous.existing,
-                ...result.existing.filter(({ row }) => !previouslyReportedRows.has(row)),
-              ],
+              added: cumulativeAdded,
+              existing: cumulativeExisting,
             },
           },
         };
@@ -2226,7 +2231,7 @@ function App() {
         setProjectsError(null);
         setProjectsFetchState("success");
         const savedProjectIds = new Set(savedProjects.map(({ id }) => id));
-        const verifiedAdded = result.added.filter(({ id }) => savedProjectIds.has(id));
+        const verifiedAdded = cumulativeAdded.filter(({ id }) => savedProjectIds.has(id));
         setAiMessages((currentMessages) => currentMessages.map((message) =>
           message.id === messageId
             ? {
@@ -2234,9 +2239,9 @@ function App() {
               projectImport: {
                 ...message.projectImport,
                 verification: {
-                  expected: result.added.length,
+                  expected: cumulativeAdded.length,
                   saved: verifiedAdded.length,
-                  complete: verifiedAdded.length === result.added.length,
+                  complete: verifiedAdded.length === cumulativeAdded.length,
                 },
               },
             }
@@ -2251,7 +2256,7 @@ function App() {
               projectImport: {
                 ...message.projectImport,
                 verification: {
-                  expected: result.added.length,
+                  expected: cumulativeAdded.length,
                   saved: null,
                   complete: false,
                   error: getApiFailureReason(error),
