@@ -1,4 +1,4 @@
-import { getGoogleAccessToken } from "./google-integration.service.js";
+import { getGoogleAccessToken, hasGoogleOperationScope } from "./google-integration.service.js";
 import { GoogleApiError } from "./google-api-error.js";
 import { readIntegrationToken } from "./integration-vault.service.js";
 
@@ -34,7 +34,7 @@ const requestSheetsApi = async (account, endpoint) => {
 
 export const readProjectsSheet = async (account, spreadsheetId) => {
   const token = await readIntegrationToken({ provider: "google", account });
-  if (!token?.scopes?.split(/\s+/).includes(SHEETS_READ_SCOPE)) {
+  if (!hasGoogleOperationScope(token?.scopes, SHEETS_READ_SCOPE)) {
     throw Object.assign(new Error("Google Sheets read-only permission is required. Reconnect Google and approve the Sheets permission."), {
       statusCode: 403,
       expose: true,

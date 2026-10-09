@@ -522,8 +522,18 @@ const describeIntegrationStatus = (label, key, status) => {
     if (!entry) return "durumu bu yanıtta alınamadı";
     if (entry.connected) return "BAĞLI";
     if (!entry.configured) return "YAPILANDIRMA GEREKLİ";
-    if (entry.status === "test_failed") return `BAĞLI DEĞİL · son test başarısız: ${entry.lastTest?.error || "ayrıntı yok"}`;
-    return "BAĞLI DEĞİL · OAuth oturumu veya başarılı bağlantı testi bekliyor";
+    if (entry.status === "configured_not_tested") return "BAĞLI DEĞİL · yapılandırıldı, başarılı bağlantı testi bekliyor";
+    if (["auth_required", "authorization_required"].includes(entry.status)) return "BAĞLI DEĞİL · OAuth yetkilendirmesi gerekli";
+    const error = typeof entry.lastTest?.error === "string" ? entry.lastTest.error : "";
+    const category = entry.lastTest?.googleApiError?.category;
+    if (error || category || [
+      "test_failed", "api_disabled", "scope_required", "permission_denied",
+      "permission_required", "failed_precondition", "service_unavailable",
+      "request_rejected", "token_refresh_failed",
+    ].includes(entry.status)) {
+      return `BAĞLI DEĞİL · son kontrol başarısız (${category || entry.status || "test_failed"}): ${error || "ayrıntı yok"}`;
+    }
+    return "BAĞLI DEĞİL · başarılı bağlantı testi bekliyor";
   };
   if (key) return `${label}: ${stateLabel(status[key])}. Durum uygulamanın entegrasyon API'sinden alındı.`;
   return `Gerçek backend durumuna göre entegrasyonlar: ${[

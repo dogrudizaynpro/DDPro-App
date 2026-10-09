@@ -8,6 +8,59 @@ const appSource = await readFile(new URL("../src/App.jsx", import.meta.url), "ut
 const moduleSource = await readFile(new URL("../src/modules/AIModule.jsx", import.meta.url), "utf8");
 const sendStart = appSource.indexOf("  const sendAiMessage = async");
 const sendEnd = appSource.indexOf("  const confirmAiOperationalAction =", sendStart);
+const summaryStart = appSource.indexOf("const describeIntegrationStatus =");
+const summaryEnd = appSource.indexOf("\nfunction App()", summaryStart);
+const describeIntegrationStatus = runInNewContext(
+  `${appSource.slice(summaryStart, summaryEnd)}; describeIntegrationStatus;`,
+);
+
+test("AI integration summaries preserve actual Google failure categories and safe errors", () => {
+  for (const category of [
+    "api_disabled", "scope_required", "permission_denied", "failed_precondition",
+    "service_unavailable", "request_rejected", "test_failed",
+  ]) {
+    const summary = describeIntegrationStatus("Gmail", "gmail", {
+      gmail: {
+        configured: true, connected: false, authenticated: true, status: category,
+        lastTest: { error: "Safe provider diagnostic", googleApiError: { category } },
+      },
+    });
+    assert.match(summary, new RegExp(category));
+    assert.match(summary, /Safe provider diagnostic/);
+    assert.doesNotMatch(summary, /OAuth oturumu|testi bekliyor|yetkilendirmesi gerekli/);
+  }
+  const summary = describeIntegrationStatus("Gmail", "gmail", {
+    gmail: {
+      configured: true, connected: false, status: "test_failed",
+      lastTest: { error: "Mailbox unavailable", googleApiError: { category: "failed_precondition" } },
+    },
+  });
+  assert.match(summary, /failed_precondition.*Mailbox unavailable/);
+});
+
+test("AI integration summaries distinguish pending tests from required authorization", () => {
+  const pending = describeIntegrationStatus("Gmail", "gmail", {
+    gmail: { configured: true, connected: false, status: "configured_not_tested" },
+  });
+  assert.match(pending, /başarılı bağlantı testi bekliyor/);
+  assert.doesNotMatch(pending, /kontrol başarısız|OAuth/);
+  for (const status of ["auth_required", "authorization_required"]) {
+    const summary = describeIntegrationStatus("Gmail", "gmail", {
+      gmail: { configured: true, connected: false, status },
+    });
+    assert.match(summary, /OAuth yetkilendirmesi gerekli/);
+    assert.doesNotMatch(summary, /testi bekliyor/);
+  }
+});
+
+test("AI integration summaries report known failures even without test error details", () => {
+  const summary = describeIntegrationStatus("Entegrasyonlar", null, {
+    gmail: { configured: true, connected: false, status: "failed_precondition" },
+    googleCalendar: { configured: true, connected: true, status: "connected" },
+  });
+  assert.match(summary, /Gmail: BAĞLI DEĞİL.*failed_precondition.*ayrıntı yok/);
+  assert.match(summary, /Google Calendar: BAĞLI;/);
+});
 
 const createSender = (overrides = {}) => {
   const state = { messages: [{ id: "welcome", role: "assistant", text: "Eski mesaj" }] };

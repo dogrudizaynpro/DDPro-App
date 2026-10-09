@@ -714,6 +714,52 @@ test("one-time exchange authenticates browser status and real provider test rout
   }
 });
 
+test("project Sheets import accepts the broader spreadsheets grant and still rejects missing scope", async () => {
+  const { decryptIntegrationToken, encryptIntegrationToken } =
+    await import("../src/services/integration-vault.service.js");
+  const encryptedBefore = structuredClone(savedToken.encrypted_token);
+  const rowsBefore = projectRows.length;
+  const valuesBefore = projectsSheetValues;
+  const token = decryptIntegrationToken(encryptedBefore);
+  const request = () => originalFetch(`${baseUrl}/api/projects/import/google-sheets`, {
+    method: "POST",
+    headers: {
+      Origin: "https://dogrudizaynpro.github.io",
+      Authorization: ["Bearer", browserSession].join(" "),
+      "Content-Type": "application/json",
+      "X-Forwarded-For": "192.0.2.91",
+    },
+    body: JSON.stringify({ spreadsheetId: "1Abcdefghijklmnopqrstuv12345" }),
+  });
+  try {
+    refreshedAccessToken = token.accessToken;
+    const broadScopes = token.scopes.replace(
+      "https://www.googleapis.com/auth/spreadsheets.readonly",
+      "https://www.googleapis.com/auth/spreadsheets"
+    );
+    savedToken.encrypted_token = encryptIntegrationToken({ ...token, scopes: broadScopes });
+    projectsSheetValues = [
+      ["Proje Adı", "Durum"],
+      ["Broader Sheets grant project", "Aktif"],
+    ];
+    const imported = await request();
+    assert.equal(imported.status, 200);
+    assert.equal((await imported.json()).data.added[0].name, "Broader Sheets grant project");
+    savedToken.encrypted_token = encryptIntegrationToken({
+      ...token, scopes: broadScopes.replace("https://www.googleapis.com/auth/spreadsheets", ""),
+    });
+    const denied = await request();
+    assert.equal(denied.status, 403);
+    assert.match((await denied.json()).message, /Google Sheets read-only permission is required/);
+    assert.ok(savedToken, "missing scope must not delete the Google token");
+  } finally {
+    savedToken.encrypted_token = encryptedBefore;
+    projectsSheetValues = valuesBefore;
+    projectRows.splice(rowsBefore);
+    refreshedAccessToken = null;
+  }
+});
+
 test("backend CRM and Supabase health use read-only storage checks without Google or an anon key", async () => {
   const probesBefore = storageProbeMethods.length;
   const providerRequestsBefore = providerRequests;
