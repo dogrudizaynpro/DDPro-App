@@ -2172,7 +2172,9 @@ function App() {
         {
           id: createId(),
           role: "assistant",
-          text: `İşlem tamamlanamadı; değişiklik yapıldığı varsayılmadı. ${getApiFailureReason(error)}`,
+          text: error.code === "AI_OPERATION_AUDIT_UNAVAILABLE"
+            ? `İşlem sonucu doğrulanamadı. Hedef kaydı tekrar denemeden önce kontrol edin. ${getApiFailureReason(error)}`
+            : `İşlem tamamlanamadı; değişiklik yapıldığı varsayılmadı. ${getApiFailureReason(error)}`,
           date: formatDate(),
           status: "unavailable",
         },

@@ -3,9 +3,11 @@ import { test } from "node:test";
 import {
   consumeOperationalConfirmation,
   createFileImportFingerprint,
+  finishOperationalAuditEvent,
   isRecordSnapshotCurrent,
   prepareOperationalWrite,
   readOperationalRecords,
+  startOperationalAuditEvent,
 } from "../src/services/ai-tools.service.js";
 
 const uuid = "4bc6f5a6-0b6c-4ddb-b29b-208c84c344d0";
@@ -134,4 +136,75 @@ test("AI update confirmation detects target changes after the user reviewed the 
     false
   );
   assert.equal(isRecordSnapshotCurrent(null, reviewed), false);
+});
+
+test("AI operation audit records safe processing, success, and failure outcomes", async () => {
+  const events = [];
+  const admin = {
+    from(table) {
+      assert.equal(table, "ai_operation_audit_events");
+      let values;
+      let predicates = [];
+      const query = {
+        insert(record) {
+          values = record;
+          return query;
+        },
+        update(record) {
+          values = record;
+          return query;
+        },
+        eq(column, value) {
+          predicates.push([column, value]);
+          return query;
+        },
+        select() {
+          return query;
+        },
+        async single() {
+          const event = { id: `audit-${events.length + 1}`, ...values };
+          events.push(event);
+          return { data: { id: event.id }, error: null };
+        },
+        async maybeSingle() {
+          const event = events.find((candidate) => predicates.every(
+            ([column, value]) => candidate[column] === value
+          ));
+          if (!event) return { data: null, error: null };
+          Object.assign(event, values);
+          return { data: { id: event.id }, error: null };
+        },
+      };
+      return query;
+    },
+  };
+  const confirmation = {
+    id: uuid,
+    resource: "projects",
+    operation: "create",
+    record_id: null,
+    record_payload: { name: "Private project data" },
+  };
+
+  const successEventId = await startOperationalAuditEvent(admin, "owner@example.com", confirmation);
+  await finishOperationalAuditEvent(admin, "owner@example.com", successEventId, {
+    executionStatus: "succeeded",
+    targetRecordId: uuid,
+  });
+  const failedEventId = await startOperationalAuditEvent(admin, "owner@example.com", {
+    ...confirmation,
+    id: "5bc6f5a6-0b6c-4ddb-b29b-208c84c344d1",
+  });
+  await finishOperationalAuditEvent(admin, "owner@example.com", failedEventId, {
+    executionStatus: "failed",
+    errorCode: "PGRST116",
+  });
+
+  assert.equal(events[0].execution_status, "succeeded");
+  assert.equal(events[0].target_record_id, uuid);
+  assert.equal(events[0].error_code, null);
+  assert.equal(events[1].execution_status, "failed");
+  assert.equal(events[1].error_code, "PGRST116");
+  assert.ok(events.every(({ completed_at }) => Boolean(completed_at)));
+  assert.ok(events.every((event) => !Object.hasOwn(event, "record_payload")));
 });

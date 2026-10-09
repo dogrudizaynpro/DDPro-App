@@ -237,6 +237,58 @@ export const isRecordSnapshotCurrent = (currentRecord, expectedSnapshot) =>
   Boolean(currentRecord) &&
   JSON.stringify(sortJson(currentRecord)) === JSON.stringify(sortJson(expectedSnapshot));
 
+export const startOperationalAuditEvent = async (admin, integrationAccount, action) => {
+  const { data, error } = await admin
+    .from("ai_operation_audit_events")
+    .insert({
+      owner_account: integrationAccount,
+      confirmation_id: action.id,
+      resource: action.resource,
+      operation: action.operation,
+      target_record_id: action.record_id || null,
+      execution_status: "processing",
+    })
+    .select("id")
+    .single();
+  if (error) throw error;
+  return data.id;
+};
+
+export const finishOperationalAuditEvent = async (
+  admin,
+  integrationAccount,
+  auditEventId,
+  { executionStatus, targetRecordId, errorCode }
+) => {
+  if (!["succeeded", "failed"].includes(executionStatus)) {
+    throw new Error("Invalid AI operation audit status.");
+  }
+  const safeTargetRecordId = typeof targetRecordId === "string" &&
+    targetRecordId.length > 0 && targetRecordId.length <= 1024
+    ? targetRecordId
+    : undefined;
+  const safeErrorCode = typeof errorCode === "string" &&
+    /^[a-z\d_-]{1,80}$/i.test(errorCode)
+    ? errorCode.toUpperCase()
+    : executionStatus === "failed"
+      ? "OPERATION_FAILED"
+      : null;
+  const { data, error } = await admin
+    .from("ai_operation_audit_events")
+    .update({
+      execution_status: executionStatus,
+      ...(safeTargetRecordId ? { target_record_id: safeTargetRecordId } : {}),
+      error_code: safeErrorCode,
+      completed_at: new Date().toISOString(),
+    })
+    .eq("id", auditEventId)
+    .eq("owner_account", integrationAccount)
+    .select("id")
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) throw new Error("AI operation audit event could not be updated.");
+};
+
 export const prepareOperationalWrite = async (
   integrationAccount,
   { resource, operation, id, record = {} },
@@ -393,53 +445,94 @@ export const confirmOperationalWrite = async (integrationAccount, confirmationId
     });
   }
 
-  if (action.operation !== "create") {
-    const currentRecord = await readWriteTarget(
-      integrationAccount,
-      action.resource,
-      action.record_id
-    );
-    if (!isRecordSnapshotCurrent(currentRecord, action.record_snapshot)) {
-      throw Object.assign(new Error("The target record changed after review. Prepare the action again."), {
-        statusCode: 409,
-        expose: true,
-      });
-    }
-  }
-
-  const controller = CONTROLLERS[action.resource];
-  if (!controller || typeof controller[action.operation] !== "function") {
-    throw Object.assign(new Error("The confirmed AI action is no longer available."), {
-      statusCode: 409,
+  let auditEventId;
+  try {
+    auditEventId = await startOperationalAuditEvent(admin, integrationAccount, action);
+  } catch {
+    throw Object.assign(new Error("The action was not executed because its audit event could not be recorded."), {
+      statusCode: 503,
+      code: "AI_OPERATION_AUDIT_UNAVAILABLE",
       expose: true,
     });
   }
-  const recordPayload = { ...(action.record_payload || {}) };
-  const fileImportFingerprint = recordPayload._ai_file_fingerprint;
-  delete recordPayload._ai_file_fingerprint;
-  if (action.operation === "create" && fileImportFingerprint) {
-    const { data: importEntry, error: importError } = await admin
-      .from("ai_file_imports")
-      .update({ confirmed_at: now })
-      .eq("owner_account", integrationAccount)
-      .eq("resource", action.resource)
-      .eq("file_row_fingerprint", fileImportFingerprint)
-      .eq("confirmation_id", action.id)
-      .is("confirmed_at", null)
-      .select("file_row_fingerprint")
-      .maybeSingle();
-    if (importError) throw importError;
-    if (!importEntry) {
-      throw Object.assign(new Error("The file import preview expired. Analyze the file again before confirming."), {
+
+  try {
+    if (action.operation !== "create") {
+      const currentRecord = await readWriteTarget(
+        integrationAccount,
+        action.resource,
+        action.record_id
+      );
+      if (!isRecordSnapshotCurrent(currentRecord, action.record_snapshot)) {
+        throw Object.assign(new Error("The target record changed after review. Prepare the action again."), {
+          statusCode: 409,
+          expose: true,
+        });
+      }
+    }
+
+    const controller = CONTROLLERS[action.resource];
+    if (!controller || typeof controller[action.operation] !== "function") {
+      throw Object.assign(new Error("The confirmed AI action is no longer available."), {
         statusCode: 409,
         expose: true,
       });
     }
+    const recordPayload = { ...(action.record_payload || {}) };
+    const fileImportFingerprint = recordPayload._ai_file_fingerprint;
+    delete recordPayload._ai_file_fingerprint;
+    if (action.operation === "create" && fileImportFingerprint) {
+      const { data: importEntry, error: importError } = await admin
+        .from("ai_file_imports")
+        .update({ confirmed_at: now })
+        .eq("owner_account", integrationAccount)
+        .eq("resource", action.resource)
+        .eq("file_row_fingerprint", fileImportFingerprint)
+        .eq("confirmation_id", action.id)
+        .is("confirmed_at", null)
+        .select("file_row_fingerprint")
+        .maybeSingle();
+      if (importError) throw importError;
+      if (!importEntry) {
+        throw Object.assign(new Error("The file import preview expired. Analyze the file again before confirming."), {
+          statusCode: 409,
+          expose: true,
+        });
+      }
+    }
+    const result = await invokeController(controller[action.operation], integrationAccount, {
+      id: action.record_id || undefined,
+      record: recordPayload,
+    });
+    try {
+      await finishOperationalAuditEvent(admin, integrationAccount, auditEventId, {
+        executionStatus: "succeeded",
+        targetRecordId: result?.id,
+      });
+    } catch {
+      throw Object.assign(new Error("The action may have completed, but its audit result could not be recorded. Verify the target before retrying."), {
+        statusCode: 503,
+        code: "AI_OPERATION_AUDIT_UNAVAILABLE",
+        expose: true,
+      });
+    }
+    return result;
+  } catch (error) {
+    if (error.code === "AI_OPERATION_AUDIT_UNAVAILABLE") throw error;
+    try {
+      await finishOperationalAuditEvent(admin, integrationAccount, auditEventId, {
+        executionStatus: "failed",
+        errorCode: error.code || `HTTP_${error.statusCode || 500}`,
+      });
+    } catch {
+      throw Object.assign(new Error("The action result could not be verified or its audit result recorded. Verify the target before retrying."), {
+        statusCode: 503,
+        code: "AI_OPERATION_AUDIT_UNAVAILABLE",
+        expose: true,
+      });
+    }
+    throw error;
   }
-  return invokeController(controller[action.operation], integrationAccount, {
-    id: action.record_id || undefined,
-    record: recordPayload,
-  });
 };
 
 export const consumeOperationalConfirmation = async (
