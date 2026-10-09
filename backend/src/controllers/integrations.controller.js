@@ -56,7 +56,12 @@ export const getIntegrationStatus = async (req, res, next) => {
       return { connected: false, status: "test_failed", lastTest: result, checkedAt };
     }
     const requiresGoogleSession = ["gmail", "googleCalendar", "crm"].includes(provider);
-    if (result?.connected && testIsFresh && (!requiresGoogleSession || sessionReady)) {
+    if (
+      provider !== "ai" &&
+      result?.connected &&
+      testIsFresh &&
+      (!requiresGoogleSession || sessionReady)
+    ) {
       return { connected: true, status: "connected", lastTest: result, checkedAt };
     }
     return {
