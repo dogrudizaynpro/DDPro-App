@@ -94,9 +94,16 @@ before(async () => {
         return Response.json([{ provider: "google" }]);
       }
       if (options.method === "DELETE") {
-        if (new URL(url).searchParams.get("provider") === "eq.google") {
+        const query = new URL(url).searchParams;
+        if (query.get("provider") === "eq.google") {
           googleTokenDeletes += 1;
-          savedToken = null;
+          const expected = query.get("encrypted_token");
+          if (!expected || expected === `eq.${JSON.stringify(savedToken?.encrypted_token)}`) {
+            savedToken = null;
+            if (expected) return Response.json([{ provider: "google" }]);
+          } else {
+            return Response.json([]);
+          }
         }
         const record = exchangeGrant && url.includes(encodeURIComponent(exchangeGrant.account))
           ? exchangeGrant : null;
@@ -506,7 +513,7 @@ test("one-time exchange authenticates browser status and real provider test rout
     const expiredToken = structuredClone(savedToken.encrypted_token);
     for (const httpStatus of [400, 401, 403, 429]) {
       refreshResponse = () => Response.json({
-        error: "invalid_grant",
+        error: "invalid_request",
         error_description: "Refresh denied test-refresh test-access test-secret",
       }, { status: httpStatus });
       const refreshFailure = await originalFetch(`${baseUrl}/api/integrations/calendar/events`, { headers });
@@ -876,8 +883,15 @@ test("Chromium accepts the production-origin CHIPS cookie and restores after ref
       await new Promise((resolve) => setTimeout(resolve, 50));
     }
     assert.ok(port, "Chromium debugging endpoint must start");
-    const targets = await (await originalFetch(`http://127.0.0.1:${port}/json`)).json();
-    websocket = new WebSocket(targets.find((target) => target.type === "page").webSocketDebuggerUrl);
+    let pageTarget;
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      const targets = await (await originalFetch(`http://127.0.0.1:${port}/json`)).json();
+      pageTarget = targets.find((target) => target.type === "page");
+      if (pageTarget) break;
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    assert.ok(pageTarget, "Chromium page debugging target must start");
+    websocket = new WebSocket(pageTarget.webSocketDebuggerUrl);
     await once(websocket, "open");
     const pending = new Map();
     let id = 0;
@@ -1273,5 +1287,82 @@ test("legacy restoration bootstrap racing disconnect or reconnect never replaces
   } finally {
     savedToken = previousToken;
     beforeConditionalTokenUpdate = null;
+  }
+});
+
+test("Google invalid_grant rejects and removes only the unchanged saved connection", async () => {
+  const { encryptIntegrationToken, decryptIntegrationToken, saveIntegrationToken } =
+    await import("../src/services/integration-vault.service.js");
+  const { getGoogleAccessToken } = await import("../src/services/google-integration.service.js");
+  const previousToken = structuredClone(savedToken);
+  try {
+    const initialValue = decryptIntegrationToken(previousToken.encrypted_token);
+    const expiredToken = encryptIntegrationToken({
+      ...initialValue, expiresAt: Date.now() - 1,
+    });
+    savedToken = { ...previousToken, encrypted_token: expiredToken };
+    let releaseRefresh;
+    let refreshStarted;
+    const started = new Promise((resolve) => { refreshStarted = resolve; });
+    refreshResponse = async () => {
+      refreshStarted();
+      await new Promise((resolve) => { releaseRefresh = resolve; });
+      return Response.json({ error: "invalid_grant" }, { status: 400 });
+    };
+    const refreshing = getGoogleAccessToken("owner@example.com");
+    await started;
+    await saveIntegrationToken({
+      provider: "google",
+      account: "owner@example.com",
+      value: {
+        ...initialValue,
+        sessionVersion: randomBytes(32).toString("base64url"),
+      },
+    });
+    const reconnectedToken = structuredClone(savedToken);
+    releaseRefresh();
+    await assert.rejects(refreshing, (error) => error.statusCode === 409);
+    assert.deepEqual(savedToken, reconnectedToken);
+
+    savedToken = {
+      ...reconnectedToken,
+      encrypted_token: encryptIntegrationToken({
+        ...decryptIntegrationToken(reconnectedToken.encrypted_token),
+        expiresAt: Date.now() - 1,
+      }),
+    };
+    const currentValue = decryptIntegrationToken(savedToken.encrypted_token);
+    const persistentCookie = `ddpro_session_restore=${encodeURIComponent(signedPayload({
+      email: "owner@example.com",
+      sessionVersion: currentValue.sessionVersion,
+      expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
+    }, "restore:"))}`;
+    const restored = await restore(persistentCookie);
+    assert.equal(restored.status, 200);
+    const activeSession = (await restored.json()).data.session;
+    const deletesBeforeRevokedGrant = googleTokenDeletes;
+    refreshResponse = () => Response.json({
+      error: "invalid_grant",
+      error_description: "Refresh token was revoked.",
+    }, { status: 400 });
+    const response = await originalFetch(`${baseUrl}/api/integrations/calendar/events`, {
+      headers: {
+        Origin: frontendOrigin,
+        Authorization: ["Bearer", activeSession].join(" "),
+      },
+    });
+    assert.equal(response.status, 401);
+    const body = await response.json();
+    assert.equal(body.code, "GOOGLE_CONNECTION_REQUIRED");
+    assert.equal(body.googleApiError.category, "connection_invalid");
+    assert.equal(body.googleApiError.operation, "oauth.token.refresh");
+    assert.deepEqual(savedToken, null);
+    assert.equal(googleTokenDeletes, deletesBeforeRevokedGrant + 1);
+    const restoration = await restore(persistentCookie);
+    assert.equal(restoration.status, 401);
+    assert.equal((await restoration.json()).code, "GOOGLE_CONNECTION_REQUIRED");
+  } finally {
+    savedToken = previousToken;
+    refreshResponse = null;
   }
 });

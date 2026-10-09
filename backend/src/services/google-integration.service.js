@@ -9,6 +9,7 @@ import {
   isSecureTokenStorageReady,
   isTokenTableAvailable,
   removeIntegrationToken,
+  removeIntegrationTokenSnapshot,
   readIntegrationToken,
   readIntegrationTokenSnapshot,
   replaceIntegrationToken,
@@ -533,12 +534,24 @@ export const getGoogleAccessToken = async (account) => {
   }
   const refreshed = await response.json().catch(() => ({}));
   if (!response.ok || !refreshed.access_token) {
-    throw new GoogleApiError(response.ok ? 502 : response.status, {
+    const refreshError = new GoogleApiError(response.ok ? 502 : response.status, {
       error: {
         message: refreshed.error_description || "Google access refresh failed. The saved connection was kept.",
         errors: typeof refreshed.error === "string" ? [{ reason: refreshed.error }] : [],
       },
     }, [token.accessToken, token.refreshToken], "google", "oauth.token.refresh");
+    if (refreshError.code === "GOOGLE_CONNECTION_REQUIRED") {
+      const removed = await removeIntegrationTokenSnapshot({
+        provider: "google", account, encryptedToken: snapshot.encryptedToken,
+      });
+      if (!removed) {
+        throw Object.assign(new Error("Google connection changed during token refresh. Retry the request."), {
+          statusCode: 409,
+          expose: true,
+        });
+      }
+    }
+    throw refreshError;
   }
   const updated = {
     ...token,

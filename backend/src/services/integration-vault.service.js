@@ -131,6 +131,20 @@ export const removeIntegrationToken = async ({ provider, account }) => {
   if (error) throw error;
 };
 
+export const removeIntegrationTokenSnapshot = async ({ provider, account, encryptedToken }) => {
+  const client = getIntegrationAdmin();
+  if (!client) throw new Error("Supabase service-role configuration is required.");
+  const { data, error } = await client.from("integration_tokens")
+    .delete()
+    .eq("provider", provider)
+    .eq("account", account)
+    .eq("encrypted_token", JSON.stringify(encryptedToken))
+    .select("provider")
+    .maybeSingle();
+  if (error) throw error;
+  return Boolean(data);
+};
+
 export const hasStoredIntegrationToken = async (provider, account = "") => {
   const client = getIntegrationAdmin();
   if (!client || !getEncryptionKey()) return false;

@@ -56,6 +56,21 @@ test("missing or malformed Google error bodies retain the real HTTP status", () 
   }
 });
 
+test("only an invalid Google refresh grant marks the stored connection invalid", () => {
+  const revoked = new GoogleApiError(400, {
+    error: { errors: [{ reason: "invalid_grant" }] },
+  }, [], "google", "oauth.token.refresh");
+  assert.equal(revoked.statusCode, 401);
+  assert.equal(revoked.code, "GOOGLE_CONNECTION_REQUIRED");
+  assert.equal(revoked.googleApiError.category, "connection_invalid");
+
+  const missingScope = new GoogleApiError(403, {
+    error: { errors: [{ reason: "insufficientPermissions" }] },
+  }, [], "googleCalendar", "calendar.events");
+  assert.equal(missingScope.statusCode, 403);
+  assert.equal(missingScope.googleApiError.category, "access_denied");
+});
+
 test("workspace error middleware forwards safe metadata and logs the provider operation", () => {
   const error = new GoogleApiError(403, {
     error: { message: "Calendar access denied", errors: [{ reason: "accessNotConfigured" }] },
