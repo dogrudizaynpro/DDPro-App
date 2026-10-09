@@ -22,6 +22,7 @@ let exchangeGrant;
 let server;
 let baseUrl;
 let workspaceResponse;
+let projectsSheetValues;
 let refreshedAccessToken;
 let refreshResponse;
 let googleTokenDeletes = 0;
@@ -30,6 +31,7 @@ let restoreCookie;
 let callbackCookie;
 let providerRequests = 0;
 let googleTokenUpserts = 0;
+let nextProjectId = 2;
 let beforeConditionalTokenUpdate;
 const calendarRequests = [];
 const projectRows = [{
@@ -120,7 +122,10 @@ before(async () => {
           const index = projectRows.findIndex((row) => row.id === id);
           if (options.method === "POST") {
             const body = JSON.parse(options.body);
-            const row = { id: "10000000-0000-4000-8000-000000000002", ...(Array.isArray(body) ? body[0] : body) };
+            const row = {
+              id: `10000000-0000-4000-8000-${String(nextProjectId++).padStart(12, "0")}`,
+              ...(Array.isArray(body) ? body[0] : body),
+            };
             projectRows.push(row);
             return Response.json(row, { status: 201 });
           }
@@ -140,6 +145,11 @@ before(async () => {
           : Response.json(rows);
       }
     }
+    if (url.startsWith("https://sheets.googleapis.com/v4/spreadsheets/")) {
+      assert.equal(options.headers.Authorization, ["Bearer", refreshedAccessToken || "test-access"].join(" "));
+      if (url.includes("/values/")) return Response.json({ values: projectsSheetValues || [] });
+      return Response.json({ sheets: [{ properties: { sheetId: 123, title: "Projects" } }] });
+    }
     providerRequests += 1;
     if (url === "https://oauth2.googleapis.com/revoke") {
       return new Response(null, { status: 200 });
@@ -150,7 +160,12 @@ before(async () => {
         if (refreshResponse) return refreshResponse();
         return Response.json({ access_token: refreshedAccessToken || "test-access", expires_in: 3600 });
       }
-      return Response.json({ access_token: "test-access", refresh_token: "test-refresh", expires_in: 3600 });
+      return Response.json({
+        access_token: "test-access",
+        refresh_token: "test-refresh",
+        expires_in: 3600,
+        scope: "openid email https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/spreadsheets.readonly",
+      });
     }
     if (url === "https://www.googleapis.com/oauth2/v2/userinfo") {
       return Response.json({ email: "owner@example.com", verified_email: true });
@@ -233,6 +248,8 @@ test("OAuth start redirects to Google and callback stores encrypted token and se
   assert.equal(destination.origin, "https://accounts.google.com");
   assert.equal(destination.searchParams.get("redirect_uri"), process.env.GOOGLE_REDIRECT_URI);
   assert.ok(destination.searchParams.get("scope").split(" ").includes("https://www.googleapis.com/auth/gmail.readonly"));
+  assert.ok(destination.searchParams.get("scope").split(" ").includes("https://www.googleapis.com/auth/calendar.events"));
+  assert.ok(destination.searchParams.get("scope").split(" ").includes("https://www.googleapis.com/auth/spreadsheets.readonly"));
   const stateCookie = start.headers.get("set-cookie").split(";")[0];
   assert.match(start.headers.get("set-cookie"), /HttpOnly.*Secure; SameSite=None/);
   const callback = new URL(`${baseUrl}/api/integrations/google/callback`);
@@ -281,6 +298,42 @@ test("one-time exchange authenticates browser status and real provider test rout
   assert.equal(exchange.headers.get("cache-control"), "no-store");
   const session = (await exchange.json()).data.session;
   browserSession = session;
+  projectsSheetValues = [
+    ["Proje Adı", "Müşteri", "Firma", "Lokasyon", "Proje Türü", "Ürün", "Metraj", "Sistem", "Durum", "Başlangıç Tarihi", "Bitiş Tarihi", "Notlar", "Ek sütun"],
+    ["Restored browser project", "Existing customer", "Existing company", "Bursa", "Hospital", "Glass", "80", "Curtain wall", "Aktif", "01.01.2020", "31.12.2020", "Keep existing", "verbatim"],
+    ["Past project from Sheets", "Customer A", "Company A", "İstanbul", "Hospital", "Facade", "125.5", "Unitized", "Tamamlandı", "01.03.2020", "31.08.2020", "Historical notes", "extra value"],
+    ["Missing status project", "Customer B", "Company B", "Ankara", "Office", "Window", "not numeric", "Stick", "", "", "", "", "original value"],
+  ];
+  const sheetsImportUrl = `${baseUrl}/api/projects/import/google-sheets`;
+  const importHeaders = {
+    Origin: "https://dogrudizaynpro.github.io",
+    Authorization: ["Bearer", session].join(" "),
+    "Content-Type": "application/json",
+  };
+  const firstImport = await originalFetch(sheetsImportUrl, {
+    method: "POST",
+    headers: importHeaders,
+    body: JSON.stringify({ spreadsheetId: "1Abcdefghijklmnopqrstuv12345" }),
+  });
+  assert.equal(firstImport.status, 200);
+  const firstImportData = (await firstImport.json()).data;
+  assert.equal(firstImportData.sourceRows, 3);
+  assert.deepEqual(firstImportData.added.map(({ name }) => name), ["Past project from Sheets"]);
+  assert.equal(firstImportData.existing[0].name, "Restored browser project");
+  assert.equal(firstImportData.errors[0].message, "Project status is missing.");
+  const importedProject = projectRows.find(({ name }) => name === "Past project from Sheets");
+  assert.equal(importedProject.area_m2, 125.5);
+  assert.deepEqual(importedProject.systems, ["Unitized"]);
+  assert.equal(importedProject.start_date, "01.03.2020");
+  assert.equal(importedProject.end_date, "31.08.2020");
+  assert.equal(importedProject.source_data.values[12], "extra value");
+  const repeatedImport = await originalFetch(sheetsImportUrl, {
+    method: "POST",
+    headers: importHeaders,
+    body: JSON.stringify({ spreadsheetId: "1Abcdefghijklmnopqrstuv12345" }),
+  });
+  assert.equal((await repeatedImport.json()).data.added.length, 0);
+  assert.equal(projectRows.filter(({ name }) => name === "Past project from Sheets").length, 1);
   assert.equal((await originalFetch(`${baseUrl}/api/integrations/google/exchange`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Origin: "https://dogrudizaynpro.github.io" },
