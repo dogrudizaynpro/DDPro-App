@@ -18,6 +18,7 @@ import {
 import {
   importAiFileProjects,
   importGoogleProjects,
+  previewAiFileProjectImport,
 } from "../controllers/project-import.controller.js";
 
 const router = express.Router();
@@ -45,6 +46,13 @@ router.post("/import/ai-file", rateLimit({
   standardHeaders: "draft-8",
   legacyHeaders: false,
 }), importAiFileProjects);
+
+router.post("/import/ai-file/preview", rateLimit({
+  windowMs: 60_000,
+  limit: 20,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+}), previewAiFileProjectImport);
 
 // GET /:id - Get project by ID
 router.get("/:id", getProjectById);

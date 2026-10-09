@@ -176,6 +176,14 @@ export const importAiFileProjects = async ({ sourceFingerprint, headers, rows })
   return response.data;
 };
 
+export const previewAiFileProjectImport = async ({ sourceFingerprint, headers, rows }) => {
+  const response = await fetchAPI("/api/projects/import/ai-file/preview", {
+    method: "POST",
+    body: JSON.stringify({ sourceFingerprint, headers, rows }),
+  });
+  return response.data;
+};
+
 export const updateProject = async (id, project) => {
   if (!id) throw new Error("Project ID is required");
   const payload = {

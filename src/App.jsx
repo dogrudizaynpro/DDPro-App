@@ -7,6 +7,7 @@ import {
   deleteProject as deleteProjectRequest,
   getProjects,
   importAiFileProjects,
+  previewAiFileProjectImport,
   updateProject as updateProjectRequest,
 } from "./services/projects.service.js";
 import "./styles.css";
@@ -2069,6 +2070,22 @@ function App() {
 
     try {
       const completion = await requestAiCompletion({ message, context, attachment });
+      let projectImport = completion.projectImport;
+      if (projectImport) {
+        try {
+          const preview = await previewAiFileProjectImport({
+            sourceFingerprint: projectImport.sourceFingerprint,
+            headers: projectImport.table.headers,
+            rows: projectImport.table.rows,
+          });
+          projectImport = { ...projectImport, ...preview, previewError: null };
+        } catch (error) {
+          projectImport = {
+            ...projectImport,
+            previewError: getApiFailureReason(error),
+          };
+        }
+      }
       if (attachment) {
         setAiMessages((currentMessages) => currentMessages.map((item) =>
           item.id === userMessage.id
@@ -2091,7 +2108,7 @@ function App() {
           date: formatDate(),
           moduleSuggestion: suggestedModuleId,
           pendingAction: completion.pendingAction,
-          projectImport: completion.projectImport,
+          projectImport,
         },
       ]);
       addLog("DDPro AI isteği yapılandırılmış sağlayıcıya gönderildi.");
@@ -2166,7 +2183,12 @@ function App() {
   };
 
   const confirmAiProjectImport = async (messageId, projectImport) => {
-    if (aiSending || (projectImport?.result && projectImport.result.errors.length === 0)) return;
+    if (
+      aiSending ||
+      projectImport?.previewError ||
+      !Array.isArray(projectImport?.records) ||
+      (projectImport?.result && projectImport.result.errors.length === 0)
+    ) return;
     setAiSending(true);
     try {
       const result = await importAiFileProjects({
@@ -2203,14 +2225,72 @@ function App() {
         setProjects(savedProjects);
         setProjectsError(null);
         setProjectsFetchState("success");
+        const savedProjectIds = new Set(savedProjects.map(({ id }) => id));
+        const verifiedAdded = result.added.filter(({ id }) => savedProjectIds.has(id));
+        setAiMessages((currentMessages) => currentMessages.map((message) =>
+          message.id === messageId
+            ? {
+              ...message,
+              projectImport: {
+                ...message.projectImport,
+                verification: {
+                  expected: result.added.length,
+                  saved: verifiedAdded.length,
+                  complete: verifiedAdded.length === result.added.length,
+                },
+              },
+            }
+            : message
+        ));
       } catch (error) {
         setProjectsError(`İçe aktarılan projeler yenilenemedi (${getApiFailureReason(error)}). Sayfayı yenileyerek tekrar deneyin.`);
+        setAiMessages((currentMessages) => currentMessages.map((message) =>
+          message.id === messageId
+            ? {
+              ...message,
+              projectImport: {
+                ...message.projectImport,
+                verification: {
+                  expected: result.added.length,
+                  saved: null,
+                  complete: false,
+                  error: getApiFailureReason(error),
+                },
+              },
+            }
+            : message
+        ));
       }
       addLog(`AI dosya aktarımı tamamlandı: ${result.added.length} proje kaydedildi, ${result.existing.length} mükerrer atlandı, ${result.errors.length} hata.`);
     } catch (error) {
       setAiMessages((currentMessages) => currentMessages.map((message) =>
         message.id === messageId
           ? { ...message, projectImport: { ...message.projectImport, importError: getApiFailureReason(error) } }
+          : message
+      ));
+    } finally {
+      setAiSending(false);
+    }
+  };
+
+  const retryAiProjectImportPreview = async (messageId, projectImport) => {
+    if (aiSending || !projectImport?.table) return;
+    setAiSending(true);
+    try {
+      const preview = await previewAiFileProjectImport({
+        sourceFingerprint: projectImport.sourceFingerprint,
+        headers: projectImport.table.headers,
+        rows: projectImport.table.rows,
+      });
+      setAiMessages((currentMessages) => currentMessages.map((message) =>
+        message.id === messageId
+          ? { ...message, projectImport: { ...message.projectImport, ...preview, previewError: null } }
+          : message
+      ));
+    } catch (error) {
+      setAiMessages((currentMessages) => currentMessages.map((message) =>
+        message.id === messageId
+          ? { ...message, projectImport: { ...message.projectImport, previewError: getApiFailureReason(error) } }
           : message
       ));
     } finally {
@@ -2780,6 +2860,7 @@ function App() {
           aiSending={aiSending}
           onConfirmAction={confirmAiOperationalAction}
           onConfirmProjectImport={confirmAiProjectImport}
+          onRetryProjectImportPreview={retryAiProjectImportPreview}
         />
       );
     }

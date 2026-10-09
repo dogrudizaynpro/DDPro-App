@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   mapProjectSheetRow,
+  previewAiFileProjects,
   saveAiFileProjects,
 } from "../src/controllers/project-import.controller.js";
 
@@ -123,4 +124,48 @@ test("AI file import reports duplicates and failures and safely retries only uns
   assert.equal(retry.existing.length, 3);
   assert.equal(retry.errors.length, 0);
   assert.equal(projects.length, 4);
+});
+
+test("AI file preflight groups duplicate, review, and transferable rows without writing", async () => {
+  const headers = ["Project", "Product", "System", "Status", "Area m2", "Start date", "End date"];
+  const rows = [
+    ["Existing", "Known product", "Known system", "Active", "10", "2026-01-01", "2026-12-31"],
+    ["New project", "Unlisted product", "Unlisted system", "Active", "10", "2026-01-01", "2026-12-31"],
+    ["Ready project", "Known product", "Known system", "Active", "10", "2026-01-01", "2026-12-31"],
+    ["", "Known product", "Known system", "Active", "10", "2026-01-01", "2026-12-31"],
+  ];
+  const tables = {
+    projects: [{ name: "Existing", import_source_key: null }],
+    products: [{ name: "Known product" }],
+    systems: [{ name: "Known system" }],
+  };
+  let writes = 0;
+  const supabase = {
+    from(table) {
+      return {
+        select: async () => ({ data: tables[table], error: null }),
+        insert: () => { writes += 1; },
+      };
+    },
+  };
+
+  const preview = await previewAiFileProjects(supabase, {
+    sourceFingerprint: "c".repeat(64),
+    headers,
+    rows,
+  });
+
+  assert.deepEqual(preview.counts, { transfer: 1, duplicate: 1, review: 2 });
+  assert.deepEqual(preview.records.map(({ classification }) => classification), [
+    "duplicate",
+    "review",
+    "transfer",
+    "review",
+  ]);
+  assert.deepEqual(preview.records[1].unmatched, [
+    { field: "product", name: "Unlisted product" },
+    { field: "system", name: "Unlisted system" },
+  ]);
+  assert.deepEqual(preview.records[1].project.source_data.values, rows[1]);
+  assert.equal(writes, 0);
 });
