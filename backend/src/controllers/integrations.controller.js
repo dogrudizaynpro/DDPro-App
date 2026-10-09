@@ -117,6 +117,7 @@ export const getIntegrationStatus = async (req, res, next) => {
         configured: googleConfigured,
         oauthFlowAvailable: googleOAuthAvailable,
         ...statusAfterTest("google", googleConfigured, googleConnected),
+        connected: googleConnected,
       },
       supabase: {
         configured: supabaseConfigured,

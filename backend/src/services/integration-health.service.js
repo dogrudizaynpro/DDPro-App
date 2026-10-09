@@ -45,7 +45,7 @@ export const getIntegrationHealthStatus = ({
     }
     if ([502, 503, 504].includes(result.statusCode)) return "service_unavailable";
     if (result.statusCode === 401) return "authorization_required";
-    if ([400, 403].includes(result.statusCode)) return "request_rejected";
+    if ([400, 403, 429].includes(result.statusCode)) return "request_rejected";
     return "test_failed";
   }
   if (requiresSession && !sessionReady) return "authorization_required";

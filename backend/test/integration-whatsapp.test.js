@@ -52,8 +52,8 @@ const runTest = () => originalFetch(`${baseUrl}/api/integrations/test/whatsapp`,
 test("WhatsApp status requires both outbound and webhook configuration, without exposing secrets", async () => {
   const ready = await status();
   assert.equal(ready.configured, true);
-  assert.equal(ready.connected, true);
-  assert.equal(ready.status, "connected");
+  assert.equal(ready.connected, false);
+  assert.equal(ready.status, "configured_not_tested");
   assert.equal(ready.sendConfigured, true);
   assert.equal(ready.webhookConfigured, true);
   for (const key of keys.filter((key) => key.startsWith("WHATSAPP_") && key !== "WHATSAPP_PHONE_NUMBER_ID")) {
@@ -111,7 +111,7 @@ test("WhatsApp test errors redact provider responses and network details, preser
     assert.equal(body.data.testSucceeded, false);
     for (const secret of secrets) assert.ok(!JSON.stringify(body).includes(secret));
     const current = await status();
-    assert.equal(current.connected, true);
+    assert.equal(current.connected, false);
     assert.equal(current.lastTest.testSucceeded, false);
     for (const secret of secrets) assert.ok(!JSON.stringify(current).includes(secret));
   }

@@ -383,10 +383,11 @@ test("one-time exchange authenticates browser status and real provider test rout
   const headers = { Origin: "https://dogrudizaynpro.github.io", Authorization: ["Bearer", session].join(" ") };
   const status = await originalFetch(`${baseUrl}/api/integrations/status`, { headers });
   const data = (await status.json()).data;
-  assert.equal(data.gmail.connected, true);
-  assert.equal(data.googleCalendar.connected, true);
-  assert.equal(data.crm.connected, true);
-  assert.equal(data.crm.status, "connected");
+  assert.equal(data.google.connected, true);
+  assert.equal(data.gmail.connected, false);
+  assert.equal(data.googleCalendar.connected, false);
+  assert.equal(data.crm.connected, false);
+  assert.equal(data.crm.status, "configured_not_tested");
   assert.equal(data.crm.lastTest, null);
   for (const provider of ["gmail", "googleCalendar"]) {
     const tested = await originalFetch(`${baseUrl}/api/integrations/test/${provider}`, {
@@ -395,8 +396,7 @@ test("one-time exchange authenticates browser status and real provider test rout
     assert.equal(tested.status, 200);
     assert.equal((await tested.json()).data.connected, true);
     const afterSuccess = (await (await originalFetch(`${baseUrl}/api/integrations/status`, { headers })).json()).data;
-    assert.equal(afterSuccess.gmail.connected, true);
-    assert.equal(afterSuccess.googleCalendar.connected, true);
+    assert.equal(afterSuccess[provider].connected, true);
   }
   const calendarHeaders = { ...headers, "Content-Type": "application/json" };
   const calendarBase = `${baseUrl}/api/integrations/calendar/events`;
@@ -491,12 +491,14 @@ test("one-time exchange authenticates browser status and real provider test rout
         httpStatus, operation: "gmail.profile", category,
         message: `Google failure: ${reason}`, reasons: [reason],
       });
-      assert.equal(failureBody.data.connected, true);
+      assert.equal(failureBody.data.connected, false);
       assert.equal(failureBody.data.testSucceeded, false);
       assert.doesNotMatch(JSON.stringify(failureBody), /test-access|test-refresh/);
       const current = await getStatus();
-      assert.equal(current.gmail.connected, true);
-      assert.equal(current.gmail.status, "connected");
+      assert.equal(current.gmail.connected, false);
+      assert.equal(current.gmail.status, httpStatus === 503
+        ? "service_unavailable"
+        : httpStatus === 403 ? "permission_required" : "request_rejected");
       assert.equal(current.gmail.lastTest.testSucceeded, false);
       assert.equal(current.gmail.lastTest.googleApiError.httpStatus, httpStatus);
       assert.equal(current.google.connected, true);
@@ -531,12 +533,12 @@ test("one-time exchange authenticates browser status and real provider test rout
     workspaceResponse = () => Response.json({ error: { message: "Calendar access denied", errors: [{ reason: "forbidden" }] } }, { status: 403 });
     const failedCalendar = await testProvider("googleCalendar");
     assert.equal(failedCalendar.status, 403);
-    assert.equal((await failedCalendar.json()).data.connected, true);
+    assert.equal((await failedCalendar.json()).data.connected, false);
     const calendarFailure = await getStatus();
-    assert.equal(calendarFailure.googleCalendar.status, "connected");
-    assert.equal(calendarFailure.googleCalendar.connected, true);
+    assert.equal(calendarFailure.googleCalendar.status, "request_rejected");
+    assert.equal(calendarFailure.googleCalendar.connected, false);
     assert.equal(calendarFailure.googleCalendar.lastTest.testSucceeded, false);
-    assert.equal(calendarFailure.gmail.connected, true);
+    assert.equal(calendarFailure.gmail.connected, false);
     assert.equal(calendarFailure.google.connected, true);
 
     workspaceResponse = null;
@@ -560,8 +562,9 @@ test("one-time exchange authenticates browser status and real provider test rout
       assert.deepEqual(savedToken.encrypted_token, expiredToken);
       assert.equal(googleTokenDeletes, 0);
       const current = await getStatus();
-      assert.equal(current.gmail.connected, true);
-      assert.equal(current.googleCalendar.connected, true);
+      assert.equal(current.gmail.connected, false);
+      assert.equal(current.gmail.status, "service_unavailable");
+      assert.equal(current.googleCalendar.connected, false);
     }
     const { getGoogleAccessToken } = await import("../src/services/google-integration.service.js");
     refreshResponse = () => new Response("<html>test-refresh</html>", { status: 401 });
@@ -626,7 +629,7 @@ test("integration status reports a recent successful AI provider health test", a
   assert.doesNotMatch(JSON.stringify(body), /test-ai-provider-key/);
 });
 
-test("exchanged browser session keeps Gmail and Calendar connected on cookie-free reload", async () => {
+test("exchanged browser session persists while provider health remains independently verified", async () => {
   const headers = {
     Origin: "https://dogrudizaynpro.github.io",
     Authorization: ["Bearer", browserSession].join(" "),
@@ -634,6 +637,7 @@ test("exchanged browser session keeps Gmail and Calendar connected on cookie-fre
   const response = await originalFetch(`${baseUrl}/api/integrations/status`, { headers });
   assert.equal(response.status, 200);
   const { data } = await response.json();
+  assert.equal(data.google.connected, true);
   assert.equal(data.gmail.connected, true);
   assert.equal(data.googleCalendar.connected, true);
   const anonymous = await originalFetch(`${baseUrl}/api/integrations/status`);
@@ -665,7 +669,7 @@ test("failed Gmail 401 preserves the exchanged session, encrypted token and Cale
     const status = await originalFetch(`${baseUrl}/api/integrations/status`, { headers });
     const { data } = await status.json();
     assert.equal(data.gmail.connected, false);
-    assert.equal(data.googleCalendar.connected, true);
+    assert.equal(data.google.connected, true);
     assert.equal(data.gmail.lastTest.testSucceeded, false);
     assert.equal(googleTokenDeletes, deletesBefore);
     assert.deepEqual(savedToken.encrypted_token, encryptedBefore);
@@ -727,7 +731,9 @@ test("restoration survives backend restart, issues only a short private bearer a
   const status = await originalFetch(`${baseUrl}/api/integrations/status`, {
     headers: { Origin: frontendOrigin, Authorization: ["Bearer", body.data.session].join(" ") },
   });
-  assert.equal((await status.json()).data.gmail.connected, true);
+  const restoredStatus = (await status.json()).data;
+  assert.equal(restoredStatus.google.connected, true);
+  assert.equal(restoredStatus.gmail.connected, false);
   for (const [path, rows] of [["/api/projects", projectRows], ["/api/crm", crmRows]]) {
     const response = await originalFetch(`${baseUrl}${path}`, {
       headers: { Origin: frontendOrigin, Authorization: ["Bearer", body.data.session].join(" ") },
@@ -897,7 +903,10 @@ test("Chromium accepts the production-origin CHIPS cookie and restores after ref
         fetch(${JSON.stringify(apiOrigin)} + "/api/projects", { credentials: "include", headers }).then(r => r.json()),
         fetch(${JSON.stringify(apiOrigin)} + "/api/integrations/status", { credentials: "include", headers }).then(r => r.json())
       ]);
-      window.result = { projects: projects.data, gmail: status.data.gmail.connected, calendar: status.data.googleCalendar.connected };
+      window.result = {
+        projects: projects.data, google: status.data.google.connected,
+        gmail: status.data.gmail.connected, calendar: status.data.googleCalendar.connected
+      };
     })().catch(error => { window.result = { error: error.message }; });
   </script>`;
   const startBrowser = async () => {
@@ -976,8 +985,9 @@ test("Chromium accepts the production-origin CHIPS cookie and restores after ref
       const { result } = await command("Runtime.evaluate", { expression: "window.result", returnByValue: true });
       if (result.value) {
         assert.equal(result.value.error, undefined, JSON.stringify(networkFailures));
-        assert.equal(result.value.gmail, true);
-        assert.equal(result.value.calendar, true);
+        assert.equal(result.value.google, true);
+        assert.equal(typeof result.value.gmail, "boolean");
+        assert.equal(typeof result.value.calendar, "boolean");
         assert.ok(result.value.projects.some((project) => project.name === "CHIPS browser project"));
         return;
       }
@@ -1143,7 +1153,9 @@ test("session parsing rejects non-finite expiry while legacy signed bearers stil
       const response = await originalFetch(`${baseUrl}/api/integrations/status`, {
         headers: { Origin: frontendOrigin, ...proof },
       });
-      assert.equal((await response.json()).data.gmail.connected, true);
+      const { data } = (await response.json());
+      assert.equal(data.google.connected, true);
+      assert.equal(data.gmail.connected, false);
       const protectedResponse = await originalFetch(`${baseUrl}/api/integrations/calendar/events/bad`, {
         headers: { Origin: frontendOrigin, "X-Forwarded-For": "192.0.2.70", ...proof },
       });
