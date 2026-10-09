@@ -13,6 +13,7 @@ const keys = [
   "NODE_ENV", "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "GOOGLE_REDIRECT_URI",
   "GOOGLE_ALLOWED_EMAILS", "FRONTEND_URL", "INTEGRATION_SESSION_SECRET",
   "INTEGRATION_TOKEN_ENCRYPTION_KEY", "SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "ALLOWED_ORIGINS",
+  "AI_API_URL", "AI_API_KEY", "AI_MODEL",
 ];
 const previous = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
 const originalFetch = globalThis.fetch;
@@ -58,6 +59,9 @@ before(async () => {
     INTEGRATION_TOKEN_ENCRYPTION_KEY: "a".repeat(64),
     SUPABASE_URL: "https://example.supabase.co",
     SUPABASE_SERVICE_ROLE_KEY: "test-service-role",
+    AI_API_URL: "https://ai.example/v1/chat/completions",
+    AI_API_KEY: "test-ai-provider-key",
+    AI_MODEL: "test-model",
   });
   globalThis.fetch = async (input, options = {}) => {
     const url = String(input);
@@ -150,6 +154,10 @@ before(async () => {
     }
     if (url === "https://www.googleapis.com/oauth2/v2/userinfo") {
       return Response.json({ email: "owner@example.com", verified_email: true });
+    }
+    if (url === process.env.AI_API_URL) {
+      assert.ok(options.headers.Authorization);
+      return Response.json({ choices: [{ message: { content: "ok" } }] });
     }
     if (url === "https://www.googleapis.com/gmail/v1/users/me/profile" ||
         url.startsWith("https://www.googleapis.com/calendar/v3/users/me/calendarList") ||
@@ -503,6 +511,21 @@ test("one-time exchange authenticates browser status and real provider test rout
     refreshedAccessToken = null;
     refreshResponse = null;
   }
+});
+
+test("integration status does not treat a cached AI provider test as live connectivity", async () => {
+  const { testIntegrationConnection } = await import("../src/services/integration-health.service.js");
+  const testData = await testIntegrationConnection("ai");
+  assert.equal(testData.connected, true);
+
+  const status = await originalFetch(`${baseUrl}/api/integrations/status`, {
+    headers: { Origin: "https://dogrudizaynpro.github.io" },
+  });
+  const body = await status.json();
+  assert.equal(body.data.ai.connected, false);
+  assert.equal(body.data.ai.status, "configured_not_tested");
+  assert.equal(body.data.ai.lastTest.connected, true);
+  assert.doesNotMatch(JSON.stringify(body), /test-ai-provider-key/);
 });
 
 test("exchanged browser session keeps Gmail and Calendar connected on cookie-free reload", async () => {

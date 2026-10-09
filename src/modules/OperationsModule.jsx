@@ -226,6 +226,27 @@ const readRecords = (key) => {
 
 const timestamp = () => new Date().toISOString();
 
+const applyAiVerification = (status, testResult, testError) => {
+  if (!status?.ai || (!testResult && !testError)) return status;
+  const connected = !testError && testResult?.data?.connected === true;
+  return {
+    ...status,
+    ai: {
+      ...status.ai,
+      connected,
+      status: connected ? "connected" : "test_failed",
+      lastTest: testError
+        ? {
+            connected: false,
+            testSucceeded: false,
+            testedAt: new Date().toISOString(),
+            error: testError.message || "AI sağlayıcı bağlantı testi başarısız.",
+          }
+        : testResult.data,
+    },
+  };
+};
+
 function IntegrationSettings({ onNavigate, hubMode = false }) {
   const [status, setStatus] = useState(null);
   const [statusLoading, setStatusLoading] = useState(true);
@@ -233,22 +254,22 @@ function IntegrationSettings({ onNavigate, hubMode = false }) {
   const [testing, setTesting] = useState("");
   const [notice, setNotice] = useState("");
 
-  const refresh = async ({ verifyAi = false } = {}) => {
+  const refresh = async ({ verifyAi = false, aiTestResult, aiTestError } = {}) => {
     setError("");
     setStatus(null);
     setStatusLoading(true);
     try {
       let nextStatus = await getIntegrationStatus();
-      let aiTestError;
       if (verifyAi && nextStatus.ai?.configured) {
         try {
-          await testIntegrationConnection("ai");
-        } catch (testError) {
-          aiTestError = testError;
+          aiTestResult = await testIntegrationConnection("ai");
+          aiTestError = undefined;
+        } catch (error) {
+          aiTestError = error;
         }
         nextStatus = await getIntegrationStatus();
       }
-      setStatus(nextStatus);
+      setStatus(applyAiVerification(nextStatus, aiTestResult, aiTestError));
       if (aiTestError) {
         setError(aiTestError.message || "AI sağlayıcı bağlantı testi başarısız.");
       }
@@ -278,16 +299,19 @@ function IntegrationSettings({ onNavigate, hubMode = false }) {
       setStatusLoading(true);
       try {
         let value = await getIntegrationStatus();
+        let aiTestResult;
+        let aiTestError;
         if (value.ai?.configured) {
           try {
-            await testIntegrationConnection("ai");
-          } catch (testError) {
-            if (active) setError(testError.message || "AI sağlayıcı bağlantı testi başarısız.");
+            aiTestResult = await testIntegrationConnection("ai");
+          } catch (error) {
+            aiTestError = error;
+            if (active) setError(error.message || "AI sağlayıcı bağlantı testi başarısız.");
           }
           value = await getIntegrationStatus();
         }
         if (active) {
-          setStatus(value);
+          setStatus(applyAiVerification(value, aiTestResult, aiTestError));
           if (oauthResult.get("integration") === "google_connected" &&
               value.gmail?.connected && value.googleCalendar?.connected) {
             setNotice("Google hesabı güvenli OAuth akışıyla bağlandı. Gmail ve Google Calendar durumları backend'den doğrulandı.");
@@ -351,11 +375,11 @@ function IntegrationSettings({ onNavigate, hubMode = false }) {
     setError("");
     setNotice("");
     try {
-      await testIntegrationConnection(provider);
+      const testResult = await testIntegrationConnection(provider);
       setNotice(`${integrationCatalog.find((item) => item.id === provider)?.title || provider} bağlantı testi başarılı.`);
-      await refresh();
+      await refresh({ aiTestResult: provider === "ai" ? testResult : undefined });
     } catch (testError) {
-      await refresh();
+      await refresh({ aiTestError: provider === "ai" ? testError : undefined });
       setError(formatGoogleIntegrationError(testError));
     } finally {
       setTesting("");

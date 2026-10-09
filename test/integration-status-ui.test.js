@@ -9,8 +9,12 @@ const source = await readFile(
 
 test("integration dashboard keeps initial status pending until the configured AI model responds", () => {
   assert.match(source, /const \[statusLoading, setStatusLoading\] = useState\(true\)/);
-  assert.match(source, /if \(value\.ai\?\.configured\)\s*\{\s*try\s*\{\s*await testIntegrationConnection\("ai"\)/);
+  assert.match(source, /if \(value\.ai\?\.configured\)\s*\{\s*try\s*\{\s*aiTestResult = await testIntegrationConnection\("ai"\)/);
   assert.match(source, /value = await getIntegrationStatus\(\)/);
+  assert.match(source, /const applyAiVerification = \(status, testResult, testError\)/);
+  assert.match(source, /const connected = !testError && testResult\?\.data\?\.connected === true/);
+  assert.match(source, /setStatus\(applyAiVerification\(nextStatus, aiTestResult, aiTestError\)\)/);
+  assert.match(source, /aiTestResult: provider === "ai" \? testResult : undefined/);
   assert.match(source, /integration\.id === "ai"\) return "TEST EDİLİYOR"/);
   assert.match(source, /integration\.id === "crm"\) return "GOOGLE OTURUMU DOĞRULANIYOR"/);
   assert.match(source, /if \(!status\) return "DURUM ALINAMADI"/);
