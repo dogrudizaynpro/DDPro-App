@@ -16,5 +16,9 @@ test("integration dashboard keeps initial status pending until the configured AI
   assert.match(source, /if \(!status\) return "DURUM ALINAMADI"/);
   assert.match(source, /Entegrasyon bağlantıları ve AI sağlayıcı yanıtı doğrulanıyor/);
   assert.match(source, /DURUM KONTROL EDİLİYOR/);
-  assert.match(source, /status === "authorization_required"/);
+  assert.match(source, /state === "authorization_required"/);
+  assert.match(source, /const isChecking = statusLoading \|\| testing === integration\.id/);
+  const labelBlock = source.match(/const integrationStatusLabel = \([\s\S]*?\n  };/)?.[0] || "";
+  assert.ok(labelBlock.indexOf('testing === integration.id') < labelBlock.indexOf('if (statusLoading)'));
+  assert.ok(labelBlock.indexOf('if (statusLoading)') < labelBlock.indexOf('if (!status)'));
 });
