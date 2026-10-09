@@ -164,19 +164,29 @@ const requestProviderCompletion = async (messages, includeTools) => {
     throw error;
   }
 
-  const response = await fetch(providerUrl, {
-    method: "POST",
-    headers: {
-      Authorization: "Bearer " + AI_API_KEY,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: AI_MODEL,
-      messages,
-      ...(includeTools ? { tools: TOOL_DEFINITIONS, tool_choice: "auto" } : {}),
-    }),
-    signal: AbortSignal.timeout(30_000),
-  });
+  let response;
+  try {
+    response = await fetch(providerUrl, {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer " + AI_API_KEY,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: AI_MODEL,
+        messages,
+        ...(includeTools ? { tools: TOOL_DEFINITIONS, tool_choice: "auto" } : {}),
+      }),
+      signal: AbortSignal.timeout(30_000),
+    });
+  } catch (error) {
+    throw createProviderError(
+      error.name === "TimeoutError"
+        ? "AI provider request timed out."
+        : "AI provider could not be reached.",
+      error.name === "TimeoutError" ? "AI_PROVIDER_TIMEOUT" : "AI_PROVIDER_UNAVAILABLE"
+    );
+  }
   if (!response.ok) return { response, data: null };
   return { response, data: await response.json() };
 };

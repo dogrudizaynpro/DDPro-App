@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import DDProIcon from "../components/DDProIcon.jsx";
+import DDProActionButton from "../components/DDProActionButton.jsx";
 import {
   beginGoogleConnection,
   createCrmContact,
@@ -215,13 +216,13 @@ function CRMModule({ projects = [], onNavigate, setAiInput }) {
               <small>{contact.status || "Durum belirtilmedi"}{contact.area_m2 ? ` · ${contact.area_m2} m²` : ""}</small>
             </div>
             <div className="module-toolbar">
-              <button className="ddpro-icon-action" type="button" aria-label={`${contact.name} kaydını düzenle`} title="Düzenle" onClick={() => beginEdit(contact)}><DDProIcon name="edit" /></button>
+              <DDProActionButton icon="edit" label={`${contact.name} kaydını düzenle`} onClick={() => beginEdit(contact)} />
               <button type="button" onClick={() => {
                 setAiInput?.(`CRM kaydındaki müşteri talebini değerlendir; ihtiyaçları, belirsizlikleri ve önerilen sonraki adımları çıkar. CRM kaydında değişiklik yapma; önerileri onaya sun.\n\nMüşteri: ${contact.name}\nFirma: ${contact.company || "Belirtilmedi"}\nTalep: ${contact.request || "Talep metni yok"}\nProje: ${contact.project_id || "Belirtilmedi"}\nSistem: ${contact.system || "Belirtilmedi"}`);
                 onNavigate?.("ai-assistant");
               }}>Talebi AI ile analiz et</button>
               {contact.phone ? <button type="button" onClick={() => sendWhatsApp(contact)}>WhatsApp yanıtı gönder</button> : null}
-              <button className="ddpro-icon-action" type="button" aria-label={`${contact.name} kaydını sil`} title="Sil" onClick={() => removeContact(contact.id)}><DDProIcon name="delete" /></button>
+              <DDProActionButton icon="delete" label={`${contact.name} kaydını sil`} onClick={() => removeContact(contact.id)} />
             </div>
           </article>
         ))}

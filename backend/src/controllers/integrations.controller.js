@@ -56,7 +56,12 @@ export const getIntegrationStatus = async (req, res, next) => {
       return { connected: false, status: "test_failed", lastTest: result, checkedAt };
     }
     const requiresGoogleSession = ["gmail", "googleCalendar", "crm"].includes(provider);
-    if (result?.connected && testIsFresh && (!requiresGoogleSession || sessionReady)) {
+    if (
+      provider !== "ai" &&
+      result?.connected &&
+      testIsFresh &&
+      (!requiresGoogleSession || sessionReady)
+    ) {
       return { connected: true, status: "connected", lastTest: result, checkedAt };
     }
     return {
@@ -78,6 +83,7 @@ export const getIntegrationStatus = async (req, res, next) => {
   );
   const googleConnected = googleConfigured && google.connected && Boolean(googleAccount);
   const supabaseConnected = coreDataConnected && crmStorageConnected;
+  const crmConnected = crmStorageConnected && googleConnected;
   const checkedAt = new Date().toISOString();
 
   res.status(200).json({
@@ -122,7 +128,14 @@ export const getIntegrationStatus = async (req, res, next) => {
       },
       crm: {
         configured: crmStorageConnected,
-        ...statusAfterTest("crm", crmStorageConnected, crmStorageConnected && googleConnected),
+        connected: crmConnected,
+        status: !crmStorageConnected
+          ? "credentials_required"
+          : crmConnected
+            ? "connected"
+            : "authorization_required",
+        lastTest: last("crm"),
+        checkedAt,
       },
       backendApi: { configured: true, connected: true, status: "connected", checkedAt },
       web: {

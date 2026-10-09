@@ -152,3 +152,20 @@ test("HTTP 400 from the provider surfaces a safe error without exposing the API 
   assert.equal("tools" in requests[1].body, false);
   for (const { body } of requests) assert.equal("temperature" in body, false);
 });
+
+test("AI provider network failures remain understandable and never expose credentials", async () => {
+  globalThis.fetch = async () => {
+    throw new Error(`Request failed with ${TEST_API_KEY}`);
+  };
+
+  await assert.rejects(
+    testIntegrationConnection("ai"),
+    (error) => {
+      assert.equal(error.statusCode, 502);
+      assert.equal(error.code, "AI_PROVIDER_UNAVAILABLE");
+      assert.equal(error.message, "AI provider could not be reached.");
+      assert.doesNotMatch(error.message, /test-ai-key-not-a-secret/);
+      return true;
+    }
+  );
+});

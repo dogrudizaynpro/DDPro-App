@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { getCrmContacts } from "../services/operations-integrations.service.js";
 import { getCatalogRecords } from "../services/catalog.service.js";
+import DDProIcon from "../components/DDProIcon.jsx";
+import DDProActionButton from "../components/DDProActionButton.jsx";
 
 function OffersModule({
   offersFetchState,
@@ -107,9 +109,7 @@ function OffersModule({
             {offersLoading ? "Yenileniyor..." : "Yenile"}
           </button>
 
-          <button
-            type="button"
-            onClick={() => {
+          <button type="button" onClick={() => {
               setEditingOfferId("");
               setOfferName("");
               setOfferAmount("");
@@ -120,9 +120,8 @@ function OffersModule({
               setProductId("");
               setMaterialAnalysisId("");
               setShowOfferForm((value) => !value);
-            }}
-          >
-            {showOfferForm ? "Formu Kapat" : "+ Yeni Teklif"}
+            }}>
+            <DDProIcon name={showOfferForm ? "settings" : "add"} />{showOfferForm ? "Formu Kapat" : "Yeni Teklif"}
           </button>
         </div>
       </div>
@@ -206,7 +205,7 @@ function OffersModule({
             <option>Reddedildi</option>
           </select>
 
-          <button type="submit" disabled={saving}>{saving ? "Kaydediliyor…" : editingOfferId ? "Teklif değişikliklerini kaydet" : "Teklifi Kaydet"}</button>
+          <button type="submit" disabled={saving}><DDProIcon name="save" />{saving ? "Kaydediliyor…" : editingOfferId ? "Teklif değişikliklerini kaydet" : "Teklifi Kaydet"}</button>
 
           {canUseLocalFallback ? (
             <p className="form-hint">
@@ -298,12 +297,11 @@ function OffersModule({
                         Detay
                       </button>
 
-                      <button
-                        type="button"
+                      <DDProActionButton
+                        icon="delete"
+                        label={offer.source === "local" ? `${offer.title} taslağını sil` : `${offer.title} teklifini listeden kaldır`}
                         onClick={() => deleteOffer(offer.id)}
-                      >
-                        {offer.source === "local" ? "Sil" : "Listeden Kaldır"}
-                      </button>
+                      />
                     </div>
                   </article>
                 ))}
@@ -396,7 +394,7 @@ function OffersModule({
                   </p>
                 </div>
                 {selectedOfferDetail.source === "api" ? (
-                  <button type="button" onClick={() => startEditing(selectedOfferDetail)}>Teklifi düzenle</button>
+                  <DDProActionButton icon="edit" label={`${selectedOfferDetail.title} teklifini düzenle`} onClick={() => startEditing(selectedOfferDetail)} />
                 ) : null}
               </div>
             )}
