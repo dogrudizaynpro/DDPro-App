@@ -15,7 +15,10 @@ import {
   getProjects,
   updateProject,
 } from "../controllers/projects.controller.js";
-import { importGoogleProjects } from "../controllers/project-import.controller.js";
+import {
+  importAiFileProjects,
+  importGoogleProjects,
+} from "../controllers/project-import.controller.js";
 
 const router = express.Router();
 
@@ -35,6 +38,13 @@ router.post("/import/google-sheets", rateLimit({
   standardHeaders: "draft-8",
   legacyHeaders: false,
 }), importGoogleProjects);
+
+router.post("/import/ai-file", rateLimit({
+  windowMs: 60_000,
+  limit: 5,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+}), importAiFileProjects);
 
 // GET /:id - Get project by ID
 router.get("/:id", getProjectById);
