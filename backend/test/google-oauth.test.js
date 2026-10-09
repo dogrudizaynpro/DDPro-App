@@ -25,6 +25,7 @@ let workspaceResponse;
 let projectsSheetValues;
 let refreshedAccessToken;
 let refreshResponse;
+let oauthGrantedScopes = "openid email https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/spreadsheets.readonly";
 let googleTokenDeletes = 0;
 let browserSession;
 let restoreCookie;
@@ -34,6 +35,7 @@ let googleTokenUpserts = 0;
 let nextProjectId = 2;
 let beforeConditionalTokenUpdate;
 const calendarRequests = [];
+const calendarReadRequests = [];
 const projectRows = [{
   id: "10000000-0000-4000-8000-000000000001",
   name: "Restored browser project",
@@ -171,7 +173,7 @@ before(async () => {
         access_token: "test-access",
         refresh_token: "test-refresh",
         expires_in: 3600,
-        scope: "openid email https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/spreadsheets.readonly",
+        scope: oauthGrantedScopes,
       });
     }
     if (url === "https://www.googleapis.com/oauth2/v2/userinfo") {
@@ -186,6 +188,9 @@ before(async () => {
         url.startsWith("https://www.googleapis.com/calendar/v3/calendars/primary/events")) {
       assert.equal(options.headers.Authorization, ["Bearer", refreshedAccessToken || "test-access"].join(" "));
       if (workspaceResponse) return workspaceResponse();
+      if (url.startsWith("https://www.googleapis.com/calendar/v3/calendars/primary/events?")) {
+        calendarReadRequests.push(url);
+      }
       if (url.includes("/events/")) {
         calendarRequests.push({ method: options.method, url, body: options.body ? JSON.parse(options.body) : null });
         if (options.method === "DELETE") return new Response(null, { status: 204 });
@@ -280,6 +285,29 @@ test("OAuth start redirects to Google and callback stores encrypted token and se
   assert.equal(savedToken.provider, "google");
   assert.equal(savedToken.account, "owner@example.com");
   assert.notEqual(savedToken.encrypted_token.ciphertext, "test-access");
+});
+
+test("OAuth scope rejection preserves an existing encrypted Google connection", async () => {
+  const previousToken = structuredClone(savedToken);
+  const previousUpserts = googleTokenUpserts;
+  oauthGrantedScopes = "openid email https://www.googleapis.com/auth/gmail.readonly";
+  try {
+    const verifier = randomBytes(32).toString("base64url");
+    const challenge = createHash("sha256").update(verifier).digest("base64url");
+    const start = await originalFetch(`${baseUrl}/api/integrations/google/start?challenge=${challenge}`, { redirect: "manual" });
+    const stateCookie = start.headers.get("set-cookie").split(";")[0];
+    const state = new URL(start.headers.get("location")).searchParams.get("state");
+    const callback = await originalFetch(
+      `${baseUrl}/api/integrations/google/callback?state=${encodeURIComponent(state)}&code=partial-scope`,
+      { redirect: "manual", headers: { cookie: stateCookie } }
+    );
+    assert.equal(callback.status, 302);
+    assert.match(callback.headers.get("location"), /reason=scope_not_granted/);
+    assert.equal(googleTokenUpserts, previousUpserts);
+    assert.deepEqual(savedToken, previousToken);
+  } finally {
+    oauthGrantedScopes = "openid email https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/spreadsheets.readonly";
+  }
 });
 
 test("one-time exchange authenticates browser status and real provider test route", async () => {
@@ -398,6 +426,10 @@ test("one-time exchange authenticates browser status and real provider test rout
     const afterSuccess = (await (await originalFetch(`${baseUrl}/api/integrations/status`, { headers })).json()).data;
     assert.equal(afterSuccess[provider].connected, true);
   }
+  const calendarProbe = new URL(calendarReadRequests.at(-1));
+  assert.equal(calendarProbe.pathname, "/calendar/v3/calendars/primary/events");
+  assert.equal(calendarProbe.searchParams.get("maxResults"), "1");
+  assert.equal(calendarProbe.pathname.includes("/users/me/calendarList"), false);
   const calendarHeaders = { ...headers, "Content-Type": "application/json" };
   const calendarBase = `${baseUrl}/api/integrations/calendar/events`;
   const eventUpdate = await originalFetch(`${calendarBase}/event_12345`, {
@@ -461,11 +493,32 @@ test("one-time exchange authenticates browser status and real provider test rout
   const getStatus = async () => (await (await originalFetch(`${baseUrl}/api/integrations/status`, { headers })).json()).data;
   const encryptedBefore = structuredClone(savedToken.encrypted_token);
   try {
+    const { decryptIntegrationToken, encryptIntegrationToken } =
+      await import("../src/services/integration-vault.service.js");
+    const savedScopes = decryptIntegrationToken(encryptedBefore);
+    savedToken.encrypted_token = encryptIntegrationToken({
+      ...savedScopes,
+      scopes: savedScopes.scopes.replace(
+        "https://www.googleapis.com/auth/calendar.events",
+        ""
+      ),
+    });
+    const calendarRequestsBeforeScopeCheck = calendarRequests.length;
+    const missingScope = await testProvider("googleCalendar");
+    assert.equal(missingScope.status, 403);
+    const missingScopeBody = await missingScope.json();
+    assert.equal(missingScopeBody.googleApiError.category, "access_denied");
+    assert.deepEqual(missingScopeBody.googleApiError.reasons, ["insufficientPermissions"]);
+    assert.equal(calendarRequests.length, calendarRequestsBeforeScopeCheck);
+    assert.equal(googleTokenDeletes, 0);
+    savedToken.encrypted_token = encryptedBefore;
+
     for (const [httpStatus, reason, category] of [
       [401, "authError", "authorization"],
       [403, "accessNotConfigured", "access_denied"],
       [429, "rateLimitExceeded", "rate_limit"],
       [400, "badRequest", "api_error"],
+      [400, "failedPrecondition", "api_error"],
       [503, "backendError", "api_error"],
     ]) {
       workspaceResponse = () => Response.json({

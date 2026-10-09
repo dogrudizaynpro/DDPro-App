@@ -6,6 +6,7 @@
 // ============================================================
 
 import { fetchAPI } from "./api.js";
+import { formatDateTime } from "../utils/date-time.js";
 
 const DEFAULT_OFFER_STATUS = "Hazırlanıyor";
 
@@ -147,16 +148,7 @@ const formatOfferDate = (value) => {
     return "Tarih belirtilmedi";
   }
 
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return String(value);
-  }
-
-  return date.toLocaleString("tr-TR", {
-    dateStyle: "short",
-    timeStyle: "short",
-  });
+  return formatDateTime(value);
 };
 
 export const mapOfferToViewModel = (offer = {}) => {

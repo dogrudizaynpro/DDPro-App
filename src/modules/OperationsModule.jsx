@@ -15,6 +15,12 @@ import { createReport, deleteReport, getReports } from "../services/reports.serv
 import DDProIcon from "../components/DDProIcon.jsx";
 import DDProActionButton from "../components/DDProActionButton.jsx";
 import {
+  formatDateOnly,
+  formatDateTime,
+  fromDateTimeLocalInput,
+  toDateTimeLocalInput,
+} from "../utils/date-time.js";
+import {
   createFinanceCost,
   deleteFinanceCost,
   getFinanceCosts,
@@ -225,6 +231,10 @@ const readRecords = (key) => {
 };
 
 const timestamp = () => new Date().toISOString();
+const formatCalendarDate = (value) =>
+  /^\d{4}-\d{2}-\d{2}$/.test(value || "")
+    ? formatDateOnly(value)
+    : formatDateTime(value);
 
 const integrationProbes = (status) => [
   ["ai", status.ai?.configured],
@@ -280,6 +290,7 @@ function IntegrationSettings({ onNavigate, hubMode = false }) {
         configuration_required: "Google OAuth backend yapılandırması eksik.",
         state_invalid: "Google OAuth güvenlik kontrolü başarısız; tekrar deneyin.",
         access_denied: "Google hesap erişimi verilmedi veya iptal edildi.",
+        scope_not_granted: "Gmail, Calendar ve Sheets izinleri tamamlanmadı. Mevcut DDPro Google bağlantısı korundu; gerekli izinlerle yeniden yetkilendirin.",
         token_exchange_failed: "Google OAuth token değişimi başarısız.",
         account_not_allowed: "Bu Google hesabı DDPro izin listesinde değil.",
         provider_unavailable: "Google bağlantısı tamamlanamadı. Backend yapılandırmasını ve bağlantı durumunu kontrol edin.",
@@ -421,8 +432,8 @@ function IntegrationSettings({ onNavigate, hubMode = false }) {
                   <p>Outbound: {connection?.sendConfigured ? "HAZIR" : "YAPILANDIRMA GEREKLİ"} · Webhook: {connection?.webhookConfigured ? "HAZIR" : "YAPILANDIRMA GEREKLİ"}</p>
                 ) : null}
                 <small><strong>Gerekli backend yapılandırması</strong><br />{integration.variables.join(" · ")}<br />
-                  {connection?.lastTest?.testedAt ? `Son test: ${new Date(connection.lastTest.testedAt).toLocaleString("tr-TR")}` : "Henüz bağlantı testi çalıştırılmadı."}
-                  {connection?.checkedAt ? <span className="integration-check-time">Son kontrol: {new Date(connection.checkedAt).toLocaleString("tr-TR")}</span> : null}
+                  {connection?.lastTest?.testedAt ? `Son test: ${formatDateTime(connection.lastTest.testedAt)}` : "Henüz bağlantı testi çalıştırılmadı."}
+                  {connection?.checkedAt ? <span className="integration-check-time">Son kontrol: {formatDateTime(connection.checkedAt)}</span> : null}
                   {connection?.lastTest?.error ? <span className="integration-error">{formatGoogleIntegrationError({ message: connection.lastTest.error, googleApiError: connection.lastTest.googleApiError })}</span> : null}
                   {integration.id === "whatsapp" ? <span className="integration-secret-note">BAĞLI, sunucu yapılandırmasının tamamlandığını gösterir. Bağlantı testi Meta telefon kaydını doğrular; webhook teslimatı ve mesaj gönderimi ayrıca canlı sistemde sınanmalıdır. API sürümü belirtilmezse v23.0 kullanılır.</span> : null}
                   <div className="module-toolbar integration-actions">
@@ -504,8 +515,8 @@ function CalendarWorkspace() {
     setBusy(true);
     setError("");
     try {
-      const start = new Date(values.start);
-      const end = new Date(values.end);
+      const start = new Date(fromDateTimeLocalInput(values.start));
+      const end = new Date(fromDateTimeLocalInput(values.end));
       if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) {
         throw new Error("Etkinlik başlangıç/bitiş zamanı geçersiz.");
       }
@@ -594,8 +605,8 @@ function CalendarWorkspace() {
       id: event.id,
       summary: event.summary || event.title || "",
       description: event.description || event.notes || "",
-      startValue: start ? new Date(new Date(start).getTime() - new Date(start).getTimezoneOffset() * 60_000).toISOString().slice(0, 16) : "",
-      endValue: end ? new Date(new Date(end).getTime() - new Date(end).getTimezoneOffset() * 60_000).toISOString().slice(0, 16) : "",
+      startValue: toDateTimeLocalInput(start),
+      endValue: toDateTimeLocalInput(end),
       local: isLocal,
     });
   };
@@ -628,7 +639,7 @@ function CalendarWorkspace() {
       <div className="data-list">
         {events.length ? events.map((event) => (
           <article className="data-card" key={event.id || `${event.title}-${event.date}`}>
-            <div><h3>{event.summary || event.title || "Takvim etkinliği"}</h3><p>{event.start?.dateTime || event.start?.date || event.date}</p><small>Google Calendar · {event.status || "Canlı etkinlik"}</small></div>
+            <div><h3>{event.summary || event.title || "Takvim etkinliği"}</h3><p>{formatCalendarDate(event.start?.dateTime || event.start?.date || event.date)}</p><small>Google Calendar · {event.status || "Canlı etkinlik"}</small></div>
             <div className="module-toolbar">
               {event.start?.dateTime && event.end?.dateTime ? <DDProActionButton icon="edit" label={`${event.summary || "Takvim etkinliği"} etkinliğini düzenle`} disabled={busy} onClick={() => beginEditEvent(event, false)} /> : null}
               <DDProActionButton icon="delete" label={`${event.summary || "Takvim etkinliği"} etkinliğini sil`} disabled={busy} onClick={() => removeCalendarEvent(event, false)} />
@@ -639,7 +650,7 @@ function CalendarWorkspace() {
           <h2>Yerel taslaklar ve kopyalar</h2>
           {localDrafts.map((event) => (
             <article className="data-card" key={event.id}>
-              <div><h3>{event.title || "Yerel etkinlik"}</h3><p>{event.date}</p><small>{event.source === "google_calendar" ? "Google Calendar'dan yerel kopya · provider kaydını değiştirmez" : "Yalnızca bu tarayıcıda saklanan taslak"}</small></div>
+              <div><h3>{event.title || "Yerel etkinlik"}</h3><p>{formatCalendarDate(event.date)}</p><small>{event.source === "google_calendar" ? "Google Calendar'dan yerel kopya · provider kaydını değiştirmez" : "Yalnızca bu tarayıcıda saklanan taslak"}</small></div>
               <div className="module-toolbar">
                 <DDProActionButton icon="edit" label={`${event.title || "Yerel etkinlik"} taslağını düzenle`} disabled={busy} onClick={() => beginEditEvent(event, true)} />
                 <DDProActionButton icon="delete" label={`${event.title || "Yerel etkinlik"} taslağını sil`} disabled={busy} onClick={() => removeCalendarEvent(event, true)} />
@@ -926,7 +937,7 @@ function FinanceWorkspace({ projects = [], onCostsChanged }) {
       ? null
       : Number(values.actualAmount);
     const budgetAmount = values.budgetAmount === "" ? null : Number(values.budgetAmount);
-    const verifiedAt = values.verifiedAt ? new Date(values.verifiedAt).toISOString() : null;
+    const verifiedAt = values.verifiedAt ? fromDateTimeLocalInput(values.verifiedAt) : null;
     const payload = {
       name: values.name,
       projectId: values.projectId,
@@ -1023,7 +1034,7 @@ function FinanceWorkspace({ projects = [], onCostsChanged }) {
           <option value="UNVERIFIED">Doğrulanmadı</option><option value="VERIFIED">Doğrulandı</option><option value="MISSING">Eksik</option>
         </select></label>
         <label>Kaynak / belge<input name="source" defaultValue={editing?.source || ""} maxLength={2000} /></label>
-        {verificationStatus === "VERIFIED" ? <label>Doğrulama tarihi<input name="verifiedAt" type="datetime-local" defaultValue={editing?.verified_at ? new Date(new Date(editing.verified_at).getTime() - new Date(editing.verified_at).getTimezoneOffset() * 60_000).toISOString().slice(0, 16) : ""} required /></label> : <input name="verifiedAt" type="hidden" defaultValue="" />}
+        {verificationStatus === "VERIFIED" ? <label>Doğrulama tarihi<input name="verifiedAt" type="datetime-local" defaultValue={toDateTimeLocalInput(editing?.verified_at)} required /></label> : <input name="verifiedAt" type="hidden" defaultValue="" />}
         <label>Gerçekleşme tarihi<input name="occurredOn" type="date" defaultValue={editing?.occurred_on || ""} /></label>
         <input name="systemId" defaultValue={editing?.system_id || ""} placeholder="Sistem UUID (isteğe bağlı)" />
         <input name="productId" defaultValue={editing?.product_id || ""} placeholder="Ürün UUID (isteğe bağlı)" />
@@ -1198,7 +1209,7 @@ function ReportsWorkspace({ projects = [], onReportsChanged }) {
           <article className="data-card" key={report.id}>
             <div>
               <h3>{report.title || reportTitles[report.report_type] || "Rapor"}</h3>
-              <p>{report.report_date || new Date(report.created_at).toLocaleString("tr-TR")}</p>
+              <p>{report.report_date ? formatDateOnly(report.report_date) : formatDateTime(report.created_at)}</p>
               <small>{reportTitles[report.report_type]} · {report.snapshot?.project?.name || "Tüm projeler"}</small>
               <details><summary>Kalıcı rapor snapshot'ını görüntüle</summary><pre>{JSON.stringify(report.snapshot, null, 2)}</pre></details>
             </div>
@@ -1282,7 +1293,7 @@ export function CatalogWorkspace({ moduleId, definition = moduleDefinitions[modu
     for (const key of ["unit_price", "quantity"]) {
       if (values[key] !== undefined && values[key] !== "") values[key] = Number(values[key]);
     }
-    if (values.verified_at) values.verified_at = new Date(values.verified_at).toISOString();
+    if (values.verified_at) values.verified_at = fromDateTimeLocalInput(values.verified_at);
     for (const key of ["system_id", "product_id", "project_id", "price_analysis_id"]) {
       if (values[key] === "") values[key] = null;
     }
@@ -1341,10 +1352,7 @@ export function CatalogWorkspace({ moduleId, definition = moduleDefinitions[modu
 
   const inputValue = (fieldType, value) => {
     if (fieldType !== "datetime-local" || !value) return value ?? "";
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return "";
-    const offset = date.getTimezoneOffset() * 60_000;
-    return new Date(date.getTime() - offset).toISOString().slice(0, 16);
+    return toDateTimeLocalInput(value);
   };
 
   const displayFields = definition.fields.filter(({ name }) =>
@@ -1425,7 +1433,7 @@ export function CatalogWorkspace({ moduleId, definition = moduleDefinitions[modu
                     : null;
                 })}
                 {moduleId === "material-analysis" ? <p><strong>Toplam malzeme maliyeti:</strong> {record.total_cost == null ? record.verification_status : `${record.currency} ${record.total_cost}`}</p> : null}
-                <small>{record.created_at ? new Date(record.created_at).toLocaleString("tr-TR") : ""}</small>
+                <small>{formatDateTime(record.created_at)}</small>
               </div>
               <div className="module-toolbar">
                 <DDProActionButton icon="edit" label={`${record.name} kaydını düzenle`} disabled={busy} onClick={() => { setEditing(record); setFormOpen(true); }} />
@@ -1543,7 +1551,7 @@ export default function OperationsModule({
             <div>
               <h3>{record.name || record.title || record.type || definition.title}</h3>
               {definition.fields.filter((item) => item.name !== "name" && item.name !== "title").map((item) => record[item.name] ? <p key={item.name}><strong>{item.label}:</strong> {record[item.name]}</p> : null)}
-              <small>{record.createdAt ? new Date(record.createdAt).toLocaleString("tr-TR") : ""}</small>
+              <small>{formatDateTime(record.createdAt)}</small>
             </div>
             <DDProActionButton icon="delete" label={`${record.name || record.title || definition.title} kaydını sil`} onClick={() => removeRecord(record.id)} />
           </article>

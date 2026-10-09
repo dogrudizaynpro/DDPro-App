@@ -22,12 +22,15 @@ import { GoogleApiError } from "./google-api-error.js";
 
 const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
+export const GOOGLE_OPERATION_SCOPES = Object.freeze({
+  gmail: "https://www.googleapis.com/auth/gmail.readonly",
+  calendar: "https://www.googleapis.com/auth/calendar.events",
+  sheets: "https://www.googleapis.com/auth/spreadsheets.readonly",
+});
 const GOOGLE_SCOPES = [
   "openid",
   "email",
-  "https://www.googleapis.com/auth/gmail.readonly",
-  "https://www.googleapis.com/auth/calendar.events",
-  "https://www.googleapis.com/auth/spreadsheets.readonly",
+  ...Object.values(GOOGLE_OPERATION_SCOPES),
 ];
 const getOAuthConfig = () => ({
   clientId: process.env.GOOGLE_CLIENT_ID,
@@ -313,16 +316,24 @@ export const completeGoogleOAuth = async (req, res, next) => {
     }
 
     const sessionVersion = randomBytes(32).toString("base64url");
+    const existingToken = await readIntegrationToken({ provider: "google", account: email });
+    const grantedScopes = typeof token.scope === "string" && token.scope.trim()
+      ? token.scope
+      : existingToken?.scopes || "";
+    const grantedScopeSet = new Set(grantedScopes.split(/\s+/).filter(Boolean));
+    if (Object.values(GOOGLE_OPERATION_SCOPES).some((scope) => !grantedScopeSet.has(scope))) {
+      return redirectOAuthResult("google_error", "scope_not_granted");
+    }
     await saveIntegrationToken({
       provider: "google",
       account: email,
       value: {
         accessToken: token.access_token,
         refreshToken: token.refresh_token ||
-          (await readIntegrationToken({ provider: "google", account: email }))?.refreshToken ||
+          existingToken?.refreshToken ||
           null,
         expiresAt: Date.now() + (Number(token.expires_in) || 3600) * 1000,
-        scopes: token.scope || "",
+        scopes: grantedScopes,
         sessionVersion,
       },
     });
@@ -503,10 +514,26 @@ export const requireGoogleSession = async (req, res, next) => {
   return next();
 };
 
-export const getGoogleAccessToken = async (account) => {
+export const getGoogleAccessToken = async (
+  account,
+  { requiredScope, provider, operation } = {}
+) => {
   const snapshot = await readIntegrationTokenSnapshot({ provider: "google", account });
   const token = snapshot?.value;
   if (!token) throw Object.assign(new Error("Google account is not connected."), { statusCode: 401, expose: true });
+  if (
+    requiredScope &&
+    typeof token.scopes === "string" &&
+    token.scopes.trim() &&
+    !token.scopes.split(/\s+/).includes(requiredScope)
+  ) {
+    throw new GoogleApiError(403, {
+      error: {
+        message: "Google authorization is missing a required permission. The saved connection was kept; authorize again to grant the requested access.",
+        errors: [{ reason: "insufficientPermissions" }],
+      },
+    }, [token.accessToken, token.refreshToken], provider, operation);
+  }
   if (token.expiresAt > Date.now() + 60_000) return token.accessToken;
   if (!token.refreshToken) {
     throw Object.assign(
