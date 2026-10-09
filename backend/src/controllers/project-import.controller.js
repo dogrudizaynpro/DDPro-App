@@ -84,10 +84,121 @@ export const mapProjectSheetRow = (headers, row) => {
 const comparableName = (name) =>
   String(name ?? "").trim().normalize("NFKC").toLocaleLowerCase("tr-TR");
 
+const rowFingerprint = (sourceFingerprint, sheetRow, row) =>
+  createHash("sha256")
+    .update(`${sourceFingerprint}:${sheetRow}:${JSON.stringify(row)}`)
+    .digest("hex");
+
+const isValidAiFileImport = ({ sourceFingerprint, headers, rows }) =>
+  typeof sourceFingerprint === "string" &&
+  /^[\da-f]{64}$/i.test(sourceFingerprint) &&
+  Array.isArray(headers) &&
+  headers.length >= 1 &&
+  headers.length <= 100 &&
+  headers.every((header) => typeof header === "string" && header.length <= 500) &&
+  Array.isArray(rows) &&
+  rows.length <= 300 &&
+  rows.every((row) => Array.isArray(row) && row.length <= 100 &&
+    row.every((value) => ["string", "number", "boolean"].includes(typeof value)));
+
 const safeFailure = (error) => ({
   code: typeof error?.code === "string" ? error.code : "PROJECT_IMPORT_FAILED",
   message: error?.code === "23505" ? "A source row with this import key already exists." : "Project could not be imported.",
 });
+
+export const previewAiFileProjects = async (supabase, { sourceFingerprint, headers, rows }) => {
+  const [projectResult, productResult, systemResult] = await Promise.all([
+    supabase.from("projects").select("name,import_source_key"),
+    supabase.from("products").select("name"),
+    supabase.from("systems").select("name"),
+  ]);
+  for (const result of [projectResult, productResult, systemResult]) {
+    if (result.error) throw result.error;
+  }
+
+  const projectNames = new Set((projectResult.data || []).map(({ name }) => comparableName(name)));
+  const importKeys = new Set((projectResult.data || [])
+    .map(({ import_source_key }) => import_source_key)
+    .filter(Boolean));
+  const productNames = new Set((productResult.data || []).map(({ name }) => comparableName(name)));
+  const systemNames = new Set((systemResult.data || []).map(({ name }) => comparableName(name)));
+  const records = [];
+
+  for (let index = 0; index < rows.length; index += 1) {
+    const row = rows[index];
+    if (!row.some((cell) => String(cell ?? "").trim())) continue;
+    const sheetRow = index + 2;
+    const mapped = mapProjectSheetRow(headers, row);
+    const missing = Object.entries(mapped.missing)
+      .filter(([, isMissing]) => isMissing)
+      .map(([field]) => field);
+    if (!mapped.project) {
+      records.push({
+        row: sheetRow,
+        project: null,
+        missing,
+        error: mapped.error,
+        classification: "review",
+        reasons: [mapped.error],
+        unmatched: [],
+      });
+      continue;
+    }
+
+    const importKey = rowFingerprint(sourceFingerprint, sheetRow, row);
+    const name = comparableName(mapped.project.name);
+    const duplicate = importKeys.has(importKey) || projectNames.has(name);
+    const unmatched = [
+      ...(mapped.project.product && !productNames.has(comparableName(mapped.project.product))
+        ? [{ field: "product", name: mapped.project.product }]
+        : []),
+      ...(mapped.project.systems.some((system) => !systemNames.has(comparableName(system)))
+        ? mapped.project.systems
+          .filter((system) => !systemNames.has(comparableName(system)))
+          .map((system) => ({ field: "system", name: system }))
+        : []),
+    ];
+    const reasons = [
+      ...(missing.length ? [`Eksik alanlar: ${missing.join(", ")}`] : []),
+      ...unmatched.map(({ field, name: value }) =>
+        `Eşleşmeyen ${field === "product" ? "ürün" : "sistem"}: ${value}`
+      ),
+    ];
+
+    if (duplicate) {
+      records.push({
+        row: sheetRow,
+        project: mapped.project,
+        missing,
+        classification: "duplicate",
+        reasons: ["Mevcut bir projeyle aynı ad veya kaynak satırı."],
+        unmatched,
+      });
+      continue;
+    }
+
+    const classification = reasons.length ? "review" : "transfer";
+    records.push({
+      row: sheetRow,
+      project: mapped.project,
+      missing,
+      classification,
+      reasons,
+      unmatched,
+    });
+    projectNames.add(name);
+    importKeys.add(importKey);
+  }
+
+  return {
+    records,
+    counts: {
+      transfer: records.filter(({ classification }) => classification === "transfer").length,
+      duplicate: records.filter(({ classification }) => classification === "duplicate").length,
+      review: records.filter(({ classification }) => classification === "review").length,
+    },
+  };
+};
 
 export const saveAiFileProjects = async (supabase, { sourceFingerprint, headers, rows }) => {
   const { data: existingProjects, error: lookupError } = await supabase
@@ -120,9 +231,7 @@ export const saveAiFileProjects = async (supabase, { sourceFingerprint, headers,
       continue;
     }
 
-    const importSourceKey = createHash("sha256")
-      .update(`${sourceFingerprint}:${sheetRow}:${JSON.stringify(row)}`)
-      .digest("hex");
+    const importSourceKey = rowFingerprint(sourceFingerprint, sheetRow, row);
     const projectName = comparableName(mapped.project.name);
     if (existingKeys.has(importSourceKey) || knownNames.has(projectName)) {
       existing.push({
@@ -159,18 +268,7 @@ export const saveAiFileProjects = async (supabase, { sourceFingerprint, headers,
 export const importAiFileProjects = async (req, res, next) => {
   try {
     const { sourceFingerprint, headers, rows } = req.body || {};
-    if (
-      typeof sourceFingerprint !== "string" ||
-      !/^[\da-f]{64}$/i.test(sourceFingerprint) ||
-      !Array.isArray(headers) ||
-      headers.length < 1 ||
-      headers.length > 100 ||
-      headers.some((header) => typeof header !== "string" || header.length > 500) ||
-      !Array.isArray(rows) ||
-      rows.length > 300 ||
-      rows.some((row) => !Array.isArray(row) || row.length > 100 ||
-        row.some((value) => !["string", "number", "boolean"].includes(typeof value)))
-    ) {
+    if (!isValidAiFileImport({ sourceFingerprint, headers, rows })) {
       return res.status(400).json({ status: "error", message: "The project file import is invalid." });
     }
 
@@ -179,6 +277,24 @@ export const importAiFileProjects = async (req, res, next) => {
       return res.status(503).json({ status: "error", message: "Database service-role configuration is required." });
     }
     const data = await saveAiFileProjects(supabase, { sourceFingerprint, headers, rows });
+    return res.json({ status: "success", data });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const previewAiFileProjectImport = async (req, res, next) => {
+  try {
+    const { sourceFingerprint, headers, rows } = req.body || {};
+    if (!isValidAiFileImport({ sourceFingerprint, headers, rows })) {
+      return res.status(400).json({ status: "error", message: "The project file import is invalid." });
+    }
+
+    const supabase = getIntegrationAdmin();
+    if (!supabase) {
+      return res.status(503).json({ status: "error", message: "Database service-role configuration is required." });
+    }
+    const data = await previewAiFileProjects(supabase, { sourceFingerprint, headers, rows });
     return res.json({ status: "success", data });
   } catch (error) {
     return next(error);

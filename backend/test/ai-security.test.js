@@ -52,6 +52,23 @@ test("AI file uploads require the authenticated Google browser session", async (
   assert.equal((await response.json()).code, "BROWSER_SESSION_REQUIRED");
 });
 
+test("AI file project preflight requires the authenticated Google browser session", async () => {
+  const response = await fetch(`${baseUrl}/api/projects/import/ai-file/preview`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Origin: "https://dogrudizaynpro.github.io",
+    },
+    body: JSON.stringify({
+      sourceFingerprint: "a".repeat(64),
+      headers: ["Project"],
+      rows: [["Project A"]],
+    }),
+  });
+  assert.equal(response.status, 401);
+  assert.equal((await response.json()).code, "BROWSER_SESSION_REQUIRED");
+});
+
 test("AI usage count requires the authenticated Google browser session", async () => {
   const response = await fetch(`${baseUrl}/api/ai/usage`);
   assert.equal(response.status, 401);

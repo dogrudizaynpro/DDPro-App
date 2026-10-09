@@ -77,6 +77,7 @@ function AIModule({
   aiSending = false,
   onConfirmAction,
   onConfirmProjectImport,
+  onRetryProjectImportPreview,
 }) {
   const promptFieldRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -255,6 +256,48 @@ function AIModule({
                       {message.projectImport.records.length} satır · {message.projectImport.table.headers.length} alan.
                       Eksik alanlar boş bırakılır; hiçbir kayıt siz onaylamadan oluşturulmaz.
                     </p>
+                    {message.projectImport.counts ? (
+                      <div className="ai-project-import-results" aria-label="Aktarım önizleme grupları">
+                        {[
+                          ["transfer", "Aktarılacak", "Eşleşen ve yeni kayıtlar"],
+                          ["duplicate", "Mükerrer olduğu için atlanacak", "Mevcut projeyle eşleşen kayıtlar"],
+                          ["review", "Kontrol gerektiren", "Eksik alan veya eşleşmeyen ürün/sistem içeren kayıtlar"],
+                        ].map(([classification, title, description]) => {
+                          const records = message.projectImport.records.filter(
+                            (record) => record.classification === classification
+                          );
+                          return (
+                            <section key={classification}>
+                              <strong>{title}: {message.projectImport.counts[classification]}</strong>
+                              <p>{description}</p>
+                              {records.length ? (
+                                <ul>
+                                  {records.map((record) => (
+                                    <li key={record.row}>
+                                      Satır {record.row}: {record.project?.name || "Proje adı yok"}
+                                      {record.reasons?.length ? ` · ${record.reasons.join("; ")}` : ""}
+                                    </li>
+                                  ))}
+                                </ul>
+                              ) : null}
+                            </section>
+                          );
+                        })}
+                      </div>
+                    ) : null}
+                    {message.projectImport.previewError ? (
+                      <div className="ai-project-import-results" role="alert">
+                        <p>Mükerrer ve ürün/sistem eşleşmeleri doğrulanamadı: {message.projectImport.previewError}</p>
+                        <button
+                          className="ai-module-suggestion"
+                          type="button"
+                          disabled={aiSending}
+                          onClick={() => onRetryProjectImportPreview?.(message.id, message.projectImport)}
+                        >
+                          {aiSending ? "Önizleme kontrol ediliyor…" : "Eşleşmeleri yeniden kontrol et"}
+                        </button>
+                      </div>
+                    ) : null}
                     <details open>
                       <summary>{message.projectImport.table.name} dosya içeriğini ve eşlenen kayıtları incele</summary>
                       <div className="ai-project-import-table-wrap">
@@ -274,11 +317,13 @@ function AIModule({
                                   <td key={index}>{String(message.projectImport.table.rows[record.row - 2]?.[index] ?? "")}</td>
                                 ))}
                                 <td>
-                                  {record.error
-                                    ? record.error
-                                    : record.missing.length
-                                      ? `Eksik: ${record.missing.join(", ")}`
-                                      : "Hazır"}
+                                  {record.classification === "duplicate"
+                                    ? "Mükerrer · aktarılmayacak"
+                                    : record.classification === "review"
+                                      ? `Kontrol gerekli${record.reasons?.length ? `: ${record.reasons.join("; ")}` : ""}`
+                                      : record.classification === "transfer"
+                                        ? "Aktarılacak"
+                                        : record.error || (record.missing.length ? `Eksik: ${record.missing.join(", ")}` : "Kontrol ediliyor")}
                                 </td>
                               </tr>
                             ))}
@@ -286,7 +331,8 @@ function AIModule({
                         </table>
                       </div>
                     </details>
-                    {(!message.projectImport.result || message.projectImport.result.errors.length > 0) ? (
+                    {!message.projectImport.previewError &&
+                    (!message.projectImport.result || message.projectImport.result.errors.length > 0) ? (
                       <button
                         className="ai-module-suggestion"
                         type="button"
@@ -303,6 +349,17 @@ function AIModule({
                     {message.projectImport.result ? (
                       <div className="ai-project-import-results" role="status">
                         <p>Kaydedildi: {message.projectImport.result.added.length}</p>
+                        {message.projectImport.verification ? (
+                          <p>
+                            Projeler API yenilemesinde doğrulandı: {message.projectImport.verification.saved ?? "—"}
+                            {" / "}{message.projectImport.verification.expected}
+                            {message.projectImport.verification.error
+                              ? ` · Yenileme hatası: ${message.projectImport.verification.error}`
+                              : message.projectImport.verification.complete
+                                ? " · Tamamı doğrulandı"
+                                : " · Eksik kayıtlar için Projeler listesini kontrol edin"}
+                          </p>
+                        ) : null}
                         {message.projectImport.result.added.length ? (
                           <ul>{message.projectImport.result.added.map((record) => <li key={record.row}>{record.name}</li>)}</ul>
                         ) : null}
@@ -314,15 +371,15 @@ function AIModule({
                         {message.projectImport.result.errors.length ? (
                           <ul>{message.projectImport.result.errors.map((record) => <li key={record.row}>Satır {record.row}: {record.message}</li>)}</ul>
                         ) : null}
+                        {message.projectImport.result.incomplete?.length ? (
+                          <p>Eksik değerler tahmin edilmeden boş bırakıldı: {message.projectImport.result.incomplete.length} satır.</p>
+                        ) : null}
                       </div>
                     ) : null}
                     {message.projectImport.importError ? (
                       <p className="ai-file-error" role="alert">
                         Aktarım yapılamadı, kayıtların değiştiği varsayılmadı: {message.projectImport.importError}
                       </p>
-                    ) : null}
-                    {message.projectImport.result?.incomplete?.length ? (
-                      <p>Eksik tarih ve alanlar tahmin edilmeden boş bırakıldı ({message.projectImport.result.incomplete.length} satır).</p>
                     ) : null}
                   </section>
                 ) : null}
