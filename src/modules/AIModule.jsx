@@ -343,7 +343,7 @@ function AIModule({
                           ? "Projeler aktarılıyor…"
                           : message.projectImport.result
                             ? "Başarısız satırları yeniden dene"
-                            : "Önizlemeyi onayla ve projeleri kaydet"}
+                            : "Projeleri Kaydet"}
                       </button>
                     ) : null}
                     {message.projectImport.result ? (
