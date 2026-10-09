@@ -27,6 +27,12 @@ export const GOOGLE_OPERATION_SCOPES = Object.freeze({
   calendar: "https://www.googleapis.com/auth/calendar.events",
   sheets: "https://www.googleapis.com/auth/spreadsheets.readonly",
 });
+export const getMissingGoogleScopes = (grantedScopes) => {
+  const granted = new Set(
+    (typeof grantedScopes === "string" ? grantedScopes : "").split(/\s+/).filter(Boolean)
+  );
+  return Object.values(GOOGLE_OPERATION_SCOPES).filter((scope) => !granted.has(scope));
+};
 const GOOGLE_SCOPES = [
   "openid",
   "email",
@@ -320,8 +326,7 @@ export const completeGoogleOAuth = async (req, res, next) => {
     const grantedScopes = typeof token.scope === "string" && token.scope.trim()
       ? token.scope
       : existingToken?.scopes || "";
-    const grantedScopeSet = new Set(grantedScopes.split(/\s+/).filter(Boolean));
-    if (Object.values(GOOGLE_OPERATION_SCOPES).some((scope) => !grantedScopeSet.has(scope))) {
+    if (getMissingGoogleScopes(grantedScopes).length > 0) {
       return redirectOAuthResult("google_error", "scope_not_granted");
     }
     await saveIntegrationToken({

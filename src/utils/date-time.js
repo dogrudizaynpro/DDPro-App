@@ -20,8 +20,12 @@ const getDateTimeParts = (date) =>
 
 const getDateTimeFormatter = (dateStyle, timeStyle) =>
   new Intl.DateTimeFormat("tr-TR", {
-    dateStyle,
-    ...(timeStyle ? { timeStyle } : {}),
+    ...(dateStyle === "short"
+      ? { day: "2-digit", month: "2-digit", year: "numeric" }
+      : dateStyle === "long"
+        ? { day: "2-digit", month: "long", year: "numeric" }
+        : { dateStyle }),
+    ...(timeStyle ? { hour: "2-digit", minute: "2-digit" } : {}),
     hourCycle: "h23",
     timeZone: DDPRO_TIME_ZONE,
   });

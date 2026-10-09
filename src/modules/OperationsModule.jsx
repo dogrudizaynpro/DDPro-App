@@ -237,7 +237,6 @@ const formatCalendarDate = (value) =>
     : formatDateTime(value);
 
 const integrationProbes = (status) => [
-  ["ai", status.ai?.configured],
   ["gmail", status.gmail?.configured && status.google?.connected],
   ["googleCalendar", status.googleCalendar?.configured && status.google?.connected],
   ["whatsapp", status.whatsapp?.sendConfigured],
@@ -248,14 +247,43 @@ const integrationProbes = (status) => [
   ["research", status.research?.configured],
 ].filter(([, configured]) => configured).map(([provider]) => provider);
 
+const applyAiVerification = (status, testResult, testError) => {
+  if (!testResult && !testError) return status;
+  const connected = !testError && testResult?.data?.connected === true;
+  return {
+    ...status,
+    ai: {
+      ...status.ai,
+      connected,
+      status: connected ? "connected" : status.ai?.status || "test_failed",
+      lastTest: status.ai?.lastTest || {
+        connected,
+        testSucceeded: connected,
+        error: testError?.message || "",
+      },
+    },
+  };
+};
+
 const probeConfiguredIntegrations = async (status) => {
+  let value = status;
+  let aiTestResult;
+  let aiTestError;
+  if (value.ai?.configured) {
+    try {
+      aiTestResult = await testIntegrationConnection("ai");
+    } catch (error) {
+      aiTestError = error;
+    }
+  }
   const staleProviders = integrationProbes(status).filter((provider) => {
     const testedAt = Date.parse(status[provider === "website" ? "web" : provider]?.lastTest?.testedAt || "");
     const age = Date.now() - testedAt;
     return !Number.isFinite(testedAt) || age < 0 || age >= 5 * 60 * 1000;
   });
   await Promise.allSettled(staleProviders.map((provider) => testIntegrationConnection(provider)));
-  return getIntegrationStatus();
+  value = await getIntegrationStatus();
+  return { value, aiTestResult, aiTestError };
 };
 
 function IntegrationSettings({ onNavigate, hubMode = false }) {
@@ -271,8 +299,15 @@ function IntegrationSettings({ onNavigate, hubMode = false }) {
     setStatusLoading(true);
     try {
       let nextStatus = await getIntegrationStatus();
-      if (verifyAi) nextStatus = await probeConfiguredIntegrations(nextStatus);
-      setStatus(nextStatus);
+      let aiTestResult;
+      let aiTestError;
+      if (verifyAi) {
+        const verification = await probeConfiguredIntegrations(nextStatus);
+        nextStatus = verification.value;
+        aiTestResult = verification.aiTestResult;
+        aiTestError = verification.aiTestError;
+      }
+      setStatus(applyAiVerification(nextStatus, aiTestResult, aiTestError));
       if (aiTestError) setError(aiTestError.message || "AI sağlayıcı bağlantı testi başarısız.");
     } catch (statusError) {
       setError(statusError.message || "Entegrasyon durumu backend'den alınamadı.");
@@ -301,9 +336,10 @@ function IntegrationSettings({ onNavigate, hubMode = false }) {
       setStatusLoading(true);
       try {
         const initialStatus = await getIntegrationStatus();
-        const value = await probeConfiguredIntegrations(initialStatus);
+        const verification = await probeConfiguredIntegrations(initialStatus);
+        const value = verification.value;
         if (active) {
-          setStatus(value);
+          setStatus(applyAiVerification(value, verification.aiTestResult, verification.aiTestError));
           if (oauthResult.get("integration") === "google_connected" &&
               value.gmail?.connected && value.googleCalendar?.connected) {
             setNotice("Google hesabı güvenli OAuth akışıyla bağlandı. Gmail ve Google Calendar durumları backend'den doğrulandı.");

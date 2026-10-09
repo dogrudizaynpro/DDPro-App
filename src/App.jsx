@@ -278,11 +278,6 @@ const dashboardQuickAccessModuleIds = new Set([
   "ai-assistant",
   "reports",
 ]);
-const calendarMonthFormatter = new Intl.DateTimeFormat("tr-TR", {
-  month: "short",
-  year: "numeric",
-  timeZone: DDPRO_TIME_ZONE,
-});
 const normalizeModulePath = (pathValue) => {
   const sanitizedPath = (pathValue || "").trim();
   const normalizedBasePath = sanitizedPath.replace(/\/+$/, "");
@@ -309,6 +304,12 @@ const OFFER_STATUS_TONES = {
   Onaylandı: "success",
   Reddedildi: "danger",
 };
+
+const calendarMonthFormatter = new Intl.DateTimeFormat("tr-TR", {
+  month: "short",
+  year: "numeric",
+  timeZone: DDPRO_TIME_ZONE,
+});
 
 const getOfferStatusTone = (status) =>
   OFFER_STATUS_TONES[status] || "neutral";

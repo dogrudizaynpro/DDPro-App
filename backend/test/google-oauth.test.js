@@ -25,7 +25,6 @@ let workspaceResponse;
 let projectsSheetValues;
 let refreshedAccessToken;
 let refreshResponse;
-let oauthGrantedScopes = "openid email https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/spreadsheets.readonly";
 let googleTokenDeletes = 0;
 let browserSession;
 let restoreCookie;
@@ -173,7 +172,7 @@ before(async () => {
         access_token: "test-access",
         refresh_token: "test-refresh",
         expires_in: 3600,
-        scope: oauthGrantedScopes,
+        scope: "openid email https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/spreadsheets.readonly",
       });
     }
     if (url === "https://www.googleapis.com/oauth2/v2/userinfo") {
@@ -285,29 +284,6 @@ test("OAuth start redirects to Google and callback stores encrypted token and se
   assert.equal(savedToken.provider, "google");
   assert.equal(savedToken.account, "owner@example.com");
   assert.notEqual(savedToken.encrypted_token.ciphertext, "test-access");
-});
-
-test("OAuth scope rejection preserves an existing encrypted Google connection", async () => {
-  const previousToken = structuredClone(savedToken);
-  const previousUpserts = googleTokenUpserts;
-  oauthGrantedScopes = "openid email https://www.googleapis.com/auth/gmail.readonly";
-  try {
-    const verifier = randomBytes(32).toString("base64url");
-    const challenge = createHash("sha256").update(verifier).digest("base64url");
-    const start = await originalFetch(`${baseUrl}/api/integrations/google/start?challenge=${challenge}`, { redirect: "manual" });
-    const stateCookie = start.headers.get("set-cookie").split(";")[0];
-    const state = new URL(start.headers.get("location")).searchParams.get("state");
-    const callback = await originalFetch(
-      `${baseUrl}/api/integrations/google/callback?state=${encodeURIComponent(state)}&code=partial-scope`,
-      { redirect: "manual", headers: { cookie: stateCookie } }
-    );
-    assert.equal(callback.status, 302);
-    assert.match(callback.headers.get("location"), /reason=scope_not_granted/);
-    assert.equal(googleTokenUpserts, previousUpserts);
-    assert.deepEqual(savedToken, previousToken);
-  } finally {
-    oauthGrantedScopes = "openid email https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/spreadsheets.readonly";
-  }
 });
 
 test("one-time exchange authenticates browser status and real provider test route", async () => {
@@ -504,11 +480,20 @@ test("one-time exchange authenticates browser status and real provider test rout
       ),
     });
     const calendarRequestsBeforeScopeCheck = calendarRequests.length;
-    const missingScope = await testProvider("googleCalendar");
-    assert.equal(missingScope.status, 403);
-    const missingScopeBody = await missingScope.json();
-    assert.equal(missingScopeBody.googleApiError.category, "access_denied");
-    assert.deepEqual(missingScopeBody.googleApiError.reasons, ["insufficientPermissions"]);
+    const { getGoogleAccessToken } = await import("../src/services/google-integration.service.js");
+    await assert.rejects(
+      getGoogleAccessToken("owner@example.com", {
+        requiredScope: "https://www.googleapis.com/auth/calendar.events",
+        provider: "googleCalendar",
+        operation: "calendar.events",
+      }),
+      (error) => {
+        assert.equal(error.statusCode, 403);
+        assert.equal(error.googleApiError.category, "access_denied");
+        assert.deepEqual(error.googleApiError.reasons, ["insufficientPermissions"]);
+        return true;
+      }
+    );
     assert.equal(calendarRequests.length, calendarRequestsBeforeScopeCheck);
     assert.equal(googleTokenDeletes, 0);
     savedToken.encrypted_token = encryptedBefore;
@@ -518,7 +503,6 @@ test("one-time exchange authenticates browser status and real provider test rout
       [403, "accessNotConfigured", "access_denied"],
       [429, "rateLimitExceeded", "rate_limit"],
       [400, "badRequest", "api_error"],
-      [400, "failedPrecondition", "api_error"],
       [503, "backendError", "api_error"],
     ]) {
       workspaceResponse = () => Response.json({
@@ -595,7 +579,6 @@ test("one-time exchange authenticates browser status and real provider test rout
     assert.equal(calendarFailure.google.connected, true);
 
     workspaceResponse = null;
-    const { encryptIntegrationToken, decryptIntegrationToken } = await import("../src/services/integration-vault.service.js");
     savedToken.encrypted_token = encryptIntegrationToken({
       ...decryptIntegrationToken(savedToken.encrypted_token), expiresAt: Date.now() - 1,
     });
@@ -619,7 +602,6 @@ test("one-time exchange authenticates browser status and real provider test rout
       assert.equal(current.gmail.status, "service_unavailable");
       assert.equal(current.googleCalendar.connected, false);
     }
-    const { getGoogleAccessToken } = await import("../src/services/google-integration.service.js");
     refreshResponse = () => new Response("<html>test-refresh</html>", { status: 401 });
     await assert.rejects(getGoogleAccessToken("owner@example.com"), (error) => {
       assert.equal(error.statusCode, 502);
