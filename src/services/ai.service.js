@@ -12,7 +12,18 @@ export const getAiUsageCount = async () => {
   return count;
 };
 
-export const requestAiCompletion = async ({ message, context }) => {
+export const requestAiCompletion = async ({ message, context, attachment }) => {
+  if (attachment) {
+    const body = new FormData();
+    body.set("message", message);
+    body.set("context", JSON.stringify(context));
+    body.set("file", attachment, attachment.name);
+    const response = await fetchAPI("/api/ai/chat", {
+      method: "POST",
+      body,
+    });
+    return response.data;
+  }
   const response = await fetchAPI("/api/ai/chat", {
     method: "POST",
     body: JSON.stringify({ message, context }),

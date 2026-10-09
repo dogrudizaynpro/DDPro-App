@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { getIntegrationAdmin } from "../config/integration-admin.js";
 import {
   createProject,
@@ -226,13 +226,21 @@ const sortJson = (value) => {
   );
 };
 
+export const createFileImportFingerprint = (sourceFingerprint, resource, record) =>
+  /^[\da-f]{64}$/i.test(sourceFingerprint || "")
+    ? createHash("sha256")
+      .update(`${sourceFingerprint}:${resource}:${JSON.stringify(sortJson(record))}`)
+      .digest("hex")
+    : null;
+
 export const isRecordSnapshotCurrent = (currentRecord, expectedSnapshot) =>
   Boolean(currentRecord) &&
   JSON.stringify(sortJson(currentRecord)) === JSON.stringify(sortJson(expectedSnapshot));
 
 export const prepareOperationalWrite = async (
   integrationAccount,
-  { resource, operation, id, record = {} }
+  { resource, operation, id, record = {} },
+  sourceFingerprint
 ) => {
   assertResource(resource);
   if (!["create", "update", "delete"].includes(operation)) {
@@ -261,6 +269,8 @@ export const prepareOperationalWrite = async (
       expose: true,
     });
   }
+  const recordPayload = { ...record };
+  delete recordPayload._ai_file_fingerprint;
   if (operation !== "create" && (
     typeof id !== "string" ||
     (resource === "calendar"
@@ -291,20 +301,62 @@ export const prepareOperationalWrite = async (
     .delete()
     .lt("expires_at", new Date().toISOString());
   if (cleanupError) throw cleanupError;
+  const { error: importCleanupError } = await admin
+    .from("ai_file_imports")
+    .delete()
+    .is("confirmed_at", null)
+    .lt("expires_at", new Date().toISOString());
+  if (importCleanupError) throw importCleanupError;
+  const fileImportFingerprint = operation === "create"
+    ? createFileImportFingerprint(sourceFingerprint, resource, recordPayload)
+    : null;
+  const payloadToStore = operation === "delete"
+    ? {}
+    : {
+      ...recordPayload,
+      ...(fileImportFingerprint ? { _ai_file_fingerprint: fileImportFingerprint } : {}),
+    };
   const { error } = await admin.from("ai_tool_confirmations").insert({
     id: confirmationId,
     owner_account: integrationAccount,
     resource,
     operation,
     record_id: id || null,
-    record_payload: operation === "delete" ? {} : record,
+    record_payload: payloadToStore,
     record_snapshot: currentRecord,
     expires_at: expiresAt,
   });
+  if (error?.code === "23505" && fileImportFingerprint) {
+    throw Object.assign(new Error("This file row was already prepared or imported into this module."), {
+      statusCode: 409,
+      expose: true,
+    });
+  }
   if (error) throw error;
+  if (fileImportFingerprint) {
+    const { error: importError } = await admin.from("ai_file_imports").insert({
+      owner_account: integrationAccount,
+      resource,
+      file_row_fingerprint: fileImportFingerprint,
+      confirmation_id: confirmationId,
+      expires_at: expiresAt,
+    });
+    if (importError) {
+      await admin.from("ai_tool_confirmations").delete()
+        .eq("id", confirmationId)
+        .eq("owner_account", integrationAccount);
+      if (importError.code === "23505") {
+        throw Object.assign(new Error("This file row was already prepared or imported into this module."), {
+          statusCode: 409,
+          expose: true,
+        });
+      }
+      throw importError;
+    }
+  }
 
   const actionName = { create: "oluştur", update: "güncelle", delete: "sil" }[operation];
-  const labelRecord = operation === "delete" ? currentRecord : record;
+  const labelRecord = operation === "delete" ? currentRecord : recordPayload;
   return {
     id: confirmationId,
     resource,
@@ -312,7 +364,7 @@ export const prepareOperationalWrite = async (
     summary: `${getRecordLabel(labelRecord, resource)} ${actionName} işlemini onaylıyor musunuz?`,
     preview: {
       current: currentRecord,
-      proposed: operation === "delete" ? null : record,
+      proposed: operation === "delete" ? null : recordPayload,
       targetId: id || null,
     },
     expiresAt,
@@ -362,9 +414,31 @@ export const confirmOperationalWrite = async (integrationAccount, confirmationId
       expose: true,
     });
   }
+  const recordPayload = { ...(action.record_payload || {}) };
+  const fileImportFingerprint = recordPayload._ai_file_fingerprint;
+  delete recordPayload._ai_file_fingerprint;
+  if (action.operation === "create" && fileImportFingerprint) {
+    const { data: importEntry, error: importError } = await admin
+      .from("ai_file_imports")
+      .update({ confirmed_at: now })
+      .eq("owner_account", integrationAccount)
+      .eq("resource", action.resource)
+      .eq("file_row_fingerprint", fileImportFingerprint)
+      .eq("confirmation_id", action.id)
+      .is("confirmed_at", null)
+      .select("file_row_fingerprint")
+      .maybeSingle();
+    if (importError) throw importError;
+    if (!importEntry) {
+      throw Object.assign(new Error("The file import preview expired. Analyze the file again before confirming."), {
+        statusCode: 409,
+        expose: true,
+      });
+    }
+  }
   return invokeController(controller[action.operation], integrationAccount, {
     id: action.record_id || undefined,
-    record: action.record_payload || {},
+    record: recordPayload,
   });
 };
 
@@ -381,7 +455,7 @@ export const consumeOperationalConfirmation = async (
     .eq("owner_account", integrationAccount)
     .is("confirmed_at", null)
     .gt("expires_at", now)
-    .select("resource, operation, record_id, record_payload, record_snapshot")
+    .select("id, resource, operation, record_id, record_payload, record_snapshot")
     .maybeSingle();
   if (error) throw error;
   return data;

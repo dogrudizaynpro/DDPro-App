@@ -6,6 +6,7 @@ import {
   getAiUsage,
   getAiStatus,
 } from "../controllers/ai.controller.js";
+import { parseAiChatUpload } from "../middleware/ai-file-upload.js";
 import { requireGoogleSession } from "../services/google-integration.service.js";
 
 const router = express.Router();
@@ -19,7 +20,7 @@ const aiChatRateLimit = rateLimit({
 
 router.get("/status", getAiStatus);
 router.get("/usage", requireGoogleSession, getAiUsage);
-router.post("/chat", requireGoogleSession, aiChatRateLimit, createAiCompletion);
+router.post("/chat", requireGoogleSession, aiChatRateLimit, parseAiChatUpload, createAiCompletion);
 router.post("/tools/confirm", requireGoogleSession, aiChatRateLimit, confirmAiOperationalAction);
 
 export default router;

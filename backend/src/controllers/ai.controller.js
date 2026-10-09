@@ -27,7 +27,18 @@ export const getAiUsage = async (req, res, next) => {
 export const createAiCompletion = async (req, res, next) => {
   const message =
     typeof req.body?.message === "string" ? req.body.message.trim() : "";
-  const context = req.body?.context ?? {};
+  let context = req.body?.context ?? {};
+
+  if (typeof context === "string") {
+    try {
+      context = JSON.parse(context);
+    } catch {
+      return res.status(400).json({
+        status: "error",
+        message: "Application context must be valid JSON.",
+      });
+    }
+  }
 
   if (!message || message.length > MAX_MESSAGE_LENGTH) {
     return res.status(400).json({
@@ -51,6 +62,7 @@ export const createAiCompletion = async (req, res, next) => {
     const completion = await requestAiCompletion({
       message,
       context,
+      attachment: req.aiFile,
       integrationAccount: req.integrationAccount,
     });
     await recordAiUsage(req.integrationAccount);

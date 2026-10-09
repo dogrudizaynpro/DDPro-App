@@ -631,6 +631,7 @@ function App() {
 
   const [aiInput, setAiInput] = useState("");
   const [aiSending, setAiSending] = useState(false);
+  const [aiAttachment, setAiAttachment] = useState(null);
 
   const [aiMessages, setAiMessages] = useState([
     {
@@ -1901,7 +1902,10 @@ function App() {
   const sendAiMessage = async (event) => {
     event.preventDefault();
 
-    const message = aiInput.trim();
+    const attachment = aiAttachment;
+    const message = aiInput.trim() || (attachment
+      ? "Ekli dosyayı analiz et, önemli bilgileri çıkar ve uygun DDPro modülünü öner. Herhangi bir kaydı kendiliğinden oluşturma veya değiştirme."
+      : "");
 
     if (!message || aiSending) return;
 
@@ -1910,9 +1914,12 @@ function App() {
       role: "user",
       text: message,
       date: formatDate(),
+      ...(attachment ? {
+        attachments: [{ name: attachment.name, status: "Dosya gönderiliyor ve analiz ediliyor…" }],
+      } : {}),
     };
     setAiMessages((currentMessages) => [...currentMessages, userMessage]);
-    setAiInput("");
+    if (!attachment) setAiInput("");
     setAiSending(true);
 
     const normalizedMessage = message.toLocaleLowerCase("tr-TR");
@@ -1929,7 +1936,7 @@ function App() {
                       : /sistem|system/.test(normalizedMessage) ? "systems"
                         : null;
 
-    const statusQuestion = integrationStatusQuestion(message);
+    const statusQuestion = attachment ? null : integrationStatusQuestion(message);
     if (statusQuestion) {
       try {
         const liveStatus = await getIntegrationStatus();
@@ -2060,7 +2067,19 @@ function App() {
     };
 
     try {
-      const completion = await requestAiCompletion({ message, context });
+      const completion = await requestAiCompletion({ message, context, attachment });
+      if (attachment) {
+        setAiMessages((currentMessages) => currentMessages.map((item) =>
+          item.id === userMessage.id
+            ? { ...item, attachments: item.attachments.map((file) => ({
+              ...file,
+              status: "İşlem tamamlandı",
+            })) }
+            : item
+        ));
+        setAiAttachment((current) => current === attachment ? null : current);
+        setAiInput("");
+      }
       getAiUsageCount().then(setAiAnalysisCount).catch(() => {});
       setAiMessages((currentMessages) => [
         ...currentMessages,
@@ -2075,6 +2094,16 @@ function App() {
       ]);
       addLog("DDPro AI isteği yapılandırılmış sağlayıcıya gönderildi.");
     } catch (error) {
+      if (attachment) {
+        setAiMessages((currentMessages) => currentMessages.map((item) =>
+          item.id === userMessage.id
+            ? { ...item, attachments: item.attachments.map((file) => ({
+              ...file,
+              status: "İşleme başarısız",
+            })) }
+            : item
+        ));
+      }
       const explanation =
         error.code === "AI_PROVIDER_NOT_CONFIGURED" || error.status === 503
           ? "AI sağlayıcısı şu anda bağlı değil. Gerçek yanıt için backend ortamında AI_API_URL, AI_API_KEY ve AI_MODEL yapılandırılmalıdır."
@@ -2690,6 +2719,8 @@ function App() {
           sendAiMessage={sendAiMessage}
           aiInput={aiInput}
           setAiInput={setAiInput}
+          aiAttachment={aiAttachment}
+          setAiAttachment={setAiAttachment}
           onNavigate={handleModuleNavigation}
           aiSending={aiSending}
           onConfirmAction={confirmAiOperationalAction}
