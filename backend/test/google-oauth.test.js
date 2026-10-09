@@ -811,7 +811,7 @@ test("Chromium accepts the production-origin CHIPS cookie and restores after ref
     ], { stdio: "ignore" });
     browserClosed = once(browser, "exit");
     let port;
-    for (let attempt = 0; attempt < 100; attempt += 1) {
+    for (let attempt = 0; attempt < 300; attempt += 1) {
       try {
         port = Number((await readFile(join(profile, "DevToolsActivePort"), "utf8")).split("\n")[0]);
         if (port) break;
