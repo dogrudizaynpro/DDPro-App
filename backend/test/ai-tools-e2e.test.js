@@ -20,7 +20,7 @@ let toolNames;
 before(async () => {
   process.env.AI_API_URL = "https://ai-provider.test/v1/chat/completions";
   process.env.AI_API_KEY = "test-ai-key";
-  process.env.AI_MODEL = "test-model";
+  process.env.AI_MODEL = "gpt-5.6-luna";
   process.env.SUPABASE_URL = "https://supabase.test";
   process.env.SUPABASE_SERVICE_ROLE_KEY = "test-service-role-key";
   databaseRequests = [];
@@ -42,6 +42,8 @@ before(async () => {
 
     const body = JSON.parse(init.body);
     providerRequests.push(body);
+    assert.equal(body.reasoning_effort, "none");
+    assert.deepEqual(body.tools.map(({ function: tool }) => tool.name), ["read_records", "prepare_write"]);
     const toolMessage = body.messages.find((message) => message.role === "tool");
     const responseMessage = toolMessage
       ? { role: "assistant", content: "Found Live API project in the Projects API." }

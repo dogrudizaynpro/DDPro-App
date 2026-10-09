@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import {
   getTurkishSpeechRecognition,
+  isSuccessfulAiResponse,
+  sendVoiceCommand,
   speakTurkishText,
 } from "../utils/voice-assistant.js";
 import aiTradeDesignReference from "../assets/DDPro-AI-Trade-Referans.png";
@@ -93,12 +95,13 @@ function AIModule({
   const [voiceSpeaking, setVoiceSpeaking] = useState(false);
   const [voiceError, setVoiceError] = useState("");
   const recognitionRef = useRef(null);
-  const voiceResponseStartRef = useRef(null);
+  const voiceRequestRef = useRef(0);
+  const sendAiMessageRef = useRef(sendAiMessage);
+  sendAiMessageRef.current = sendAiMessage;
   const voiceCancellationRef = useRef(false);
   const SpeechRecognition = getTurkishSpeechRecognition();
-  const latestAssistantMessage = [...aiMessages].reverse().find((message) =>
-    message.role === "assistant" && message.text?.trim()
-  );
+  const latestMessage = aiMessages.at(-1);
+  const latestAssistantMessage = isSuccessfulAiResponse(latestMessage) ? latestMessage : null;
   const allowedFileExtensions = new Set(["png", "jpg", "jpeg", "webp", "xlsx", "csv", "pdf", "docx", "txt"]);
   const maxFileSize = 10 * 1024 * 1024;
   const isImageAttachment = (file) =>
@@ -118,7 +121,7 @@ function AIModule({
     let active = true;
     getAiProviderStatus()
       .then((status) => {
-        if (active) setProviderStatus(status.configured ? "ready" : "unconfigured");
+        if (active) setProviderStatus(status.configured ? "configured" : "unconfigured");
       })
       .catch(() => {
         if (active) setProviderStatus("unavailable");
@@ -148,23 +151,14 @@ function AIModule({
   };
 
   const stopSpeech = () => {
+    voiceRequestRef.current += 1;
     voiceCancellationRef.current = true;
     window.speechSynthesis?.cancel();
     setVoiceSpeaking(false);
   };
 
-  useEffect(() => {
-    const responseStart = voiceResponseStartRef.current;
-    if (responseStart === null || aiSending) return;
-    const response = aiMessages.find((message, index) =>
-      index >= responseStart && message.role === "assistant"
-    );
-    if (!response) return;
-    voiceResponseStartRef.current = null;
-    speakResponse(response.text);
-  }, [aiMessages, aiSending]);
-
   useEffect(() => () => {
+    voiceRequestRef.current += 1;
     recognitionRef.current?.abort();
     window.speechSynthesis?.cancel();
   }, []);
@@ -189,7 +183,7 @@ function AIModule({
     recognition.lang = "tr-TR";
     recognition.interimResults = false;
     recognition.maxAlternatives = 1;
-    recognition.onresult = (event) => {
+    recognition.onresult = async (event) => {
       const transcript = Array.from(event.results || [])
         .map((result) => result[0]?.transcript || "")
         .join(" ")
@@ -199,8 +193,13 @@ function AIModule({
         return;
       }
       setAiInput(transcript);
-      voiceResponseStartRef.current = aiMessages.length + 1;
-      sendAiMessage({ preventDefault() {} }, transcript);
+      const requestId = ++voiceRequestRef.current;
+      try {
+        const response = await sendVoiceCommand(sendAiMessageRef.current, transcript);
+        if (requestId === voiceRequestRef.current) speakResponse(response.text);
+      } catch (error) {
+        if (requestId === voiceRequestRef.current) setVoiceError(error.message);
+      }
     };
     recognition.onerror = (event) => {
       const errors = {
@@ -307,8 +306,8 @@ function AIModule({
             </div>
             <div className="ai-specification">
               <span>ÇALIŞMA DURUMU</span>
-              <strong><i aria-hidden="true" /> {providerStatus === "ready" ? "AI sağlayıcısı yapılandırıldı" : providerStatus === "checking" ? "AI sağlayıcısı kontrol ediliyor" : "AI sağlayıcısı bağlı değil"}</strong>
-              <p>{providerStatus === "ready" ? "Yanıtlar sunucu tarafındaki AI sağlayıcısından istenir." : "Gerçek yanıt için backend AI_API_URL, AI_API_KEY ve AI_MODEL değişkenleri gerekir. İstek başarısız olursa yanıt uydurulmaz."}</p>
+              <strong><i aria-hidden="true" /> {providerStatus === "configured" ? "AI sağlayıcısı yapılandırıldı" : providerStatus === "checking" ? "AI sağlayıcısı kontrol ediliyor" : "AI sağlayıcısı bağlı değil"}</strong>
+              <p>{providerStatus === "configured" ? "Yapılandırma, başarılı yanıt garantisi değildir. Yanıtlar sunucu tarafındaki AI sağlayıcısından istenir." : "Gerçek yanıt için backend AI_API_URL, AI_API_KEY ve AI_MODEL değişkenleri gerekir. İstek başarısız olursa yanıt uydurulmaz."}</p>
             </div>
           </aside>
         ) : null}
@@ -329,7 +328,7 @@ function AIModule({
               >
                 <strong>
                   {message.role === "assistant"
-                    ? "DDPro AI"
+                    ? (message.status === "unavailable" ? "DDPro AI · Yanıt alınamadı" : "DDPro AI")
                     : "Sen"}
                 </strong>
                 <p>{message.text}</p>
@@ -565,7 +564,7 @@ function AIModule({
             <button
               type="button"
               aria-label={voiceSpeaking ? "Sesli AI yanıtını durdur" : "Son AI yanıtını seslendir"}
-              disabled={aiSending || !latestAssistantMessage}
+              disabled={!voiceSpeaking && (aiSending || !latestAssistantMessage)}
               onClick={() => voiceSpeaking
                 ? stopSpeech()
                 : speakResponse(latestAssistantMessage?.text || "")}
@@ -594,7 +593,6 @@ function AIModule({
               </div>
             ) : null}
             {fileError ? <p className="ai-file-error" role="alert">{fileError}</p> : null}
-            {voiceError ? <p className="ai-voice-status" role="alert">{voiceError}</p> : null}
             {voiceError ? <p className="ai-voice-status" role="alert">{voiceError}</p> : null}
             {!voiceError ? <p className="ai-voice-status" role="status" aria-live="polite">
               {voiceListening

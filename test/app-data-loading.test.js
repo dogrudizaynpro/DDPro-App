@@ -22,8 +22,8 @@ const createLoader = ({ name, fetch, service, items }) => {
   let response;
   let cleanup;
   const context = {
-    useEffect: (effect) => { cleanup = effect(); },
-    integrationState: { google: { connected: true } },
+    useEffect: (effect, dependencies) => { state.dependencies = dependencies; cleanup = effect(); },
+    integrationState: { google: { authenticated: true, connected: false } },
     offersReloadKey: 0,
     [`${name.toLowerCase()}TouchedRef`]: revision,
     [`${name.toLowerCase()}ActiveMutationsRef`]: active,
@@ -55,6 +55,21 @@ const createLoader = ({ name, fetch, service, items }) => {
 };
 
 for (const domain of domains) {
+  test(`${domain.name} reloads on authentication independently of aggregate Google service health`, async () => {
+    const loader = createLoader(domain);
+    const records = [{ id: "authenticated-record" }];
+    loader.load(() => Promise.resolve(records));
+    await flush();
+    assert.equal(loader.state.dependencies.at(-1), true);
+    assert.deepEqual(loader.state.rows, records);
+    assert.equal(loader.state.status, "success");
+    loader.context.integrationState.google.authenticated = false;
+    loader.context.integrationState.google.connected = true;
+    loader.load(() => Promise.resolve(records));
+    assert.equal(loader.state.dependencies.at(-1), false);
+    await flush();
+  });
+
   test(`${domain.name} recovers real API records after an earlier edit and failed session reload`, async () => {
     const loader = createLoader(domain);
     loader.load(() => Promise.reject(new Error("Browser session required")));
@@ -96,6 +111,58 @@ for (const domain of domains) {
   }
 
 }
+
+const loadDashboard = (authenticated) => {
+  const state = { calls: 0 };
+  const context = {
+    useEffect: (effect, dependencies) => { state.dependencies = dependencies; effect(); },
+    integrationState: { google: { authenticated, connected: false } },
+    getReports: async () => { state.calls += 1; return [{ id: "report" }]; },
+    getFinanceCosts: async () => { state.calls += 1; return [{ id: "cost" }]; },
+    getDocuments: async () => { state.calls += 1; return [{ id: "document" }]; },
+    getAiUsageCount: async () => { state.calls += 1; return 7; },
+    getGoogleCalendarEvents: async () => { state.calls += 1; throw new Error("Calendar service unavailable"); },
+    setReportItems: (rows) => { state.reports = rows; },
+    setFinanceItems: (rows) => { state.finance = rows; },
+    setDocumentItems: (rows) => { state.documents = rows; },
+    setAiAnalysisCount: (count) => { state.aiCount = count; },
+    setAiUsageFetchState: (status) => { state.aiStatus = status; },
+    setCalendarEvents: (rows) => { state.calendar = rows; },
+    setCalendarFetchState: (status) => { state.calendarStatus = status; },
+  };
+  const marker = source.indexOf("    getReports()");
+  const start = source.lastIndexOf("  useEffect(() => {", marker);
+  const end = source.indexOf("  }, [integrationState?.google?.authenticated]);", marker) +
+    "  }, [integrationState?.google?.authenticated]);".length;
+  assert.ok(marker >= 0 && start >= 0 && end > marker);
+  runInNewContext(source.slice(start, end), context);
+  return state;
+};
+
+test("authenticated dashboard loads core data despite failed Google service health and Calendar reads", async () => {
+  const state = loadDashboard(true);
+  await flush();
+  assert.equal(state.calls, 5);
+  assert.equal(state.dependencies[0], true);
+  assert.equal(state.reports[0].id, "report");
+  assert.equal(state.finance[0].id, "cost");
+  assert.equal(state.documents[0].id, "document");
+  assert.equal(state.aiCount, 7);
+  assert.equal(state.aiStatus, "success");
+  assert.equal(state.calendarStatus, "error");
+  assert.equal(state.calendar.length, 0);
+});
+
+test("unauthenticated dashboard does not request protected records", async () => {
+  const state = loadDashboard(false);
+  await flush();
+  assert.equal(state.calls, 0);
+  assert.equal(state.dependencies[0], false);
+  assert.equal(state.reports.length, 0);
+  assert.equal(state.aiCount, 0);
+  assert.equal(state.aiStatus, "unavailable");
+  assert.equal(state.calendarStatus, "unavailable");
+});
 
 test("a project creation already in flight fences a stale reload when its write completes", async () => {
   const loader = createLoader(domains[0]);

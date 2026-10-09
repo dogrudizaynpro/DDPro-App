@@ -20,7 +20,7 @@ before(async () => {
   globalThis.fetch = async (url, init) => {
     const body = JSON.parse(init.body);
     requests.push({ url: String(url), headers: init.headers, body });
-    const next = rejectSamplingParameters(body) || responses.shift();
+    const next = rejectReasoningTools(body) || rejectSamplingParameters(body) || responses.shift();
     assert.ok(next, "Unexpected AI provider request");
     return new Response(JSON.stringify(next.body), {
       status: next.status,
@@ -50,6 +50,14 @@ afterEach(() => {
 
 const completion = (message) => ({ status: 200, body: { choices: [{ message }] } });
 
+const rejectReasoningTools = (body) => {
+  if (!body.tools?.length || body.reasoning_effort === "none") return null;
+  return {
+    status: 400,
+    body: { error: { message: "Function tools with reasoning_effort are not supported for gpt-5.6-luna in /v1/chat/completions." } },
+  };
+};
+
 const rejectSamplingParameters = (body) => {
   const unsupported = ["temperature", "top_p"].find((key) => key in body);
   if (!unsupported) return null;
@@ -71,6 +79,7 @@ test("Chat Completions request omits sampling parameters unsupported by gpt-5.6-
   assert.equal(body.model, "gpt-5.6-luna");
   assert.equal("temperature" in body, false);
   assert.equal("top_p" in body, false);
+  assert.equal(body.reasoning_effort, "none");
   assert.equal(body.tool_choice, "auto");
   assert.deepEqual(body.tools.map((tool) => tool.function.name), ["read_records", "prepare_write"]);
 });
@@ -152,6 +161,10 @@ test("file project analysis cannot prepare writes before separate import confirm
   assert.deepEqual(JSON.parse(requests[1].body.messages.at(-1).content), {
     error: "Project spreadsheet rows are shown in a separate review and import flow.",
   });
+  assert.ok(requests.every(({ body }) =>
+    body.reasoning_effort === "none" &&
+    body.tools.some(({ function: tool }) => tool.name === "read_records")
+  ));
 });
 
 test("AI provider connection test succeeds with the production request shape", async () => {

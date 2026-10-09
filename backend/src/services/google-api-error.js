@@ -23,10 +23,17 @@ const safeGoogleText = (value, credentials = []) => {
 
 export class GoogleApiError extends Error {
   constructor(httpStatus, payload, credentials = [], provider = "google", operation = "google.api.request") {
-    const reasons = Array.isArray(payload?.error?.errors)
-      ? [...new Set(payload.error.errors.slice(0, 20)
-        .map((error) => safeGoogleText(error?.reason, credentials).slice(0, 128)).filter(Boolean))]
-      : [];
+    const legacyErrors = Array.isArray(payload?.error?.errors) ? payload.error.errors : [];
+    const details = Array.isArray(payload?.error?.details) ? payload.error.details : [];
+    const reasons = [...new Set([
+      ...legacyErrors.slice(0, 20).map((error) => error?.reason),
+      ...details.slice(0, 20)
+        .filter((detail) => detail?.["@type"] === "type.googleapis.com/google.rpc.ErrorInfo")
+        .map((detail) => detail.reason),
+    ].map((reason) => safeGoogleText(reason, credentials).slice(0, 128)).filter(Boolean))];
+    const providerStatus = safeGoogleText(payload?.error?.status, credentials).slice(0, 128);
+    const reasonKeys = [...reasons, providerStatus].map((reason) => reason.replace(/[_-]/g, "").toLowerCase());
+    const includesReason = (...values) => values.some((value) => reasonKeys.includes(value));
     const connectionInvalid = provider === "google" &&
       operation === "oauth.token.refresh" && reasons.includes("invalid_grant");
     const message = safeGoogleText(payload?.error?.message, credentials) ||
@@ -48,10 +55,15 @@ export class GoogleApiError extends Error {
       operation,
       category: connectionInvalid ? "connection_invalid"
         : httpStatus === 401 ? "authorization"
-        : httpStatus === 403 ? "access_denied"
-          : httpStatus === 429 ? "rate_limit" : "api_error",
+        : httpStatus === 429 ? "rate_limit"
+        : includesReason("servicedisabled", "accessnotconfigured", "apidisabled") ? "api_disabled"
+        : includesReason("insufficientpermissions", "insufficientscope", "accesstokenscopeinsufficient") ? "scope_required"
+        : includesReason("failedprecondition") ? "failed_precondition"
+        : includesReason("forbidden", "permissiondenied", "iampermissiondenied") ? "permission_denied"
+        : httpStatus === 403 ? "access_denied" : "api_error",
       message,
       reasons,
+      ...(providerStatus && { providerStatus }),
     };
   }
 }

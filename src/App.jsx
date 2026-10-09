@@ -654,7 +654,7 @@ function App() {
 
   useEffect(() => {
     let active = true;
-    if (!integrationState?.google?.connected) {
+    if (!integrationState?.google?.authenticated) {
       setReportItems([]);
       setFinanceItems([]);
       setDocumentItems([]);
@@ -700,7 +700,7 @@ function App() {
         }
       });
     return () => { active = false; };
-  }, [integrationState?.google?.connected]);
+  }, [integrationState?.google?.authenticated]);
 
   useEffect(() => {
     let active = true;
@@ -957,7 +957,7 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, [offersReloadKey, integrationState?.google?.connected]);
+  }, [offersReloadKey, integrationState?.google?.authenticated]);
 
   useEffect(() => {
     if (offers.length === 0) {
@@ -1102,7 +1102,7 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, [integrationState?.google?.connected]);
+  }, [integrationState?.google?.authenticated]);
 
   useEffect(() => {
     localStorage.setItem(
@@ -1185,7 +1185,7 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, [integrationState?.google?.connected]);
+  }, [integrationState?.google?.authenticated]);
 
   const addLog = (message) => {
     const newLog = {
@@ -1908,7 +1908,7 @@ function App() {
       ? "Ekli dosyayı analiz et, önemli bilgileri çıkar ve uygun DDPro modülünü öner. Herhangi bir kaydı kendiliğinden oluşturma veya değiştirme."
       : "");
 
-    if (!message || aiSending) return;
+    if (!message || aiSending) return null;
 
     const userMessage = {
       id: createId(),
@@ -1942,16 +1942,19 @@ function App() {
       try {
         const liveStatus = await getIntegrationStatus();
         setIntegrationState(liveStatus);
+        const response = {
+          id: createId(),
+          role: "assistant",
+          text: describeIntegrationStatus(statusQuestion[0], statusQuestion[1], liveStatus),
+          date: formatDate(),
+          status: "success",
+          moduleSuggestion: "integrations",
+        };
         setAiMessages((currentMessages) => [
           ...currentMessages,
-          {
-            id: createId(),
-            role: "assistant",
-            text: describeIntegrationStatus(statusQuestion[0], statusQuestion[1], liveStatus),
-            date: formatDate(),
-            moduleSuggestion: "integrations",
-          },
+          response,
         ]);
+        return response;
       } catch (error) {
         setAiMessages((currentMessages) => [
           ...currentMessages,
@@ -1967,7 +1970,7 @@ function App() {
       } finally {
         setAiSending(false);
       }
-      return;
+      return null;
     }
 
     let crmContext = getStoredData("ddpro_crm_contacts_v1");
@@ -2069,6 +2072,9 @@ function App() {
 
     try {
       const completion = await requestAiCompletion({ message, context, attachment });
+      if (typeof completion?.answer !== "string" || !completion.answer.trim()) {
+        throw new Error("AI sağlayıcısı geçerli bir yanıt döndürmedi.");
+      }
       let projectImport = completion.projectImport;
       if (projectImport) {
         try {
@@ -2098,19 +2104,22 @@ function App() {
         setAiInput("");
       }
       getAiUsageCount().then(setAiAnalysisCount).catch(() => {});
+      const response = {
+        id: createId(),
+        role: "assistant",
+        text: completion.answer,
+        date: formatDate(),
+        status: "success",
+        moduleSuggestion: suggestedModuleId,
+        pendingAction: completion.pendingAction,
+        projectImport,
+      };
       setAiMessages((currentMessages) => [
         ...currentMessages,
-        {
-          id: createId(),
-          role: "assistant",
-          text: completion.answer,
-          date: formatDate(),
-          moduleSuggestion: suggestedModuleId,
-          pendingAction: completion.pendingAction,
-          projectImport,
-        },
+        response,
       ]);
       addLog("DDPro AI isteği yapılandırılmış sağlayıcıya gönderildi.");
+      return response;
     } catch (error) {
       if (attachment) {
         setAiMessages((currentMessages) => currentMessages.map((item) =>
@@ -2137,6 +2146,7 @@ function App() {
           moduleSuggestion: suggestedModuleId,
         },
       ]);
+      return null;
     } finally {
       setAiSending(false);
     }

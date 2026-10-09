@@ -130,6 +130,9 @@ const requestProviderCompletion = async (messages) => {
         messages,
         tools: AI_TOOL_DEFINITIONS,
         tool_choice: "auto",
+        ...(/^gpt-5\.6-luna(?:-\d{4}-\d{2}-\d{2})?$/i.test(AI_MODEL)
+          ? { reasoning_effort: "none" }
+          : {}),
       }),
       signal: AbortSignal.timeout(30_000),
     });

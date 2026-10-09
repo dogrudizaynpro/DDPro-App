@@ -15,6 +15,12 @@ const resultKey = (provider, account) =>
 export const getIntegrationTestResult = (provider, account = "") =>
   recentTests.get(resultKey(provider, account)) || null;
 
+const isFreshResult = (result, now) => {
+  const testedAt = Date.parse(result?.testedAt || "");
+  const testAge = now - testedAt;
+  return Number.isFinite(testedAt) && testAge >= 0 && testAge < testResultLifetime;
+};
+
 export const getIntegrationHealthStatus = ({
   configured,
   result,
@@ -23,21 +29,26 @@ export const getIntegrationHealthStatus = ({
   now = Date.now(),
 }) => {
   if (!configured) return "credentials_required";
-  const testedAt = Date.parse(result?.testedAt || "");
-  const testAge = now - testedAt;
-  const fresh = Number.isFinite(testedAt) && testAge >= 0 && testAge < testResultLifetime;
-  if (fresh && result.connected) return "connected";
-  if (fresh && !result.connected) {
-    if (result.googleApiError?.operation === "oauth.token.refresh") {
-      return result.googleApiError.category === "connection_invalid"
+  const fresh = isFreshResult(result, now);
+  if (fresh && result.connected && result.testSucceeded !== false) {
+    return requiresSession && !sessionReady ? "authorization_required" : "connected";
+  }
+  if (fresh) {
+    if ((result.googleApiError?.operation || result.operation) === "oauth.token.refresh") {
+      return result.googleApiError?.category === "connection_invalid"
         ? "authorization_required"
         : "token_refresh_failed";
     }
+    if (result.googleApiError?.category === "api_disabled") return "api_disabled";
+    if (["failed_precondition", "scope_required", "permission_denied"].includes(result.googleApiError?.category)) {
+      return result.googleApiError.category;
+    }
     if (result.googleApiError?.category === "access_denied") {
       const reasons = result.googleApiError.reasons || [];
-      return reasons.some((reason) => /insufficientPermissions|insufficient_scope|accessNotConfigured/i.test(reason))
-        ? "permission_required"
-        : "request_rejected";
+      if (reasons.some((reason) => /^(accessNotConfigured|SERVICE_DISABLED|API_DISABLED)$/i.test(reason))) return "api_disabled";
+      if (reasons.some((reason) => /^(insufficientPermissions|insufficient_scope|ACCESS_TOKEN_SCOPE_INSUFFICIENT)$/i.test(reason))) return "scope_required";
+      return reasons.some((reason) => /^(forbidden|PERMISSION_DENIED|IAM_PERMISSION_DENIED)$/i.test(reason))
+        ? "permission_denied" : "request_rejected";
     }
     if (result.googleApiError?.category === "authorization") return "request_rejected";
     if (["GOOGLE_CONNECTION_REQUIRED", "BROWSER_SESSION_REQUIRED"].includes(result.code)) {
@@ -50,6 +61,30 @@ export const getIntegrationHealthStatus = ({
   }
   if (requiresSession && !sessionReady) return "authorization_required";
   return "configured_not_tested";
+};
+
+export const getIntegrationHealthState = (options) => {
+  const status = getIntegrationHealthStatus(options);
+  const fresh = isFreshResult(options.result, options.now ?? Date.now());
+  const result = fresh ? options.result : null;
+  const authorized = result?.connected && result?.testSucceeded !== false ? true
+    : ["authorization", "scope_required", "permission_denied", "connection_invalid"]
+      .includes(result?.googleApiError?.category) || result?.statusCode === 401 ? false
+      : !options.requiresSession && result?.statusCode === 403 ? false : null;
+  return {
+    configured: Boolean(options.configured),
+    authenticated: options.requiresSession
+      ? Boolean(options.sessionReady)
+      : null,
+    authorized,
+    reachable: result?.reachable ?? (
+      result?.googleApiError?.requestSent === false ? null
+        : result?.googleApiError || result?.connected ? true : null
+    ),
+    working: fresh ? status === "connected" : null,
+    connected: status === "connected",
+    status,
+  };
 };
 
 const recordResult = (provider, account, result) => {
@@ -162,7 +197,7 @@ export const testIntegrationConnection = async (provider, account = "") => {
   }
   try {
     await test(account);
-    return recordResult(provider, account, { connected: true, testSucceeded: true, error: "" });
+    return recordResult(provider, account, { connected: true, testSucceeded: true, reachable: true, error: "" });
   } catch (error) {
     recordResult(provider, account, {
       connected: false,
@@ -170,6 +205,8 @@ export const testIntegrationConnection = async (provider, account = "") => {
       error: error.expose ? error.message : "Provider connection test failed.",
       ...(error.code && { code: error.code }),
       ...(error.statusCode && { statusCode: error.statusCode }),
+      ...(error.operation && { operation: error.operation }),
+      ...(typeof error.reachable === "boolean" && { reachable: error.reachable }),
       ...(error.googleApiError && { googleApiError: error.googleApiError }),
     });
     throw error;

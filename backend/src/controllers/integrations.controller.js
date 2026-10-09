@@ -5,7 +5,7 @@ import {
 } from "../services/google-integration.service.js";
 import { websiteCmsConfigured } from "../services/website-cms.service.js";
 import {
-  getIntegrationHealthStatus,
+  getIntegrationHealthState,
   getIntegrationTestResult,
   testIntegrationConnection,
 } from "../services/integration-health.service.js";
@@ -25,6 +25,7 @@ export const getIntegrationStatus = async (req, res, next) => {
   const websiteConfigured = cmsConfigured && websiteWebhookConfigured && databaseConfigured;
   let coreDataConnected = false;
   let crmStorageConnected = false;
+  let crmConnected = false;
   if (databaseConfigured) {
     const admin = getIntegrationAdmin();
     const coreTables = [
@@ -43,6 +44,7 @@ export const getIntegrationStatus = async (req, res, next) => {
     ]);
     coreDataConnected = coreResults.every(({ error }) => !error);
     crmStorageConnected = !crmError && !tokenError;
+    crmConnected = !coreResults[0].error && crmStorageConnected;
   }
   const googleConfigured = google.configured;
   const googleOAuthAvailable = google.oauthFlowAvailable;
@@ -50,16 +52,15 @@ export const getIntegrationStatus = async (req, res, next) => {
   const statusAfterTest = (provider, configured, sessionReady = false) => {
     const result = last(provider);
     const checkedAt = new Date().toISOString();
-    const requiresGoogleSession = ["gmail", "googleCalendar", "crm"].includes(provider);
-    const state = getIntegrationHealthStatus({
+    const requiresGoogleSession = ["gmail", "googleCalendar"].includes(provider);
+    const state = getIntegrationHealthState({
       configured,
       result,
       requiresSession: requiresGoogleSession,
       sessionReady,
     });
     return {
-      connected: state === "connected",
-      status: state,
+      ...state,
       lastTest: result,
       checkedAt,
     };
@@ -69,12 +70,14 @@ export const getIntegrationStatus = async (req, res, next) => {
     process.env.APPLE_KEY_ID &&
     process.env.APPLE_PRIVATE_KEY
   );
-  const supabaseConfigured = Boolean(
-    process.env.SUPABASE_URL &&
-    process.env.SUPABASE_ANON_KEY &&
-    process.env.SUPABASE_SERVICE_ROLE_KEY
-  );
-  const googleConnected = googleConfigured && google.connected && Boolean(googleAccount);
+  const supabaseConfigured = databaseConfigured;
+  const googleSessionReady = Boolean(googleAccount);
+  const gmailHealth = statusAfterTest("gmail", googleConfigured, googleSessionReady);
+  const calendarHealth = statusAfterTest("googleCalendar", googleConfigured, googleSessionReady);
+  const workspaceHealth = [gmailHealth, calendarHealth];
+  const googleStatus = workspaceHealth.find(({ status }) =>
+    !["connected", "configured_not_tested"].includes(status))?.status ||
+    (workspaceHealth.every(({ connected }) => connected) ? "connected" : "configured_not_tested");
   const supabaseConnected = coreDataConnected && crmStorageConnected;
   const supabaseStatus = !supabaseConfigured
     ? "credentials_required"
@@ -98,12 +101,12 @@ export const getIntegrationStatus = async (req, res, next) => {
       gmail: {
         configured: googleConfigured,
         oauthFlowAvailable: googleOAuthAvailable,
-        ...statusAfterTest("gmail", googleConfigured, googleConnected),
+        ...gmailHealth,
       },
       googleCalendar: {
         configured: googleConfigured,
         oauthFlowAvailable: googleOAuthAvailable,
-        ...statusAfterTest("googleCalendar", googleConfigured, googleConnected),
+        ...calendarHealth,
       },
       whatsapp: {
         ...whatsapp,
@@ -116,12 +119,25 @@ export const getIntegrationStatus = async (req, res, next) => {
       google: {
         configured: googleConfigured,
         oauthFlowAvailable: googleOAuthAvailable,
-        ...statusAfterTest("google", googleConfigured, googleConnected),
-        connected: googleConnected,
+        authenticated: googleSessionReady,
+        authorized: workspaceHealth.every(({ authorized }) => authorized === true) ? true
+          : workspaceHealth.some(({ authorized }) => authorized === false) ? false : null,
+        reachable: workspaceHealth.every(({ reachable }) => reachable === true) ? true
+          : workspaceHealth.some(({ reachable }) => reachable === false) ? false : null,
+        working: workspaceHealth.every(({ working }) => working === true) ? true
+          : workspaceHealth.some(({ working }) => working === false) ? false : null,
+        status: googleStatus,
+        connected: workspaceHealth.every(({ connected }) => connected),
+        lastTest: null,
+        checkedAt,
       },
       supabase: {
         configured: supabaseConfigured,
         connected: supabaseConfigured && supabaseConnected,
+        authenticated: null,
+        authorized: supabaseConnected ? true : null,
+        reachable: supabaseConnected ? true : null,
+        working: supabaseConnected,
         status: supabaseStatus,
         lastTest: supabaseLastTest,
         checkedAt: supabaseCheckedAt,
@@ -130,8 +146,21 @@ export const getIntegrationStatus = async (req, res, next) => {
         integrationStorageConnected: crmStorageConnected,
       },
       crm: {
-        configured: crmStorageConnected,
-        ...statusAfterTest("crm", crmStorageConnected, googleConnected),
+        configured: databaseConfigured,
+        authenticated: null,
+        authorized: crmConnected ? true : null,
+        connected: crmConnected,
+        reachable: crmConnected ? true : null,
+        working: crmConnected,
+        status: !databaseConfigured ? "credentials_required"
+          : crmConnected ? "connected" : "service_unavailable",
+        lastTest: {
+          connected: crmConnected,
+          testSucceeded: crmConnected,
+          testedAt: checkedAt,
+          error: crmConnected ? "" : "CRM storage could not be reached.",
+        },
+        checkedAt,
       },
       backendApi: { configured: true, connected: true, status: "connected", checkedAt },
       web: {
