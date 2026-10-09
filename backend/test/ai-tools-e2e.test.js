@@ -112,7 +112,7 @@ test("read_records reaches the Projects API controller and returns its actual da
 });
 
 test("Projects API errors fail the AI request instead of being hidden by a generated answer", async () => {
-  databaseStatus = 503;
+  databaseStatus = 400;
   databaseRequests.length = 0;
   providerRequests.length = 0;
 
