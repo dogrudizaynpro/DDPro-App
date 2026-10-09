@@ -4,6 +4,10 @@ import { after, before, test } from "node:test";
 import { strToU8, zipSync } from "fflate";
 import { parseAiChatUpload } from "../src/middleware/ai-file-upload.js";
 import { prepareAiAttachment } from "../src/services/ai-file.service.js";
+import {
+  previewAiFileProjects,
+  saveAiFileProjects,
+} from "../src/controllers/project-import.controller.js";
 
 let server;
 let baseUrl;
@@ -90,6 +94,9 @@ test("multipart XLSX upload reads all 18 rows and 12 source columns", async () =
     "2026-12-31",
     `Kaynak notu ${index + 1}`,
   ]);
+  rows[1][0] = rows[0][0];
+  rows[2][9] = "";
+  rows[2][10] = "";
   const values = [headers, ...rows];
   const columnName = (column) => {
     let result = "";
@@ -128,4 +135,62 @@ test("multipart XLSX upload reads all 18 rows and 12 source columns", async () =
   assert.equal(result.extracted.tables[0].rows.length, 18);
   assert.equal(result.extracted.tables[0].rows[0][9], "");
   assert.equal(result.extracted.tables[0].rows[17][11], "Kaynak notu 18");
+
+  const table = result.extracted.tables[0];
+  const databaseProjects = [{
+    id: "existing-project",
+    name: rows[0][0],
+    import_source_key: null,
+  }];
+  const database = {
+    from(tableName) {
+      let payload;
+      const query = {
+        select() {
+          if (payload) return query;
+          const data = tableName === "projects"
+            ? databaseProjects.map((project) => ({ ...project }))
+            : [{ name: tableName === "products" ? "Cephe" : "Curtain wall" }];
+          return Promise.resolve({ data, error: null });
+        },
+        insert(record) {
+          payload = record;
+          return query;
+        },
+        async single() {
+          const project = { id: `imported-${databaseProjects.length}`, ...payload };
+          databaseProjects.push(project);
+          return { data: project, error: null };
+        },
+      };
+      return query;
+    },
+  };
+  const sourceFingerprint = "a".repeat(64);
+  const preview = await previewAiFileProjects(database, {
+    sourceFingerprint,
+    headers: table.headers,
+    rows: table.rows,
+  });
+  assert.deepEqual(preview.counts, { transfer: 15, duplicate: 2, review: 1 });
+  assert.equal(preview.records.find(({ row }) => row === 4).classification, "review");
+  assert.deepEqual(preview.records.find(({ row }) => row === 4).missing, ["start_date", "end_date"]);
+
+  const imported = await saveAiFileProjects(database, {
+    sourceFingerprint,
+    headers: table.headers,
+    rows: table.rows,
+  });
+  assert.equal(imported.sourceRows, 18);
+  assert.equal(imported.added.length, 16);
+  assert.equal(imported.existing.length, 2);
+  assert.equal(imported.errors.length, 0);
+  const refreshedProjects = databaseProjects.filter(({ id }) =>
+    imported.added.some((record) => record.id === id)
+  );
+  assert.equal(refreshedProjects.length, 16);
+  const incompleteProject = refreshedProjects.find(({ name }) => name === "Test Projesi 3");
+  assert.equal(incompleteProject.start_date, null);
+  assert.equal(incompleteProject.end_date, null);
+  assert.equal(incompleteProject.source_data.values[11], "Kaynak notu 3");
 });
