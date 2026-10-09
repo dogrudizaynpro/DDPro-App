@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { formatDateTime } from "../utils/date-time.js";
 import { getProjects } from "../services/projects.service.js";
 import { getCrmContacts } from "../services/operations-integrations.service.js";
 import DDProIcon from "../components/DDProIcon.jsx";
@@ -189,7 +190,7 @@ export default function MessagesModule() {
             <div className="data-list">
               {messages.length ? messages.map((message) => (
                 <article className="data-card" key={message.id}>
-                  <div><p>{message.content}</p><small>{message.direction === "INBOUND" ? `Gelen · ${message.read_at ? "Okundu" : "Okunmadı"}` : "Giden"} · {new Date(message.created_at).toLocaleString("tr-TR")}</small></div>
+                  <div><p>{message.content}</p><small>{message.direction === "INBOUND" ? `Gelen · ${message.read_at ? "Okundu" : "Okunmadı"}` : "Giden"} · {formatDateTime(message.created_at)}</small></div>
                   <div className="module-toolbar">
                     {message.direction === "INBOUND" && !message.read_at ? <button type="button" onClick={() => toggleRead(message)}>Okundu işaretle</button> : null}
                     <DDProActionButton icon="delete" label="Mesajı sil" onClick={() => deleteMessage(selectedId, message.id).then(() => setMessages((items) => items.filter((item) => item.id !== message.id))).catch((actionError) => setError(actionError.message))} />

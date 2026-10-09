@@ -75,6 +75,25 @@ const createProviderError = (message, code) => {
   return error;
 };
 
+const sanitizeProviderError = (data) => {
+  const raw = typeof data?.error === "string"
+    ? data.error
+    : data?.error?.message || data?.message;
+  if (typeof raw !== "string") return "";
+  let message = raw;
+  for (const [key, secret] of Object.entries(process.env)) {
+    if (!secret || !/SECRET|TOKEN|KEY|PASSWORD/i.test(key)) continue;
+    for (const variant of new Set([secret, encodeURIComponent(secret)])) {
+      message = message.split(variant).join("[REDACTED]");
+    }
+  }
+  return message
+    .replace(/Bearer\s+\S+/gi, "******")
+    .replace(/\b(?:ya29\.[\w.-]+|1\/\/[\w.-]+|GOCSPX-[\w-]+|AIza[\w-]+)\b/g, "[REDACTED]")
+    .replace(/[\u0000-\u001f\u007f]/g, " ")
+    .slice(0, 500);
+};
+
 const requestProviderCompletion = async (messages) => {
   let providerUrl;
   try {
@@ -122,8 +141,8 @@ const requestProviderCompletion = async (messages) => {
       error.name === "TimeoutError" ? "AI_PROVIDER_TIMEOUT" : "AI_PROVIDER_UNAVAILABLE"
     );
   }
-  if (!response.ok) return { response, data: null };
-  return { response, data: await response.json() };
+  const data = await response.json().catch(() => null);
+  return { response, data };
 };
 
 const parseToolArguments = (toolCall) => {
@@ -248,10 +267,12 @@ export const requestAiCompletion = async ({ message, context = {}, integrationAc
     const { response, data } = await requestProviderCompletion(messages);
     if (!response.ok) {
       const toolRejected = [400, 422].includes(response.status);
+      const providerMessage = sanitizeProviderError(data);
+      const messageSuffix = providerMessage ? ` ${providerMessage}` : "";
       throw createProviderError(
         toolRejected
-          ? `AI provider rejected the request containing DDPro operational tools (HTTP ${response.status}).`
-          : `AI provider request failed (HTTP ${response.status}).`,
+          ? `AI provider rejected the request containing DDPro operational tools (HTTP ${response.status}).${messageSuffix}`
+          : `AI provider request failed (HTTP ${response.status}).${messageSuffix}`,
         toolRejected ? "AI_PROVIDER_TOOL_REQUEST_REJECTED" : "AI_PROVIDER_REQUEST_FAILED"
       );
     }

@@ -1,4 +1,7 @@
-import { getGoogleAccessToken } from "./google-integration.service.js";
+import {
+  getGoogleAccessToken,
+  GOOGLE_OPERATION_SCOPES,
+} from "./google-integration.service.js";
 import { createCrmContact } from "./crm.service.js";
 import { GoogleApiError } from "./google-api-error.js";
 
@@ -14,7 +17,12 @@ const getGoogleOperation = (endpoint) => {
 };
 
 const googleRequest = async (account, endpoint, options = {}) => {
-  const accessToken = await getGoogleAccessToken(account);
+  const isGmail = endpoint.startsWith("/gmail/");
+  const accessToken = await getGoogleAccessToken(account, {
+    requiredScope: isGmail ? GOOGLE_OPERATION_SCOPES.gmail : GOOGLE_OPERATION_SCOPES.calendar,
+    provider: isGmail ? "gmail" : "googleCalendar",
+    operation: getGoogleOperation(endpoint),
+  });
   let response;
   try {
     response = await fetch(`https://www.googleapis.com${endpoint}`, {
@@ -132,7 +140,7 @@ export const testGoogleWorkspaceConnection = async (account, provider) => {
     return;
   }
   if (provider === "calendar") {
-    await googleRequest(account, "/calendar/v3/users/me/calendarList?maxResults=1");
+    await googleRequest(account, "/calendar/v3/calendars/primary/events?maxResults=1");
     return;
   }
   throw Object.assign(new Error("Unsupported Google Workspace provider."), {

@@ -1,4 +1,8 @@
 import { useEffect, useRef, useState } from "react";
+import {
+  getTurkishSpeechRecognition,
+  speakTurkishText,
+} from "../utils/voice-assistant.js";
 import aiTradeDesignReference from "../assets/DDPro-AI-Trade-Referans.png";
 import aiCharacterFront from "../assets/ddpro-ai-character-front.png";
 import aiCharacterBack from "../assets/ddpro-ai-character-back.png";
@@ -86,12 +90,15 @@ function AIModule({
   const [previewUrl, setPreviewUrl] = useState("");
   const [providerStatus, setProviderStatus] = useState("checking");
   const [voiceListening, setVoiceListening] = useState(false);
+  const [voiceSpeaking, setVoiceSpeaking] = useState(false);
   const [voiceError, setVoiceError] = useState("");
   const recognitionRef = useRef(null);
   const voiceResponseStartRef = useRef(null);
-  const SpeechRecognition = typeof window === "undefined"
-    ? null
-    : window.SpeechRecognition || window.webkitSpeechRecognition;
+  const voiceCancellationRef = useRef(false);
+  const SpeechRecognition = getTurkishSpeechRecognition();
+  const latestAssistantMessage = [...aiMessages].reverse().find((message) =>
+    message.role === "assistant" && message.text?.trim()
+  );
   const allowedFileExtensions = new Set(["png", "jpg", "jpeg", "webp", "xlsx", "csv", "pdf", "docx", "txt"]);
   const maxFileSize = 10 * 1024 * 1024;
   const isImageAttachment = (file) =>
@@ -121,6 +128,31 @@ function AIModule({
     };
   }, []);
 
+  const speakResponse = (text) => {
+    try {
+      voiceCancellationRef.current = false;
+      const utterance = speakTurkishText(text);
+      setVoiceError("");
+      setVoiceSpeaking(true);
+      utterance.onend = () => setVoiceSpeaking(false);
+      utterance.onerror = () => {
+        setVoiceSpeaking(false);
+        if (!voiceCancellationRef.current) {
+          setVoiceError("AI yanıtı seslendirilemedi. Tarayıcının ses ayarlarını kontrol edin.");
+        }
+      };
+    } catch (error) {
+      setVoiceSpeaking(false);
+      setVoiceError(error.message);
+    }
+  };
+
+  const stopSpeech = () => {
+    voiceCancellationRef.current = true;
+    window.speechSynthesis?.cancel();
+    setVoiceSpeaking(false);
+  };
+
   useEffect(() => {
     const responseStart = voiceResponseStartRef.current;
     if (responseStart === null || aiSending) return;
@@ -129,10 +161,7 @@ function AIModule({
     );
     if (!response) return;
     voiceResponseStartRef.current = null;
-    if (!response.text?.trim() || !window.speechSynthesis || !window.SpeechSynthesisUtterance) return;
-    const utterance = new window.SpeechSynthesisUtterance(response.text);
-    utterance.lang = "tr-TR";
-    window.speechSynthesis.speak(utterance);
+    speakResponse(response.text);
   }, [aiMessages, aiSending]);
 
   useEffect(() => () => {
@@ -149,9 +178,13 @@ function AIModule({
       setVoiceError("Bu tarayıcı sesli komutları desteklemiyor. Yazılı mesaj gönderebilirsiniz.");
       return;
     }
+    if (typeof window !== "undefined" && !window.isSecureContext) {
+      setVoiceError("Mikrofon için güvenli HTTPS bağlantısı gerekir.");
+      return;
+    }
     if (aiSending) return;
     setVoiceError("");
-    window.speechSynthesis?.cancel();
+    stopSpeech();
     const recognition = new SpeechRecognition();
     recognition.lang = "tr-TR";
     recognition.interimResults = false;
@@ -529,6 +562,16 @@ function AIModule({
               <span aria-hidden="true">🎙</span>
               {voiceListening ? "Dinleniyor…" : "Sesli komut"}
             </button>
+            <button
+              type="button"
+              aria-label={voiceSpeaking ? "Sesli AI yanıtını durdur" : "Son AI yanıtını seslendir"}
+              disabled={aiSending || !latestAssistantMessage}
+              onClick={() => voiceSpeaking
+                ? stopSpeech()
+                : speakResponse(latestAssistantMessage?.text || "")}
+            >
+              {voiceSpeaking ? "Yanıtı durdur" : "Yanıtı seslendir"}
+            </button>
             <button type="submit" disabled={aiSending || (!aiInput.trim() && !aiAttachment)}>
               <span>{aiSending ? (aiAttachment ? "Yükleniyor ve analiz ediliyor…" : "Yanıt bekleniyor…") : "Analizi başlat"}</span>
               <span aria-hidden="true">→</span>
@@ -552,11 +595,14 @@ function AIModule({
             ) : null}
             {fileError ? <p className="ai-file-error" role="alert">{fileError}</p> : null}
             {voiceError ? <p className="ai-voice-status" role="alert">{voiceError}</p> : null}
-            {!voiceError ? (
-              <p className="ai-voice-status">
-                Sesli komutlar yazılı mesajlarla aynı güvenli AI akışını kullanır. Ses tanıma tarayıcı tarafından işlenir.
-              </p>
-            ) : null}
+            {voiceError ? <p className="ai-voice-status" role="alert">{voiceError}</p> : null}
+            {!voiceError ? <p className="ai-voice-status" role="status" aria-live="polite">
+              {voiceListening
+                ? "Mikrofon dinliyor…"
+                : voiceSpeaking
+                  ? "AI yanıtı seslendiriliyor…"
+                  : "Türkçe sesli komutlar yazılı mesajlarla aynı güvenli AI akışını kullanır."}
+            </p> : null}
           </form>
         </section>
       </div>

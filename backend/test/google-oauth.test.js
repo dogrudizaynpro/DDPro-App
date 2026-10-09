@@ -34,6 +34,7 @@ let googleTokenUpserts = 0;
 let nextProjectId = 2;
 let beforeConditionalTokenUpdate;
 const calendarRequests = [];
+const calendarReadRequests = [];
 const projectRows = [{
   id: "10000000-0000-4000-8000-000000000001",
   name: "Restored browser project",
@@ -186,6 +187,9 @@ before(async () => {
         url.startsWith("https://www.googleapis.com/calendar/v3/calendars/primary/events")) {
       assert.equal(options.headers.Authorization, ["Bearer", refreshedAccessToken || "test-access"].join(" "));
       if (workspaceResponse) return workspaceResponse();
+      if (url.startsWith("https://www.googleapis.com/calendar/v3/calendars/primary/events?")) {
+        calendarReadRequests.push(url);
+      }
       if (url.includes("/events/")) {
         calendarRequests.push({ method: options.method, url, body: options.body ? JSON.parse(options.body) : null });
         if (options.method === "DELETE") return new Response(null, { status: 204 });
@@ -398,6 +402,10 @@ test("one-time exchange authenticates browser status and real provider test rout
     const afterSuccess = (await (await originalFetch(`${baseUrl}/api/integrations/status`, { headers })).json()).data;
     assert.equal(afterSuccess[provider].connected, true);
   }
+  const calendarProbe = new URL(calendarReadRequests.at(-1));
+  assert.equal(calendarProbe.pathname, "/calendar/v3/calendars/primary/events");
+  assert.equal(calendarProbe.searchParams.get("maxResults"), "1");
+  assert.equal(calendarProbe.pathname.includes("/users/me/calendarList"), false);
   const calendarHeaders = { ...headers, "Content-Type": "application/json" };
   const calendarBase = `${baseUrl}/api/integrations/calendar/events`;
   const eventUpdate = await originalFetch(`${calendarBase}/event_12345`, {
@@ -461,6 +469,35 @@ test("one-time exchange authenticates browser status and real provider test rout
   const getStatus = async () => (await (await originalFetch(`${baseUrl}/api/integrations/status`, { headers })).json()).data;
   const encryptedBefore = structuredClone(savedToken.encrypted_token);
   try {
+    const { decryptIntegrationToken, encryptIntegrationToken } =
+      await import("../src/services/integration-vault.service.js");
+    const savedScopes = decryptIntegrationToken(encryptedBefore);
+    savedToken.encrypted_token = encryptIntegrationToken({
+      ...savedScopes,
+      scopes: savedScopes.scopes.replace(
+        "https://www.googleapis.com/auth/calendar.events",
+        ""
+      ),
+    });
+    const calendarRequestsBeforeScopeCheck = calendarRequests.length;
+    const { getGoogleAccessToken } = await import("../src/services/google-integration.service.js");
+    await assert.rejects(
+      getGoogleAccessToken("owner@example.com", {
+        requiredScope: "https://www.googleapis.com/auth/calendar.events",
+        provider: "googleCalendar",
+        operation: "calendar.events",
+      }),
+      (error) => {
+        assert.equal(error.statusCode, 403);
+        assert.equal(error.googleApiError.category, "access_denied");
+        assert.deepEqual(error.googleApiError.reasons, ["insufficientPermissions"]);
+        return true;
+      }
+    );
+    assert.equal(calendarRequests.length, calendarRequestsBeforeScopeCheck);
+    assert.equal(googleTokenDeletes, 0);
+    savedToken.encrypted_token = encryptedBefore;
+
     for (const [httpStatus, reason, category] of [
       [401, "authError", "authorization"],
       [403, "accessNotConfigured", "access_denied"],
@@ -542,7 +579,6 @@ test("one-time exchange authenticates browser status and real provider test rout
     assert.equal(calendarFailure.google.connected, true);
 
     workspaceResponse = null;
-    const { encryptIntegrationToken, decryptIntegrationToken } = await import("../src/services/integration-vault.service.js");
     savedToken.encrypted_token = encryptIntegrationToken({
       ...decryptIntegrationToken(savedToken.encrypted_token), expiresAt: Date.now() - 1,
     });
@@ -566,7 +602,6 @@ test("one-time exchange authenticates browser status and real provider test rout
       assert.equal(current.gmail.status, "service_unavailable");
       assert.equal(current.googleCalendar.connected, false);
     }
-    const { getGoogleAccessToken } = await import("../src/services/google-integration.service.js");
     refreshResponse = () => new Response("<html>test-refresh</html>", { status: 401 });
     await assert.rejects(getGoogleAccessToken("owner@example.com"), (error) => {
       assert.equal(error.statusCode, 502);

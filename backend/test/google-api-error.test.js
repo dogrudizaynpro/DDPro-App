@@ -72,6 +72,25 @@ test("only an invalid Google refresh grant marks the stored connection invalid",
   assert.equal(missingScope.googleApiError.category, "access_denied");
 });
 
+test("Gmail failedPrecondition stays a provider error with its actual safe reason", () => {
+  const error = new GoogleApiError(400, {
+    error: {
+      message: "Gmail API precondition check failed.",
+      errors: [{ reason: "failedPrecondition" }],
+    },
+  }, [], "gmail", "gmail.profile");
+
+  assert.equal(error.statusCode, 400);
+  assert.equal(error.code, "GOOGLE_API_ERROR");
+  assert.deepEqual(error.googleApiError, {
+    httpStatus: 400,
+    operation: "gmail.profile",
+    category: "api_error",
+    message: "Gmail API precondition check failed.",
+    reasons: ["failedPrecondition"],
+  });
+});
+
 test("workspace error middleware forwards safe metadata and logs the provider operation", () => {
   const error = new GoogleApiError(403, {
     error: { message: "Calendar access denied", errors: [{ reason: "accessNotConfigured" }] },

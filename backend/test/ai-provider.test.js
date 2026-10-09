@@ -214,7 +214,10 @@ test("prepare_write never executes a write and still requires explicit confirmat
 });
 
 test("HTTP 400 from the provider surfaces a safe error without exposing the API key", async () => {
-  const badRequest = { status: 400, body: { error: { message: "Bad request" } } };
+  const badRequest = {
+    status: 400,
+    body: { error: { message: `Unsupported model tool calls: ${TEST_API_KEY}` } },
+  };
   responses.push(badRequest);
 
   await assert.rejects(
@@ -222,7 +225,7 @@ test("HTTP 400 from the provider surfaces a safe error without exposing the API 
     (error) => {
       assert.equal(error.statusCode, 502);
       assert.equal(error.code, "AI_PROVIDER_TOOL_REQUEST_REJECTED");
-      assert.equal(error.message, "AI provider rejected the request containing DDPro operational tools (HTTP 400).");
+      assert.equal(error.message, "AI provider rejected the request containing DDPro operational tools (HTTP 400). Unsupported model tool calls: [REDACTED]");
       assert.equal(error.message.includes(TEST_API_KEY), false);
       return true;
     }

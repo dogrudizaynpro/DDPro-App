@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { formatDateTime } from "../utils/date-time.js";
 import { getProjects } from "../services/projects.service.js";
 import { getCrmContacts } from "../services/operations-integrations.service.js";
 import DDProIcon from "../components/DDProIcon.jsx";
@@ -131,7 +132,7 @@ export default function DocumentsModule() {
                 <p>{(document.file_size / 1024).toFixed(1)} KB · {document.content_type}</p>
                 {document.project_id ? <p>Proje: {projects.find((project) => project.id === document.project_id)?.name || document.project_id}</p> : null}
                 {document.crm_contact_id ? <p>Müşteri: {contacts.find((contact) => contact.id === document.crm_contact_id)?.name || document.crm_contact_id}</p> : null}
-                <small>{document.created_at ? new Date(document.created_at).toLocaleString("tr-TR") : ""}</small>
+                <small>{formatDateTime(document.created_at)}</small>
               </div>
               <div className="module-toolbar">
                 <button type="button" onClick={() => download(document)}>Güvenli indir</button>

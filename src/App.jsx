@@ -39,6 +39,11 @@ import {
 } from "./services/operations-integrations.service.js";
 import { getIntegrationStatus } from "./services/integrations.service.js";
 import {
+  DDPRO_TIME_ZONE,
+  formatDateOnly,
+  formatDateTime,
+} from "./utils/date-time.js";
+import {
   createResearchItem as createProcurementRequest,
   deleteResearchItem as deleteProcurementRequest,
   getResearchItems as getProcurementItems,
@@ -273,20 +278,6 @@ const dashboardQuickAccessModuleIds = new Set([
   "ai-assistant",
   "reports",
 ]);
-const calendarMonthFormatter = new Intl.DateTimeFormat("tr-TR", {
-  month: "short",
-  year: "numeric",
-});
-const footerDateFormatter = new Intl.DateTimeFormat("tr-TR", {
-  day: "2-digit",
-  month: "long",
-  year: "numeric",
-  hour: "2-digit",
-  minute: "2-digit",
-  hourCycle: "h23",
-  timeZone: "Europe/Istanbul",
-});
-
 const normalizeModulePath = (pathValue) => {
   const sanitizedPath = (pathValue || "").trim();
   const normalizedBasePath = sanitizedPath.replace(/\/+$/, "");
@@ -313,6 +304,12 @@ const OFFER_STATUS_TONES = {
   Onaylandı: "success",
   Reddedildi: "danger",
 };
+
+const calendarMonthFormatter = new Intl.DateTimeFormat("tr-TR", {
+  month: "short",
+  year: "numeric",
+  timeZone: DDPRO_TIME_ZONE,
+});
 
 const getOfferStatusTone = (status) =>
   OFFER_STATUS_TONES[status] || "neutral";
@@ -385,11 +382,7 @@ const isUuid = (value) =>
     value
   );
 
-const formatDate = () =>
-  new Date().toLocaleString("tr-TR", {
-    dateStyle: "short",
-    timeStyle: "short",
-  });
+const formatDate = () => formatDateTime(new Date());
 
 function DashboardCalendar({
   now,
@@ -398,9 +391,18 @@ function DashboardCalendar({
   events = [],
   fetchState = "loading",
 }) {
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-  const leadingDays = (monthStart.getDay() + 6) % 7;
+  const dateParts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: DDPRO_TIME_ZONE,
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+  }).formatToParts(now);
+  const year = Number(dateParts.find(({ type }) => type === "year").value);
+  const month = Number(dateParts.find(({ type }) => type === "month").value);
+  const today = Number(dateParts.find(({ type }) => type === "day").value);
+  const monthStart = new Date(Date.UTC(year, month - 1, 1));
+  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  const leadingDays = (monthStart.getUTCDay() + 6) % 7;
 
   return (
     <section className="panel calendar-panel">
@@ -428,9 +430,9 @@ function DashboardCalendar({
             const day = index + 1;
             return (
               <span
-                className={`calendar-day${day === now.getDate() ? " today" : ""}`}
+                className={`calendar-day${day === today ? " today" : ""}`}
                 key={day}
-                aria-current={day === now.getDate() ? "date" : undefined}
+                aria-current={day === today ? "date" : undefined}
               >
                 {day}
               </span>
@@ -450,7 +452,7 @@ function DashboardCalendar({
             {events.slice(0, 3).map((event) => {
               const start = event.start?.dateTime || event.start?.date;
               const dateLabel = start
-                ? new Date(start).toLocaleString("tr-TR", { dateStyle: "short", timeStyle: event.start?.dateTime ? "short" : undefined })
+                ? event.start?.dateTime ? formatDateTime(start) : formatDateOnly(start)
                 : "Tarih belirtilmedi";
               return (
                 <div className="calendar-upcoming-item" key={event.id}>
@@ -1237,10 +1239,7 @@ function App() {
       .slice(0, 4)
       .map((entry) => ({
         ...entry,
-        date: new Date(entry.createdAt).toLocaleString("tr-TR", {
-          dateStyle: "short",
-          timeStyle: "short",
-        }),
+        date: formatDateTime(entry.createdAt),
       }));
   }, [
     offers,
@@ -3037,7 +3036,7 @@ function App() {
         </div>
         <div className="footer-status">
           <span className="footer-clock" aria-hidden="true">◷</span>
-          <span>{footerDateFormatter.format(currentDate)}</span>
+          <span>{formatDateTime(currentDate, { dateStyle: "long" })}</span>
           <i aria-hidden="true" />
           <span className="status-dot" aria-hidden="true" />
           <span>Arayüz Aktif</span>
@@ -3061,9 +3060,9 @@ function App() {
             />
             <span
               className="dashboard-reference-clock"
-              aria-label={`Türkiye saati: ${footerDateFormatter.format(currentDate)}`}
+              aria-label={`Türkiye saati: ${formatDateTime(currentDate, { dateStyle: "long" })}`}
             >
-              {footerDateFormatter.format(currentDate)}
+              {formatDateTime(currentDate, { dateStyle: "long" })}
             </span>
             <nav className="dashboard-reference-primary-nav" aria-label="Ana modüller">
               {dashboardReferenceNavigation.map((item) => (
