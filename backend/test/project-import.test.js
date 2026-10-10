@@ -63,7 +63,7 @@ test("Turkish Excel headers normalize case, accents, spacing and employer label"
   const result = mapProjectSheetRow(headers, [
     "Proje 1", "Müşteri 1", "Firma 1", "İstanbul", "Ofis", "Cephe",
     "1.250,5", "Perde duvar", "Aktif", "01.02.2026", "46054", "Açıklama",
-  ]);
+  ], { parseExcelValues: true });
   assert.equal(result.project.name, "Proje 1");
   assert.equal(result.project.customer, "Müşteri 1");
   assert.equal(result.project.company, "Firma 1");
@@ -81,7 +81,8 @@ test("Turkish Excel headers normalize case, accents, spacing and employer label"
 test("invalid nonempty area and dates are shown as validation errors, not missing values", () => {
   const result = mapProjectSheetRow(
     ["Proje Adı", "Durum", "Alan (m²)", "Başlangıç", "Bitiş"],
-    ["Proje 1", "Aktif", "12,3,4", "31.02.2026", "not a date"]
+    ["Proje 1", "Aktif", "12,3,4", "31.02.2026", "not a date"],
+    { parseExcelValues: true }
   );
   assert.deepEqual(result.missing, { area_m2: false, start_date: false, end_date: false });
   assert.deepEqual(result.validationErrors, [

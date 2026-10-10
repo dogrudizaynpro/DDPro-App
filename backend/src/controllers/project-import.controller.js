@@ -109,7 +109,7 @@ const parseProjectDate = (value) => {
   return date.toISOString().slice(0, 10);
 };
 
-export const mapProjectSheetRow = (headers, row) => {
+export const mapProjectSheetRow = (headers, row, { parseExcelValues = false } = {}) => {
   const indexes = columnIndexes(headers);
   const name = textValue(row, indexes.name);
   const status = textValue(row, indexes.status);
@@ -117,8 +117,12 @@ export const mapProjectSheetRow = (headers, row) => {
   const system = textValue(row, indexes.system);
   const startDateValue = textValue(row, indexes.start_date);
   const endDateValue = textValue(row, indexes.end_date);
-  const startDate = parseProjectDate(startDateValue);
-  const endDate = parseProjectDate(endDateValue);
+  const startDate = parseExcelValues
+    ? parseProjectDate(startDateValue)
+    : startDateValue || null;
+  const endDate = parseExcelValues
+    ? parseProjectDate(endDateValue)
+    : endDateValue || null;
   const missing = {
     area_m2: !areaValue,
     start_date: !startDateValue,
@@ -126,8 +130,8 @@ export const mapProjectSheetRow = (headers, row) => {
   };
   const validationErrors = [
     ...(areaValue && parseAreaM2(areaValue) === null ? ["Alan (m²) sayısal olmalıdır."] : []),
-    ...(startDateValue && !startDate ? ["Başlangıç tarihi geçerli değil."] : []),
-    ...(endDateValue && !endDate ? ["Bitiş tarihi geçerli değil."] : []),
+    ...(parseExcelValues && startDateValue && !startDate ? ["Başlangıç tarihi geçerli değil."] : []),
+    ...(parseExcelValues && endDateValue && !endDate ? ["Bitiş tarihi geçerli değil."] : []),
   ];
   const sourceData = {
     headers: headers.map((header) => String(header ?? "")),
@@ -211,7 +215,7 @@ export const previewAiFileProjects = async (supabase, { sourceFingerprint, heade
     const row = rows[index];
     if (!row.some((cell) => String(cell ?? "").trim())) continue;
     const sheetRow = index + 2;
-    const mapped = mapProjectSheetRow(headers, row);
+    const mapped = mapProjectSheetRow(headers, row, { parseExcelValues: true });
     const missing = Object.entries(mapped.missing)
       .filter(([, isMissing]) => isMissing)
       .map(([field]) => field);
@@ -308,7 +312,7 @@ export const saveAiFileProjects = async (supabase, { sourceFingerprint, headers,
     if (!row.some((cell) => String(cell ?? "").trim())) continue;
     sourceRows += 1;
     const sheetRow = index + 2;
-    const mapped = mapProjectSheetRow(headers, row);
+    const mapped = mapProjectSheetRow(headers, row, { parseExcelValues: true });
     const missingFields = Object.entries(mapped.missing)
       .filter(([, missing]) => missing)
       .map(([field]) => field);
