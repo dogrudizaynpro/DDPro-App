@@ -46,20 +46,38 @@ const parseAreaM2 = (value) => {
   const comma = normalized.lastIndexOf(",");
   const dot = normalized.lastIndexOf(".");
   let decimalSeparator = "";
+  let groupingSeparator = "";
   if (comma >= 0 && dot >= 0) {
     decimalSeparator = comma > dot ? "," : ".";
+    groupingSeparator = decimalSeparator === "," ? "." : ",";
   } else if (comma >= 0 || dot >= 0) {
     const separator = comma >= 0 ? "," : ".";
     const parts = normalized.split(separator);
-    if (parts.length === 2 && parts[1].length !== 3) decimalSeparator = separator;
-    else if (parts.length > 2 && parts.slice(1).some((part) => part.length !== 3)) return null;
+    if (parts.length === 2 && parts[1].length !== 3) {
+      decimalSeparator = separator;
+    } else {
+      if (parts.length > 1 && (
+        parts[0].length < 1 ||
+        parts[0].length > 3 ||
+        parts.slice(1).some((part) => part.length !== 3)
+      )) return null;
+      groupingSeparator = separator;
+    }
   }
-  const groupingSeparator = decimalSeparator === "," ? "." : ",";
-  const canonical = normalized
-    .split(groupingSeparator).join("")
-    .replace(decimalSeparator, ".");
-  if (!/^\d+(?:\.\d+)?$/.test(canonical)) return null;
-  const parsed = Number(canonical);
+  const decimalParts = decimalSeparator ? normalized.split(decimalSeparator) : [normalized];
+  if (decimalParts.length > 2) return null;
+  const integerGroups = groupingSeparator
+    ? decimalParts[0].split(groupingSeparator)
+    : [decimalParts[0]];
+  if (integerGroups.length > 1 && (
+    integerGroups[0].length < 1 ||
+    integerGroups[0].length > 3 ||
+    integerGroups.slice(1).some((part) => part.length !== 3)
+  )) return null;
+  const integer = decimalParts[0].split(groupingSeparator).join("");
+  const fraction = decimalParts[1];
+  if (!/^\d+$/.test(integer) || (fraction !== undefined && !/^\d+$/.test(fraction))) return null;
+  const parsed = Number(fraction === undefined ? integer : `${integer}.${fraction}`);
   return Number.isFinite(parsed) ? parsed : null;
 };
 

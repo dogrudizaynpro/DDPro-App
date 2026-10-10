@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { strToU8, zipSync } from "fflate";
+import { findProjectSpreadsheetTable } from "../src/controllers/project-import.controller.js";
 import { prepareAiAttachment } from "../src/services/ai-file.service.js";
 
 const makeArchive = (entries) => Buffer.from(zipSync(
@@ -144,6 +145,19 @@ test("XLSX ignores styled blank rows and preserves the 18 project records", asyn
   assert.equal(result.tables[0].rows[17][0], "Proje 18");
 });
 
+test("large rendered text does not make a complete Projects table exceed its structured limit", async () => {
+  const result = await prepareAiAttachment({
+    originalName: "projects-with-notes.xlsx",
+    buffer: makeXlsxFromRows([
+      ["Proje Adı", "Durum", "Notlar"],
+      ["Proje 1", "Aktif", "A".repeat(65_000)],
+    ]),
+  });
+  assert.equal(result.truncated, true);
+  assert.equal(result.tables[0].truncated, false);
+  assert.equal(findProjectSpreadsheetTable(result.tables), result.tables[0]);
+});
+
 test("XLSX row and column limits mark the affected structured table as truncated", async () => {
   const rowLimited = await prepareAiAttachment({
     originalName: "many-rows.xlsx",
@@ -179,6 +193,16 @@ test("empty and malformed XLSX workbooks are distinguished from unsupported file
       buffer: Buffer.concat([Buffer.from([0x50, 0x4b, 0x03, 0x04]), Buffer.from("broken")]),
     }),
     /XLSX|archive|workbook/i
+  );
+  await assert.rejects(
+    prepareAiAttachment({
+      originalName: "invalid-xml.xlsx",
+      buffer: makeArchive({
+        "xl/workbook.xml": "<workbook><sheets></workbook>",
+        "xl/_rels/workbook.xml.rels": "<Relationships></Relationships>",
+      }),
+    }),
+    /XLSX|invalid XML|workbook/i
   );
   await assert.rejects(
     prepareAiAttachment({ originalName: "legacy.xls", buffer: Buffer.from("PK\\x03\\x04") }),

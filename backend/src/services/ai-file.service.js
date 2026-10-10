@@ -1,6 +1,6 @@
 import { posix } from "node:path";
 import { Unzip, UnzipInflate, UnzipPassThrough } from "fflate";
-import { XMLParser } from "fast-xml-parser";
+import { XMLParser, XMLValidator } from "fast-xml-parser";
 import { PDFParse } from "pdf-parse";
 
 export const MAX_AI_FILE_SIZE = 10 * 1024 * 1024;
@@ -46,6 +46,7 @@ const decodeText = (buffer) => {
 
 const parseXml = (xml) => {
   if (/<!DOCTYPE|<!ENTITY/i.test(xml)) throw fail("The document contains unsupported XML declarations.");
+  if (XMLValidator.validate(xml) !== true) throw fail("The document contains invalid XML.");
   return XML.parse(xml);
 };
 
