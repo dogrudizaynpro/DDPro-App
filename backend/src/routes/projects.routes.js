@@ -19,7 +19,9 @@ import {
   importAiFileProjects,
   importGoogleProjects,
   previewAiFileProjectImport,
+  previewProjectSpreadsheetUpload,
 } from "../controllers/project-import.controller.js";
+import { parseAiChatUpload } from "../middleware/ai-file-upload.js";
 
 const router = express.Router();
 
@@ -53,6 +55,13 @@ router.post("/import/ai-file/preview", rateLimit({
   standardHeaders: "draft-8",
   legacyHeaders: false,
 }), previewAiFileProjectImport);
+
+router.post("/import/spreadsheet/preview", rateLimit({
+  windowMs: 60_000,
+  limit: 10,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+}), parseAiChatUpload, previewProjectSpreadsheetUpload);
 
 // GET /:id - Get project by ID
 router.get("/:id", getProjectById);

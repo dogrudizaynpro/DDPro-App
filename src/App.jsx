@@ -2792,6 +2792,7 @@ function App() {
           updateProject={updateProject}
           selectedProjectId={selectedProjectId}
           onNavigate={handleModuleNavigation}
+          refreshProjects={async () => setProjects(await getProjects())}
         />
       );
     }

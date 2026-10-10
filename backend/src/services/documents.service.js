@@ -9,6 +9,7 @@ const MIME_TYPES = new Map([
   [".png", "image/png"],
   [".jpg", "image/jpeg"],
   [".jpeg", "image/jpeg"],
+  [".webp", "image/webp"],
   [".csv", "text/csv"],
   [".docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"],
   [".xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"],
@@ -25,7 +26,34 @@ const requireDatabase = () => {
   return client;
 };
 
-export const normalizeDocumentUpload = ({ originalName, contentType, projectId, crmContactId, buffer }) => {
+const isWebp = (buffer) => {
+  if (
+    buffer.length < 20 ||
+    buffer.subarray(0, 4).toString("ascii") !== "RIFF" ||
+    buffer.readUInt32LE(4) !== buffer.length - 8 ||
+    buffer.subarray(8, 12).toString("ascii") !== "WEBP"
+  ) return false;
+  let offset = 12;
+  let hasImageChunk = false;
+  while (offset + 8 <= buffer.length) {
+    const type = buffer.toString("ascii", offset, offset + 4);
+    const length = buffer.readUInt32LE(offset + 4);
+    const end = offset + 8 + length + (length % 2);
+    if (end > buffer.length) return false;
+    if (["VP8 ", "VP8L", "VP8X"].includes(type)) hasImageChunk = true;
+    offset = end;
+  }
+  return hasImageChunk && offset === buffer.length;
+};
+
+export const normalizeDocumentUpload = ({
+  originalName,
+  contentType,
+  projectId,
+  crmContactId,
+  projectAssetType = "document",
+  buffer,
+}) => {
   const fileBuffer = Buffer.isBuffer(buffer) ? Buffer.from(buffer) : null;
   if (typeof originalName !== "string") throw fail("A document filename is required.");
   const name = originalName.split(/[\\/]/).pop().trim();
@@ -41,10 +69,18 @@ export const normalizeDocumentUpload = ({ originalName, contentType, projectId, 
       ? fileBuffer.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
       : [".jpg", ".jpeg"].includes(extension)
         ? fileBuffer[0] === 0xff && fileBuffer[1] === 0xd8 && fileBuffer[2] === 0xff
+        : extension === ".webp"
+          ? isWebp(fileBuffer)
         : [".docx", ".xlsx"].includes(extension)
           ? fileBuffer[0] === 0x50 && fileBuffer[1] === 0x4b
           : !fileBuffer.includes(0);
   if (!signatureValid) throw fail("Document contents do not match the selected file type.");
+  const assetType = ["document", "before", "progress", "completed"].includes(projectAssetType)
+    ? projectAssetType
+    : null;
+  if (!assetType || (assetType !== "document" && !contentType.startsWith("image/"))) {
+    throw fail("Project asset type is invalid for this file.");
+  }
   const reference = (value, label) => {
     if (value === undefined || value === null || value === "") return null;
     if (typeof value !== "string" || !UUID_PATTERN.test(value)) throw fail(`${label} reference must be a valid UUID.`);
@@ -55,6 +91,7 @@ export const normalizeDocumentUpload = ({ originalName, contentType, projectId, 
     content_type: contentType,
     project_id: reference(projectId, "Project"),
     crm_contact_id: reference(crmContactId, "CRM contact"),
+    project_asset_type: assetType,
     file_size: fileBuffer.length,
   };
 };
@@ -86,15 +123,18 @@ export const uploadDocument = async (ownerAccount, input) => {
   return data;
 };
 
-export const getDocumentDownload = async (ownerAccount, id) => {
+export const getDocumentDownload = async (ownerAccount, id, { preview = false } = {}) => {
   if (!UUID_PATTERN.test(id || "")) throw fail("Document id must be a valid UUID.");
   const client = requireDatabase();
   const { data: record, error } = await client.from("document_records").select("*")
     .eq("id", id).eq("owner_account", ownerAccount).maybeSingle();
   if (error) throw error;
   if (!record) return null;
+  if (preview && !record.content_type.startsWith("image/")) {
+    throw fail("Only project images can be previewed.");
+  }
   const { data, error: signedUrlError } = await client.storage.from(BUCKET)
-    .createSignedUrl(record.storage_key, 60, { download: record.original_name });
+    .createSignedUrl(record.storage_key, 60, preview ? {} : { download: record.original_name });
   if (signedUrlError) throw signedUrlError;
   return { ...record, download_url: data.signedUrl };
 };
