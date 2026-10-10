@@ -77,8 +77,8 @@ test("unexpected upload fields are rejected", async () => {
 
 test("multipart XLSX upload reads all 18 rows and 12 source columns", async () => {
   const headers = [
-    "Proje Adı", "Müşteri", "Firma", "Lokasyon", "Proje Türü", "Ürün",
-    "Metraj", "Sistem", "Durum", "Başlangıç Tarihi", "Bitiş Tarihi", "Notlar",
+    "Proje Adı", "Müşteri", "Firma / İşveren", "Lokasyon", "Proje Türü", "Ürün",
+    "Alan (m²)", "Sistem", "Durum", "Başlangıç", "Bitiş", "Notlar",
   ];
   const rows = Array.from({ length: 18 }, (_, index) => [
     `Test Projesi ${index + 1}`,

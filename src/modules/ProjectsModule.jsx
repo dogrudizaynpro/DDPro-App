@@ -454,7 +454,12 @@ function ProjectsModule({
               <tbody>{spreadsheetPreview.records.map((record) => (
                 <tr key={record.row}>
                   {spreadsheetPreview.table.headers.map((_, index) => <td key={index}>{String(spreadsheetPreview.table.rows[record.row - 2]?.[index] ?? "")}</td>)}
-                  <td>{record.classification === "duplicate" ? "Mükerrer · atlanacak" : record.classification === "review" ? `Kontrol gerekli${record.reasons?.length ? `: ${record.reasons.join("; ")}` : ""}` : record.error || "Aktarılacak"}</td>
+                  <td>
+                    {record.classification === "duplicate" ? "Mükerrer · atlanacak" : record.classification === "review" ? "Kontrol gerekli" : record.error || "Aktarılacak"}
+                    {record.missing?.length ? <small>Eksik alanlar: {record.missing.join(", ")}</small> : null}
+                    {record.validationErrors?.length ? <small>Doğrulama hataları: {record.validationErrors.join("; ")}</small> : null}
+                    {record.reasons?.length ? <small>{record.reasons.join("; ")}</small> : null}
+                  </td>
                 </tr>
               ))}</tbody>
             </table></div>
