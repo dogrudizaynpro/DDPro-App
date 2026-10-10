@@ -172,8 +172,8 @@ test("multipart XLSX upload reads all 18 rows and 12 source columns", async () =
     headers: table.headers,
     rows: table.rows,
   });
-  assert.deepEqual(preview.counts, { transfer: 15, duplicate: 2, review: 1 });
-  assert.equal(preview.records.find(({ row }) => row === 4).classification, "review");
+  assert.deepEqual(preview.counts, { transfer: 16, duplicate: 2, review: 0 });
+  assert.equal(preview.records.find(({ row }) => row === 4).classification, "transfer");
   assert.deepEqual(preview.records.find(({ row }) => row === 4).missing, ["start_date", "end_date"]);
 
   const imported = await saveAiFileProjects(database, {

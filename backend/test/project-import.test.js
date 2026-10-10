@@ -205,10 +205,10 @@ test("AI file preflight groups duplicate, review, and transferable rows without 
     rows,
   });
 
-  assert.deepEqual(preview.counts, { transfer: 1, duplicate: 1, review: 2 });
+  assert.deepEqual(preview.counts, { transfer: 2, duplicate: 1, review: 1 });
   assert.deepEqual(preview.records.map(({ classification }) => classification), [
     "duplicate",
-    "review",
+    "transfer",
     "transfer",
     "review",
   ]);
@@ -216,6 +216,71 @@ test("AI file preflight groups duplicate, review, and transferable rows without 
     { field: "product", name: "Unlisted product" },
     { field: "system", name: "Unlisted system" },
   ]);
+  assert.deepEqual(preview.records[1].warnings, [
+    "Katalogda bulunamadı (ürün): Unlisted product",
+    "Katalogda bulunamadı (sistem): Unlisted system",
+  ]);
   assert.deepEqual(preview.records[1].project.source_data.values, rows[1]);
+  assert.equal(writes, 0);
+});
+
+test("optional blanks and unknown Turkish product/system names do not block an 18-row preview", async () => {
+  const headers = [
+    "Proje Adı", "Müşteri", "Firma / İşveren", "Lokasyon", "Proje Türü",
+    "Ürün", "Alan (m²)", "Sistem", "Durum", "Başlangıç", "Bitiş", "Notlar",
+  ];
+  const rows = Array.from({ length: 18 }, (_, index) => [
+    `Proje ${index + 1}`,
+    `Müşteri ${index + 1}`,
+    `Firma ${index + 1}`,
+    "İstanbul",
+    "Ofis",
+    "Cephe",
+    index === 1 ? "" : "1.250,5",
+    "Perde duvar",
+    "Aktif",
+    index === 1 ? "" : "01.02.2026",
+    index === 1 ? "" : "46054",
+    `Kaynak notu ${index + 1}`,
+  ]);
+  rows[0][0] = "Existing";
+  rows[17][10] = "31.02.2026";
+  let writes = 0;
+  const supabase = {
+    from(table) {
+      const data = table === "projects"
+        ? [{ name: "Existing", import_source_key: null }]
+        : [{ name: "A different catalog entry" }];
+      return {
+        select: async () => ({ data, error: null }),
+        insert: () => { writes += 1; },
+      };
+    },
+  };
+
+  const preview = await previewAiFileProjects(supabase, {
+    sourceFingerprint: "d".repeat(64),
+    headers,
+    rows,
+  });
+
+  assert.deepEqual(preview.counts, { transfer: 16, duplicate: 1, review: 1 });
+  assert.equal(preview.records.length, 18);
+  assert.equal(preview.records[1].classification, "transfer");
+  assert.deepEqual(preview.records[1].missing, ["area_m2", "start_date", "end_date"]);
+  assert.equal(preview.records[1].project.company, "Firma 2");
+  assert.equal(preview.records[1].project.location, "İstanbul");
+  assert.equal(preview.records[1].project.source_data.values[5], "Cephe");
+  assert.equal(preview.records[1].project.source_data.values[7], "Perde duvar");
+  assert.equal(preview.records[1].project.area_m2, null);
+  assert.deepEqual(preview.records[1].warnings, [
+    "Katalogda bulunamadı (ürün): Cephe",
+    "Katalogda bulunamadı (sistem): Perde duvar",
+  ]);
+  assert.equal(preview.records[2].project.area_m2, 1250.5);
+  assert.equal(preview.records[2].project.start_date, "2026-02-01");
+  assert.equal(preview.records[2].project.end_date, "2026-02-01");
+  assert.equal(preview.records[17].classification, "review");
+  assert.deepEqual(preview.records[17].validationErrors, ["Bitiş tarihi geçerli değil."]);
   assert.equal(writes, 0);
 });

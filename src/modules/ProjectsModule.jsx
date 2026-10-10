@@ -459,6 +459,7 @@ function ProjectsModule({
                     {record.missing?.length ? <small>Eksik alanlar: {record.missing.join(", ")}</small> : null}
                     {record.validationErrors?.length ? <small>Doğrulama hataları: {record.validationErrors.join("; ")}</small> : null}
                     {record.reasons?.length ? <small>{record.reasons.join("; ")}</small> : null}
+                    {record.warnings?.length ? <small>Uyarılar: {record.warnings.join("; ")}</small> : null}
                   </td>
                 </tr>
               ))}</tbody>
