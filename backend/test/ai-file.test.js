@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { strToU8, zipSync } from "fflate";
-import { findProjectSpreadsheetTable } from "../src/controllers/project-import.controller.js";
+import {
+  findProjectSpreadsheetTable,
+  previewAiFileProjects,
+} from "../src/controllers/project-import.controller.js";
 import { prepareAiAttachment } from "../src/services/ai-file.service.js";
 
 const makeArchive = (entries) => Buffer.from(zipSync(
@@ -131,18 +134,72 @@ test("XLSX project rows preserve every header and cell through structured extrac
   assert.equal(result.tables[0].rows[17][11], "Source note 18");
 });
 
-test("XLSX ignores styled blank rows and preserves the 18 project records", async () => {
-  const rows = [
-    ["Proje Adı", "Durum"],
-    ...Array.from({ length: 18 }, (_, index) => [`Proje ${index + 1}`, "Aktif"]),
+test("Turkish Projects XLSX preserves 18 rows and produces accurate preview counts", async () => {
+  const headers = [
+    "Proje Adı", "Müşteri", "Firma / İşveren", "Lokasyon", "Proje Türü",
+    "Ürün", "Alan (m²)", "Sistem", "Durum", "Başlangıç", "Bitiş", "Notlar",
   ];
+  const rows = [
+    headers,
+    ...Array.from({ length: 18 }, (_, index) => [
+      `Proje ${index + 1}`,
+      `Müşteri ${index + 1}`,
+      `Firma ${index + 1}`,
+      "İstanbul",
+      "Ofis",
+      "Cephe",
+      index === 1 ? "" : "1.250,5",
+      "Perde duvar",
+      "Aktif",
+      index === 1 ? "" : "01.02.2026",
+      index === 1 ? "" : "46054",
+      `Kaynak notu ${index + 1}`,
+    ]),
+  ];
+  rows[1][0] = "Existing";
+  rows[18][10] = "31.02.2026";
   const result = await prepareAiAttachment({
     originalName: "DDPro CRM 2026.xlsx",
     buffer: makeXlsxFromRows(rows, { blankRows: 400 }),
   });
   assert.equal(result.tables[0].rows.length, 18);
   assert.equal(result.tables[0].truncated, false);
+  assert.deepEqual(result.tables[0].headers, headers);
   assert.equal(result.tables[0].rows[17][0], "Proje 18");
+
+  const tables = {
+    projects: [{ name: "Existing", import_source_key: null }],
+    products: [{ name: "Catalog product" }],
+    systems: [{ name: "Catalog system" }],
+  };
+  let writes = 0;
+  const preview = await previewAiFileProjects({
+    from(table) {
+      return {
+        select: async () => ({ data: tables[table], error: null }),
+        insert: () => { writes += 1; },
+      };
+    },
+  }, {
+    sourceFingerprint: "e".repeat(64),
+    headers: result.tables[0].headers,
+    rows: result.tables[0].rows,
+  });
+
+  assert.deepEqual(preview.counts, { transfer: 16, duplicate: 1, review: 1 });
+  assert.equal(preview.records[1].project.company, "Firma 2");
+  assert.equal(preview.records[1].project.product, "Cephe");
+  assert.equal(preview.records[1].project.systems[0], "Perde duvar");
+  assert.deepEqual(preview.records[1].missing, ["area_m2", "start_date", "end_date"]);
+  assert.equal(preview.records[2].project.area_m2, 1250.5);
+  assert.equal(preview.records[2].project.start_date, "2026-02-01");
+  assert.equal(preview.records[2].project.end_date, "2026-02-01");
+  assert.deepEqual(preview.records[2].warnings, [
+    "Katalogda bulunamadı (ürün): Cephe",
+    "Katalogda bulunamadı (sistem): Perde duvar",
+  ]);
+  assert.equal(preview.records[17].classification, "review");
+  assert.equal(writes, 0);
 });
 
 test("large rendered text does not make a complete Projects table exceed its structured limit", async () => {

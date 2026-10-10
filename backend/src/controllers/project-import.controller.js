@@ -246,13 +246,12 @@ export const previewAiFileProjects = async (supabase, { sourceFingerprint, heade
           .map((system) => ({ field: "system", name: system }))
         : []),
     ];
-    const reasons = [
-      ...(missing.length ? [`Eksik alanlar: ${missing.join(", ")}`] : []),
-      ...(mapped.validationErrors.length ? [`Doğrulama hataları: ${mapped.validationErrors.join("; ")}`] : []),
-      ...unmatched.map(({ field, name: value }) =>
-        `Eşleşmeyen ${field === "product" ? "ürün" : "sistem"}: ${value}`
-      ),
-    ];
+    const warnings = unmatched.map(({ field, name: value }) =>
+      `Katalogda bulunamadı (${field === "product" ? "ürün" : "sistem"}): ${value}`
+    );
+    const reasons = mapped.validationErrors.length
+      ? [`Doğrulama hataları: ${mapped.validationErrors.join("; ")}`]
+      : [];
 
     if (duplicate) {
       records.push({
@@ -262,6 +261,7 @@ export const previewAiFileProjects = async (supabase, { sourceFingerprint, heade
         validationErrors: mapped.validationErrors,
         classification: "duplicate",
         reasons: ["Mevcut bir projeyle aynı ad veya kaynak satırı."],
+        warnings,
         unmatched,
       });
       continue;
@@ -275,6 +275,7 @@ export const previewAiFileProjects = async (supabase, { sourceFingerprint, heade
       validationErrors: mapped.validationErrors,
       classification,
       reasons,
+      warnings,
       unmatched,
     });
     projectNames.add(name);
