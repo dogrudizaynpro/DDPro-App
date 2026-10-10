@@ -51,7 +51,40 @@ test("project sheet mapping leaves missing or ambiguous dates and metrage ungues
   assert.equal(result.missing.area_m2, true);
   assert.equal(result.missing.start_date, true);
   assert.equal(result.missing.end_date, true);
+  assert.deepEqual(result.validationErrors, []);
   assert.deepEqual(result.project.source_data.values, ["Project B", "1.250,5", "Aktif", "", ""]);
+});
+
+test("Turkish Excel headers normalize case, accents, spacing and employer label", () => {
+  const headers = [
+    "  pROJE   aDı ", "MÜŞTERİ", "Firma / İşveren", "Lokasyon", "Proje Türü",
+    "ÜRÜN", "Alan (m²)", "Sistem", "Durum", "Başlangıç", "Bitiş", "Notlar",
+  ];
+  const result = mapProjectSheetRow(headers, [
+    "Proje 1", "Müşteri 1", "Firma 1", "İstanbul", "Ofis", "Cephe",
+    "1.250,5", "Perde duvar", "Aktif", "01.02.2026", "46054", "Açıklama",
+  ]);
+  assert.equal(result.project.name, "Proje 1");
+  assert.equal(result.project.customer, "Müşteri 1");
+  assert.equal(result.project.company, "Firma 1");
+  assert.equal(result.project.area_m2, 1250.5);
+  assert.equal(result.project.start_date, "2026-02-01");
+  assert.equal(result.project.end_date, "2026-02-01");
+  assert.deepEqual(result.missing, { area_m2: false, start_date: false, end_date: false });
+  assert.deepEqual(result.validationErrors, []);
+});
+
+test("invalid nonempty area and dates are shown as validation errors, not missing values", () => {
+  const result = mapProjectSheetRow(
+    ["Proje Adı", "Durum", "Alan (m²)", "Başlangıç", "Bitiş"],
+    ["Proje 1", "Aktif", "12,3,4", "31.02.2026", "not a date"]
+  );
+  assert.deepEqual(result.missing, { area_m2: false, start_date: false, end_date: false });
+  assert.deepEqual(result.validationErrors, [
+    "Alan (m²) sayısal olmalıdır.",
+    "Başlangıç tarihi geçerli değil.",
+    "Bitiş tarihi geçerli değil.",
+  ]);
 });
 
 test("project sheet mapping rejects rows without a project name or status", () => {

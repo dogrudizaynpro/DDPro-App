@@ -7,6 +7,37 @@ const makeArchive = (entries) => Buffer.from(zipSync(
   Object.fromEntries(Object.entries(entries).map(([name, content]) => [name, strToU8(content)]))
 ));
 
+const makeXlsxFromRows = (rows, {
+  sheetName = "Projects",
+  blankRows = 0,
+} = {}) => {
+  const strings = rows.flat().filter((value) => value !== "");
+  let stringIndex = 0;
+  const columnName = (value) => {
+    let result = "";
+    for (let number = value; number > 0; number = Math.floor((number - 1) / 26)) {
+      result = String.fromCharCode(65 + ((number - 1) % 26)) + result;
+    }
+    return result;
+  };
+  const sheetRows = rows.map((row, rowIndex) =>
+    `<row r="${rowIndex + 1}">${row.map((value, columnIndex) => {
+      if (value === "") return "";
+      const index = stringIndex++;
+      return `<c r="${columnName(columnIndex + 1)}${rowIndex + 1}" t="s"><v>${index}</v></c>`;
+    }).join("")}</row>`
+  ).join("") + Array.from(
+    { length: blankRows },
+    (_, index) => `<row r="${rows.length + index + 1}"></row>`
+  ).join("");
+  return makeArchive({
+    "xl/workbook.xml": `<workbook xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="${sheetName}" sheetId="1" r:id="rId1"/></sheets></workbook>`,
+    "xl/_rels/workbook.xml.rels": '<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>',
+    "xl/sharedStrings.xml": `<sst>${strings.map((value) => `<si><t>${value}</t></si>`).join("")}</sst>`,
+    "xl/worksheets/sheet1.xml": `<worksheet><sheetData>${sheetRows}</sheetData></worksheet>`,
+  });
+};
+
 const makePdf = () => {
   const objects = [
     "<< /Type /Catalog /Pages 2 0 R >>",
@@ -97,6 +128,62 @@ test("XLSX project rows preserve every header and cell through structured extrac
   assert.deepEqual(result.tables[0].headers, headers);
   assert.equal(result.tables[0].rows.length, 18);
   assert.equal(result.tables[0].rows[17][11], "Source note 18");
+});
+
+test("XLSX ignores styled blank rows and preserves the 18 project records", async () => {
+  const rows = [
+    ["Proje Adı", "Durum"],
+    ...Array.from({ length: 18 }, (_, index) => [`Proje ${index + 1}`, "Aktif"]),
+  ];
+  const result = await prepareAiAttachment({
+    originalName: "DDPro CRM 2026.xlsx",
+    buffer: makeXlsxFromRows(rows, { blankRows: 400 }),
+  });
+  assert.equal(result.tables[0].rows.length, 18);
+  assert.equal(result.tables[0].truncated, false);
+  assert.equal(result.tables[0].rows[17][0], "Proje 18");
+});
+
+test("XLSX row and column limits mark the affected structured table as truncated", async () => {
+  const rowLimited = await prepareAiAttachment({
+    originalName: "many-rows.xlsx",
+    buffer: makeXlsxFromRows([
+      ["Proje Adı", "Durum"],
+      ...Array.from({ length: 301 }, (_, index) => [`Proje ${index + 1}`, "Aktif"]),
+    ]),
+  });
+  assert.equal(rowLimited.tables[0].rows.length, 300);
+  assert.equal(rowLimited.tables[0].truncated, true);
+
+  const wideHeaders = Array.from({ length: 101 }, (_, index) => `Başlık ${index + 1}`);
+  const columnLimited = await prepareAiAttachment({
+    originalName: "many-columns.xlsx",
+    buffer: makeXlsxFromRows([wideHeaders, wideHeaders]),
+  });
+  assert.equal(columnLimited.tables[0].headers.length, 100);
+  assert.equal(columnLimited.tables[0].truncated, true);
+});
+
+test("empty and malformed XLSX workbooks are distinguished from unsupported file types", async () => {
+  const empty = await prepareAiAttachment({
+    originalName: "empty.xlsx",
+    buffer: makeXlsxFromRows([]),
+  });
+  assert.deepEqual(empty.tables[0].headers, []);
+  assert.deepEqual(empty.tables[0].rows, []);
+  assert.equal(empty.tables[0].truncated, false);
+
+  await assert.rejects(
+    prepareAiAttachment({
+      originalName: "broken.xlsx",
+      buffer: Buffer.concat([Buffer.from([0x50, 0x4b, 0x03, 0x04]), Buffer.from("broken")]),
+    }),
+    /XLSX|archive|workbook/i
+  );
+  await assert.rejects(
+    prepareAiAttachment({ originalName: "legacy.xls", buffer: Buffer.from("PK\\x03\\x04") }),
+    /Unsupported file type/
+  );
 });
 
 test("DOCX and PDF document text is extracted", async () => {

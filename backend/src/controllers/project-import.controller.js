@@ -97,13 +97,20 @@ export const mapProjectSheetRow = (headers, row) => {
   const status = textValue(row, indexes.status);
   const areaValue = textValue(row, indexes.area_m2);
   const system = textValue(row, indexes.system);
-  const startDate = parseProjectDate(textValue(row, indexes.start_date));
-  const endDate = parseProjectDate(textValue(row, indexes.end_date));
+  const startDateValue = textValue(row, indexes.start_date);
+  const endDateValue = textValue(row, indexes.end_date);
+  const startDate = parseProjectDate(startDateValue);
+  const endDate = parseProjectDate(endDateValue);
   const missing = {
-    area_m2: !areaValue || parseAreaM2(areaValue) === null,
-    start_date: !startDate,
-    end_date: !endDate,
+    area_m2: !areaValue,
+    start_date: !startDateValue,
+    end_date: !endDateValue,
   };
+  const validationErrors = [
+    ...(areaValue && parseAreaM2(areaValue) === null ? ["Alan (m²) sayısal olmalıdır."] : []),
+    ...(startDateValue && !startDate ? ["Başlangıç tarihi geçerli değil."] : []),
+    ...(endDateValue && !endDate ? ["Bitiş tarihi geçerli değil."] : []),
+  ];
   const sourceData = {
     headers: headers.map((header) => String(header ?? "")),
     values: Array.from(
@@ -115,6 +122,7 @@ export const mapProjectSheetRow = (headers, row) => {
     return {
       error: !name ? "Project name is missing." : "Project status is missing.",
       missing,
+      validationErrors,
     };
   }
   return {
@@ -134,6 +142,7 @@ export const mapProjectSheetRow = (headers, row) => {
       source_data: sourceData,
     },
     missing,
+    validationErrors,
   };
 };
 
@@ -196,6 +205,7 @@ export const previewAiFileProjects = async (supabase, { sourceFingerprint, heade
         error: mapped.error,
         classification: "review",
         reasons: [mapped.error],
+        validationErrors: mapped.validationErrors,
         unmatched: [],
       });
       continue;
@@ -216,6 +226,7 @@ export const previewAiFileProjects = async (supabase, { sourceFingerprint, heade
     ];
     const reasons = [
       ...(missing.length ? [`Eksik alanlar: ${missing.join(", ")}`] : []),
+      ...(mapped.validationErrors.length ? [`Doğrulama hataları: ${mapped.validationErrors.join("; ")}`] : []),
       ...unmatched.map(({ field, name: value }) =>
         `Eşleşmeyen ${field === "product" ? "ürün" : "sistem"}: ${value}`
       ),
@@ -226,6 +237,7 @@ export const previewAiFileProjects = async (supabase, { sourceFingerprint, heade
         row: sheetRow,
         project: mapped.project,
         missing,
+        validationErrors: mapped.validationErrors,
         classification: "duplicate",
         reasons: ["Mevcut bir projeyle aynı ad veya kaynak satırı."],
         unmatched,
@@ -238,6 +250,7 @@ export const previewAiFileProjects = async (supabase, { sourceFingerprint, heade
       row: sheetRow,
       project: mapped.project,
       missing,
+      validationErrors: mapped.validationErrors,
       classification,
       reasons,
       unmatched,
@@ -284,6 +297,14 @@ export const saveAiFileProjects = async (supabase, { sourceFingerprint, headers,
     if (missingFields.length) incomplete.push({ row: sheetRow, missing: missingFields });
     if (mapped.error) {
       errors.push({ row: sheetRow, message: mapped.error, missing: missingFields });
+      continue;
+    }
+    if (mapped.validationErrors.length) {
+      errors.push({
+        row: sheetRow,
+        message: mapped.validationErrors.join("; "),
+        missing: missingFields,
+      });
       continue;
     }
 
@@ -398,7 +419,10 @@ export const previewProjectSpreadsheetUpload = async (req, res, next) => {
 };
 
 export const findProjectSpreadsheetTable = (tables = []) =>
-  tables.find(({ name }) => normalizeHeader(name) === "projects") ||
+  tables.find(({ name, headers = [], rows = [] }) =>
+    normalizeHeader(name) === "projects" &&
+    rows.some((row) => Boolean(mapProjectSheetRow(headers, row).project))
+  ) ||
   tables.find(({ headers = [], rows = [] }) =>
     rows.some((row) => Boolean(mapProjectSheetRow(headers, row).project))
   ) || null;
