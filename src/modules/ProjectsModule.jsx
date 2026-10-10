@@ -51,12 +51,13 @@ function ProjectsModule({
   selectedProjectId,
   onNavigate,
   refreshProjects,
+  setAiInput,
 }) {
   const selectedProject = projects.find((project) => project.id === selectedProjectId);
-  const projectDocuments = documents.filter((document) => document.project_id === selectedProject?.id);
   const [areaM2, setAreaM2] = useState("");
   const [systems, setSystems] = useState("");
   const [notes, setNotes] = useState("");
+  const [projectCommand, setProjectCommand] = useState("");
   const [status, setStatus] = useState("");
   const [detailsStatus, setDetailsStatus] = useState("");
   const [crmContacts, setCrmContacts] = useState([]);
@@ -71,6 +72,7 @@ function ProjectsModule({
   const [spreadsheetBusy, setSpreadsheetBusy] = useState(false);
   const [spreadsheetError, setSpreadsheetError] = useState("");
   const [spreadsheetResult, setSpreadsheetResult] = useState(null);
+  const projectDocuments = documents.filter((document) => document.project_id === selectedProject?.id);
 
   useEffect(() => {
     setAreaM2(selectedProject?.areaM2 ?? "");
@@ -79,6 +81,7 @@ function ProjectsModule({
     setStatus(selectedProject?.status || "Aktif");
     setCrmContactId(selectedProject?.crmContactId || "");
     setDetailsStatus("");
+    setProjectCommand("");
     setSpreadsheetPreview(null);
     setSpreadsheetError("");
     setSpreadsheetResult(null);
@@ -255,6 +258,14 @@ function ProjectsModule({
     }
   };
 
+  const sendProjectCommand = () => {
+    if (!selectedProject || !projectCommand.trim()) return;
+    setAiInput(
+      `Proje: ${selectedProject.name}\nİstek: ${projectCommand.trim()}\nÖnce analiz et ve öneri sun. Dosya yükleme veya kayıt değişikliği yapma; onay gerektiren işlemleri açıkça belirt.`
+    );
+    onNavigate("ai-assistant");
+  };
+
   return (
     <div className="module-page">
       {selectedProject ? (
@@ -307,6 +318,18 @@ function ProjectsModule({
               <DDProActionButton icon="save" label="Proje ayrıntılarını kaydet" type="submit" />
             </form>
             {detailsStatus ? <p role="status">{detailsStatus}</p> : null}
+            <section className="project-command-section">
+              <h3>Proje komutu ve açıklaması</h3>
+              <p>İsteğiniz mevcut AI Asistanına analiz için iletilir; dosya yükleme ve kayıt değişikliği bu alandan yapılmaz.</p>
+              <textarea
+                rows={3}
+                aria-label="Proje hakkında doğal dilde istek"
+                placeholder="Örn. Uygulama fotoğraflarını ve teknik belgeleri düzenlemek için bir kontrol listesi hazırla."
+                value={projectCommand}
+                onChange={(event) => setProjectCommand(event.target.value)}
+              />
+              <button type="button" disabled={!projectCommand.trim()} onClick={sendProjectCommand}>AI ile analiz et</button>
+            </section>
             <section className="project-assets-section">
               <div className="panel-header"><h3>Fotoğraflar ve proje belgeleri</h3></div>
               {documentError ? <p className="status-banner warning" role="alert">{documentError}</p> : null}

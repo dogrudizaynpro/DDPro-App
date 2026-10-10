@@ -2793,6 +2793,7 @@ function App() {
           selectedProjectId={selectedProjectId}
           onNavigate={handleModuleNavigation}
           refreshProjects={async () => setProjects(await getProjects())}
+          setAiInput={setAiInput}
         />
       );
     }
