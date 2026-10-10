@@ -140,17 +140,18 @@ const renderTable = (rows, name = "CSV") => {
   ].join("\n");
 };
 
-const structuredTable = (rows, name) => {
+const structuredTable = (rows, name, { columnsTruncated = false } = {}) => {
+  const nonEmptyRows = rows.filter((row) => row.some((value) => String(value ?? "").trim()));
   const table = {
     name,
-    headers: rows[0] || [],
-    rows: rows.slice(1, MAX_SPREADSHEET_ROWS + 1)
-      .map((row) => Array.from({ length: Math.min(MAX_SPREADSHEET_COLUMNS, Math.max(rows[0]?.length || 0, row.length)) }, (_, index) => row[index] ?? "")),
+    headers: nonEmptyRows[0] || [],
+    rows: nonEmptyRows.slice(1, MAX_SPREADSHEET_ROWS + 1)
+      .map((row) => Array.from({ length: Math.min(MAX_SPREADSHEET_COLUMNS, Math.max(nonEmptyRows[0]?.length || 0, row.length)) }, (_, index) => row[index] ?? "")),
   };
   return {
     ...table,
-    truncated: rows.length > MAX_SPREADSHEET_ROWS + 1 ||
-      rows.some((row) => row.length > MAX_SPREADSHEET_COLUMNS) ||
+    truncated: nonEmptyRows.length > MAX_SPREADSHEET_ROWS + 1 ||
+      columnsTruncated ||
       Buffer.byteLength(JSON.stringify(table)) > MAX_STRUCTURED_TABLE_SIZE,
   };
 };
@@ -305,6 +306,7 @@ const parseXlsx = async (buffer) => {
     }
     const rows = asArray(parsed.worksheet?.sheetData?.row).map((row) => {
       const cells = [];
+      let columnsTruncated = false;
       for (const cell of asArray(row.c)) {
         const reference = cell["@_r"] || "";
         const letters = reference.match(/^[A-Z]+/i)?.[0] || "";
@@ -312,17 +314,31 @@ const parseXlsx = async (buffer) => {
           (value, letter) => value * 26 + letter.charCodeAt(0) - 64,
           0
         ) - 1;
-        if (columnIndex < 0 || columnIndex >= 100) continue;
         const raw = xmlText(cell.v ?? cell.is);
-        cells[columnIndex] = cell["@_t"] === "s"
+        const value = cell["@_t"] === "s"
           ? sharedStrings[Number(raw)] || ""
           : raw;
+        if (!String(value ?? "").trim()) continue;
+        if (columnIndex < 0 || columnIndex >= MAX_SPREADSHEET_COLUMNS) {
+          columnsTruncated = true;
+          continue;
+        }
+        cells[columnIndex] = value;
       }
-      return cells;
+      return { cells, columnsTruncated };
     });
     const name = sheet["@_name"] || `Sayfa ${output.length + 1}`;
-    output.push(renderTable(rows, name));
-    tables.push(structuredTable(rows, name));
+    const hasMeaningfulData = rows.some(({ cells }) =>
+      cells.some((value) => String(value ?? "").trim())
+    );
+    const meaningfulRows = hasMeaningfulData
+      ? rows.filter(({ cells }) => cells.some((value) => String(value ?? "").trim()))
+      : [];
+    const tableRows = meaningfulRows.map(({ cells }) => cells);
+    output.push(renderTable(tableRows, name));
+    tables.push(structuredTable(tableRows, name, {
+      columnsTruncated: meaningfulRows.some(({ columnsTruncated }) => columnsTruncated),
+    }));
   }
   const content = output.join("\n\n");
   return {
