@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   mapProjectSheetRow,
+  findProjectSpreadsheetTable,
   previewAiFileProjects,
   saveAiFileProjects,
 } from "../src/controllers/project-import.controller.js";
@@ -57,6 +58,17 @@ test("project sheet mapping rejects rows without a project name or status", () =
   const headers = ["Proje", "Durum"];
   assert.equal(mapProjectSheetRow(headers, ["", "Aktif"]).error, "Project name is missing.");
   assert.equal(mapProjectSheetRow(headers, ["Project C", ""]).error, "Project status is missing.");
+});
+
+test("spreadsheet preview reuses existing header mapping and requires real project rows", () => {
+  const emptyTable = { name: "Notes", headers: ["Title"], rows: [["A note"]] };
+  const projectTable = {
+    name: "Projects",
+    headers: ["Project name", "Status", "Area m2"],
+    rows: [["Project A", "Active", "25"]],
+  };
+  assert.equal(findProjectSpreadsheetTable([emptyTable, projectTable]), projectTable);
+  assert.equal(findProjectSpreadsheetTable([emptyTable]), null);
 });
 
 test("AI file import reports duplicates and failures and safely retries only unsaved rows", async () => {

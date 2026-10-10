@@ -5,11 +5,9 @@
 // ============================================================
 
 import { completeGoogleConnection } from "./operations-integrations.service.js";
+import { resolveApiBaseUrl } from "./api-config.js";
 
-const DEFAULT_LOCAL_API_URL = "http://localhost:3001";
 const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
-
-const trimTrailingSlash = (value = "") => value.replace(/\/+$/, "");
 
 const isLocalHost = (hostname = "") =>
   ["localhost", "127.0.0.1", "::1"].includes(hostname);
@@ -20,26 +18,11 @@ const getRuntimeHostname = () =>
 const IS_PRODUCTION_RUNTIME = !isLocalHost(getRuntimeHostname());
 const CAN_USE_LOCAL_FALLBACK = !IS_PRODUCTION_RUNTIME;
 
-const resolveApiBaseUrl = () => {
-  const envUrl = trimTrailingSlash(
-    String(import.meta.env?.VITE_API_URL || "").trim()
-  );
-
-  if (envUrl) {
-    return envUrl;
-  }
-
-  if (
-    typeof window !== "undefined" &&
-    isLocalHost(window.location.hostname)
-  ) {
-    return DEFAULT_LOCAL_API_URL;
-  }
-
-  return "";
-};
-
-const API_BASE_URL = resolveApiBaseUrl();
+const API_BASE_URL = resolveApiBaseUrl({
+  apiUrl: import.meta.env?.VITE_API_URL || "",
+  deploymentEnvironment: import.meta.env?.VERCEL_ENV || "",
+  hostname: getRuntimeHostname(),
+});
 const SESSION_KEY = "ddpro_browser_session";
 let pendingSessionRestore;
 let sessionRestoreError;

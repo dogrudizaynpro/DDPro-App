@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { getIntegrationAdmin } from "../config/integration-admin.js";
 import { createProjectRecord } from "./projects.controller.js";
 import { readProjectsSheet } from "../services/google-sheets.service.js";
+import { prepareAiAttachment } from "../services/ai-file.service.js";
 
 const headerAliases = {
   name: ["proje adı", "proje adi", "proje", "project name", "project"],
@@ -300,6 +301,48 @@ export const previewAiFileProjectImport = async (req, res, next) => {
     return next(error);
   }
 };
+
+export const previewProjectSpreadsheetUpload = async (req, res, next) => {
+  try {
+    if (!req.aiFile) {
+      return res.status(400).json({ status: "error", message: "Select an XLSX or CSV project file." });
+    }
+    const parsed = await prepareAiAttachment(req.aiFile);
+    if (parsed.extractedType !== "spreadsheet" || parsed.truncated || !Array.isArray(parsed.tables)) {
+      return res.status(400).json({ status: "error", message: "The project spreadsheet is invalid or exceeds the safe processing limit." });
+    }
+
+    const table = findProjectSpreadsheetTable(parsed.tables);
+    if (!table) {
+      return res.status(400).json({ status: "error", message: "No project rows with a name and status were found in the spreadsheet." });
+    }
+    const sourceFingerprint = createHash("sha256").update(req.aiFile.buffer).digest("hex");
+    const supabase = getIntegrationAdmin();
+    if (!supabase) {
+      return res.status(503).json({ status: "error", message: "Database service-role configuration is required." });
+    }
+    const preview = await previewAiFileProjects(supabase, {
+      sourceFingerprint,
+      headers: table.headers,
+      rows: table.rows,
+    });
+    return res.json({
+      status: "success",
+      data: {
+        sourceFingerprint,
+        table: { name: table.name, headers: table.headers, rows: table.rows },
+        ...preview,
+      },
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const findProjectSpreadsheetTable = (tables = []) =>
+  tables.find(({ headers = [], rows = [] }) =>
+    rows.some((row) => Boolean(mapProjectSheetRow(headers, row).project))
+  ) || null;
 
 export const importGoogleProjects = async (req, res, next) => {
   try {

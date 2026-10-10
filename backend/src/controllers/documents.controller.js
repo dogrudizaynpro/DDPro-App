@@ -22,6 +22,7 @@ export const postDocument = async (req, res, next) => {
       contentType: req.get("content-type"),
       projectId: queryString(req.query.project_id),
       crmContactId: queryString(req.query.crm_contact_id),
+      projectAssetType: queryString(req.query.project_asset_type),
       buffer: Buffer.from(req.body),
     });
     return res.status(201).json({ status: "success", data });
@@ -30,7 +31,8 @@ export const postDocument = async (req, res, next) => {
 
 export const getDocument = async (req, res, next) => {
   try {
-    const data = await getDocumentDownload(req.integrationAccount, req.params.id);
+    const preview = req.query.preview === "true";
+    const data = await getDocumentDownload(req.integrationAccount, req.params.id, { preview });
     return data ? res.json({ status: "success", data }) : res.status(404).json({ status: "error", message: "Document not found." });
   } catch (error) { return next(error); }
 };

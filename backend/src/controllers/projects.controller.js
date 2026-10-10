@@ -235,6 +235,7 @@ export const updateProject = async (req, res, next) => {
       systems,
       notes,
       crm_contact_id: crmContactId,
+      cover_document_id: coverDocumentId,
     } = req.body || {};
 
     if (status !== undefined) {
@@ -271,6 +272,27 @@ export const updateProject = async (req, res, next) => {
         return res.status(400).json({ status: "error", message: "CRM contact id is invalid." });
       }
       updates.crm_contact_id = crmContactId || null;
+    }
+
+    if (coverDocumentId !== undefined) {
+      if (coverDocumentId !== null && coverDocumentId !== "" &&
+          (typeof coverDocumentId !== "string" || !/^[\da-f-]{36}$/i.test(coverDocumentId))) {
+        return res.status(400).json({ status: "error", message: "Project cover document id is invalid." });
+      }
+      if (coverDocumentId) {
+        const { data: cover, error: coverError } = await supabase
+          .from("document_records")
+          .select("id,content_type")
+          .eq("id", coverDocumentId)
+          .eq("project_id", req.params.id)
+          .eq("owner_account", req.integrationAccount)
+          .maybeSingle();
+        if (coverError) return next(coverError);
+        if (!cover || !cover.content_type.startsWith("image/")) {
+          return res.status(400).json({ status: "error", message: "Choose an image uploaded to this project." });
+        }
+      }
+      updates.cover_document_id = coverDocumentId || null;
     }
 
     if (Object.keys(updates).length === 0) {

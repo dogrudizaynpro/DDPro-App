@@ -64,6 +64,13 @@ export const mapProjectToViewModel = (project = {}) => {
     areaM2: project.area_m2 ?? project.areaM2 ?? "",
     systems: Array.isArray(project.systems) ? project.systems : [],
     notes: project.notes || "",
+    customer: project.customer || "",
+    company: project.company || "",
+    location: project.location || "",
+    product: project.product || "",
+    startDate: project.start_date || project.startDate || "",
+    endDate: project.end_date || project.endDate || "",
+    coverDocumentId: project.cover_document_id || project.coverDocumentId || "",
     crmContactId: project.crm_contact_id || project.crmContactId || "",
     date: formatProjectDate(createdAt),
     createdAt,
@@ -176,18 +183,32 @@ export const previewAiFileProjectImport = async ({ sourceFingerprint, headers, r
   return response.data;
 };
 
+export const previewProjectSpreadsheetUpload = async (file) => {
+  const form = new FormData();
+  form.append("file", file);
+  const response = await fetchAPI("/api/projects/import/spreadsheet/preview", {
+    method: "POST",
+    body: form,
+  });
+  return response.data;
+};
+
 export const updateProject = async (id, project) => {
   if (!id) throw new Error("Project ID is required");
-  const payload = {
-    status: project.status,
-    area_m2: project.areaM2 === "" ? null : Number(project.areaM2),
-    systems: Array.isArray(project.systems) ? project.systems : [],
-    notes: typeof project.notes === "string" ? project.notes.trim() : "",
-    crm_contact_id: project.crmContactId || null,
-  };
-  if (payload.area_m2 !== null && (!Number.isFinite(payload.area_m2) || payload.area_m2 < 0)) {
+  const payload = {};
+  if (Object.hasOwn(project, "status")) payload.status = project.status;
+  if (Object.hasOwn(project, "areaM2")) payload.area_m2 = project.areaM2 === "" ? null : Number(project.areaM2);
+  if (Object.hasOwn(project, "systems")) payload.systems = Array.isArray(project.systems) ? project.systems : [];
+  if (Object.hasOwn(project, "notes")) payload.notes = typeof project.notes === "string" ? project.notes.trim() : "";
+  if (Object.hasOwn(project, "crmContactId")) payload.crm_contact_id = project.crmContactId || null;
+  if (Object.hasOwn(project, "coverDocumentId")) {
+    payload.cover_document_id = project.coverDocumentId || null;
+  }
+  if (Object.hasOwn(payload, "area_m2") && payload.area_m2 !== null &&
+      (!Number.isFinite(payload.area_m2) || payload.area_m2 < 0)) {
     throw new Error("Project area must be a non-negative number");
   }
+  if (!Object.keys(payload).length) throw new Error("At least one project field is required");
   const data = await fetchAPI(`/api/projects/${encodeURIComponent(id)}`, {
     method: "PATCH",
     body: JSON.stringify(payload),

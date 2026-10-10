@@ -16,7 +16,38 @@ test("document upload validates supported file signatures, size, name, and relat
     content_type: "application/pdf",
     project_id: projectId,
     crm_contact_id: null,
+    project_asset_type: "document",
     file_size: pdf.length,
+  });
+
+  test("document upload supports genuine WebP images for project galleries", () => {
+    const webp = Buffer.alloc(20);
+    webp.write("RIFF", 0, "ascii");
+    webp.writeUInt32LE(webp.length - 8, 4);
+    webp.write("WEBPVP8 ", 8, "ascii");
+    webp.writeUInt32LE(0, 16);
+    const metadata = normalizeDocumentUpload({
+      originalName: "site.webp",
+      contentType: "image/webp",
+      projectId,
+      projectAssetType: "progress",
+      buffer: webp,
+    });
+    assert.equal(metadata.project_asset_type, "progress");
+    assert.throws(() => normalizeDocumentUpload({
+      originalName: "site.webp",
+      contentType: "image/webp",
+      projectId,
+      projectAssetType: "before",
+      buffer: Buffer.from("not an image"),
+    }), /contents do not match/);
+    assert.throws(() => normalizeDocumentUpload({
+      originalName: "invoice.pdf",
+      contentType: "application/pdf",
+      projectId,
+      projectAssetType: "completed",
+      buffer: pdf,
+    }), /invalid for this file/);
   });
   assert.throws(() => normalizeDocumentUpload({
     originalName: "../invoice.pdf",

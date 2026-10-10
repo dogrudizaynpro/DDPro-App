@@ -6,10 +6,11 @@ export const getDocuments = async () => {
   return response.data;
 };
 
-export const uploadDocument = (file, { projectId, crmContactId } = {}) => {
+export const uploadDocument = (file, { projectId, crmContactId, projectAssetType } = {}) => {
   const query = new URLSearchParams({ name: file.name });
   if (projectId) query.set("project_id", projectId);
   if (crmContactId) query.set("crm_contact_id", crmContactId);
+  if (projectAssetType) query.set("project_asset_type", projectAssetType);
   return fetchAPI(`/api/documents?${query.toString()}`, {
     method: "POST",
     headers: { "Content-Type": file.type },
@@ -17,8 +18,9 @@ export const uploadDocument = (file, { projectId, crmContactId } = {}) => {
   });
 };
 
-export const getDocumentDownload = async (id) => {
-  const response = await fetchAPI(`/api/documents/${encodeURIComponent(id)}/download`);
+export const getDocumentDownload = async (id, { preview = false } = {}) => {
+  const query = preview ? "?preview=true" : "";
+  const response = await fetchAPI(`/api/documents/${encodeURIComponent(id)}/download${query}`);
   return response.data;
 };
 
