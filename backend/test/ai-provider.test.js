@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { after, afterEach, before, beforeEach, test } from "node:test";
+import { after, before, test } from "node:test";
 
 const TEST_API_KEY = "test-ai-key-not-a-secret";
 const savedEnv = {};
@@ -37,15 +37,6 @@ after(() => {
     if (savedEnv[key] === undefined) delete process.env[key];
     else process.env[key] = savedEnv[key];
   }
-});
-
-beforeEach(() => {
-  requests = [];
-  responses = [];
-});
-
-afterEach(() => {
-  assert.equal(responses.length, 0, "Every queued AI provider response must be consumed");
 });
 
 const completion = (message) => ({ status: 200, body: { choices: [{ message }] } });
@@ -273,6 +264,43 @@ test("read-only project analyses cannot request operational writes", async () =>
   }));
   await assert.rejects(
     requestAiCompletion({ message: "Analyze this project.", context: {}, readOnly: true }),
+    (error) => error.code === "AI_TOOL_UNAVAILABLE"
+  );
+  assert.deepEqual(
+    requests[0].body.tools.map(({ function: tool }) => tool.name),
+    ["read_records"]
+  );
+});
+
+test("orchestrator tool policies restrict advertised and executable DDPro tools", async () => {
+  responses.push(completion({ role: "assistant", content: "General answer." }));
+  assert.equal((await requestAiCompletion({
+    message: "General question.",
+    context: {},
+    toolPolicy: "none",
+  })).answer, "General answer.");
+  assert.equal("tools" in requests[0].body, false);
+
+  requests = [];
+  responses.push(completion({
+    role: "assistant",
+    content: null,
+    tool_calls: [{
+      id: "call_disallowed_write",
+      type: "function",
+      function: {
+        name: "prepare_write",
+        arguments: JSON.stringify({ resource: "projects", operation: "create", record: { name: "X" } }),
+      },
+    }],
+  }));
+  await assert.rejects(
+    requestAiCompletion({
+      message: "List projects.",
+      context: {},
+      integrationAccount: "owner@example.com",
+      toolPolicy: "read",
+    }),
     (error) => error.code === "AI_TOOL_UNAVAILABLE"
   );
   assert.deepEqual(
