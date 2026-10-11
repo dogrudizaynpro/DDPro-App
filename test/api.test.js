@@ -49,6 +49,29 @@ beforeEach(() => {
   window.location.hash = "";
 });
 
+test("completed provider tests force an in-flight status read to return post-test evidence without changing OAuth", async () => {
+  let finishOldRead;
+  let statusReads = 0;
+  response = (url) => {
+    if (url.includes("/test/ai")) {
+      return Response.json({ data: { connected: true, testSucceeded: true } });
+    }
+    statusReads += 1;
+    if (statusReads === 1) return new Promise((resolve) => { finishOldRead = resolve; });
+    return Response.json({ data: { ai: { connected: true }, google: { authenticated: true } } });
+  };
+  const oldRead = getIntegrationStatus();
+  while (!finishOldRead) await new Promise((resolve) => setTimeout(resolve, 0));
+  await testIntegrationConnection("ai");
+  const postTestRead = getIntegrationStatus();
+  finishOldRead(Response.json({ data: { ai: { connected: false } } }));
+  assert.equal((await oldRead).ai.connected, true);
+  assert.equal((await postTestRead).ai.connected, true);
+  assert.equal(statusReads, 2);
+  assert.equal(storage.get("ddpro_browser_session"), "existing-browser-session");
+  assert.equal(requests.some(({ url }) => /logout|restore|exchange/.test(url)), false);
+});
+
 test("API GET requests make one bounded retry after a timeout", async () => {
   response = (_url, options) => new Promise((_resolve, reject) => {
     options.signal.addEventListener("abort", () => reject(options.signal.reason), {

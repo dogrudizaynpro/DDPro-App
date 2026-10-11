@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useId, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import ddproMasterLogo from "./assets/DDPRO_LOGO_MASTER_V1_EXACT.png";
 import dashboardDesignReference from "./assets/DDPro-Dashboard-Referans.png";
 import DDProIcon from "./components/DDProIcon.jsx";
@@ -37,7 +37,7 @@ import {
   getCrmContacts,
   getGoogleCalendarEvents,
 } from "./services/operations-integrations.service.js";
-import { getIntegrationStatus } from "./services/integrations.service.js";
+import { getIntegrationStatus, getIntegrationStatusSnapshot, subscribeToIntegrationStatus } from "./services/integrations.service.js";
 import {
   DDPRO_TIME_ZONE,
   formatDateOnly,
@@ -572,7 +572,12 @@ function App() {
     status: "loading",
     message: "",
   });
-  const [integrationState, setIntegrationState] = useState(null);
+  const integrationSnapshot = useSyncExternalStore(
+    subscribeToIntegrationStatus,
+    getIntegrationStatusSnapshot,
+    getIntegrationStatusSnapshot,
+  );
+  const integrationState = integrationSnapshot.status;
 
   const [projects, setProjects] = useState(() => getInitialItems(STORAGE_KEYS.projects));
 
@@ -740,19 +745,10 @@ function App() {
   }, [integrationState?.google?.authenticated, projects]);
 
   useEffect(() => {
-    let active = true;
-    const refreshIntegrationState = () =>
-      getIntegrationStatus()
-        .then((status) => {
-          if (active) setIntegrationState(status);
-        })
-        .catch(() => {
-          if (active) setIntegrationState(null);
-        });
+    const refreshIntegrationState = () => getIntegrationStatus().catch(() => {});
     refreshIntegrationState();
     const intervalId = window.setInterval(refreshIntegrationState, 60_000);
     return () => {
-      active = false;
       window.clearInterval(intervalId);
     };
   }, []);
@@ -1988,7 +1984,6 @@ function App() {
     if (statusQuestion) {
       try {
         const liveStatus = await getIntegrationStatus();
-        setIntegrationState(liveStatus);
         const response = {
           id: createId(),
           role: "assistant",
@@ -2032,7 +2027,6 @@ function App() {
     let liveIntegrationContext;
     try {
       liveIntegrationContext = await getIntegrationStatus();
-      setIntegrationState(liveIntegrationContext);
     } catch (error) {
       liveIntegrationContext = { available: false, error: getApiFailureReason(error) };
     }
