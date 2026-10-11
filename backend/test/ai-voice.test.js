@@ -42,12 +42,15 @@ test("Gemini Live config requests Turkish audio, VAD, and safe context-only beha
     history: [{ role: "user", text: "Önceki soru" }],
   });
   assert.equal(config.model, "models/test-live-audio");
-  assert.deepEqual(config.config.responseModalities, ["AUDIO"]);
-  assert.equal(config.config.speechConfig.languageCode, "tr-TR");
-  assert.equal(config.config.speechConfig.voiceConfig.prebuiltVoiceConfig.voiceName, "Kore");
-  assert.equal(config.config.realtimeInputConfig.automaticActivityDetection.disabled, false);
-  assert.match(config.config.systemInstruction.parts[0].text, /değişiklik yapma yetkin yok/);
-  assert.match(config.config.systemInstruction.parts[0].text, /Test project/);
+  assert.deepEqual(config.generationConfig.responseModalities, ["AUDIO"]);
+  assert.equal(config.generationConfig.speechConfig.languageCode, "tr-TR");
+  assert.equal(config.generationConfig.speechConfig.voiceConfig.prebuiltVoiceConfig.voiceName, "Kore");
+  assert.equal(config.realtimeInputConfig.automaticActivityDetection.disabled, false);
+  assert.match(config.systemInstruction.parts[0].text, /değişiklik yapma yetkin yok/);
+  assert.match(config.systemInstruction.parts[0].text, /Test project/);
+  assert.deepEqual(config.inputAudioTranscription, {});
+  assert.deepEqual(config.outputAudioTranscription, {});
+  assert.equal(config.config, undefined);
   assert.throws(() => createGeminiLiveSessionConfig({ context: { data: "x".repeat(24_001) } }), {
     statusCode: 413,
   });
@@ -58,15 +61,41 @@ test("single-use Live token is created server-side and the permanent key is not 
   const config = createGeminiLiveSessionConfig({ context: {}, history: [] });
   const token = await createGeminiLiveToken(config);
   assert.equal(token, "auth_tokens/one-use-session");
-  assert.equal(request.url, "https://generativelanguage.googleapis.com/v1alpha/authTokens");
+  assert.equal(request.url, "https://generativelanguage.googleapis.com/v1beta/auth_tokens");
   assert.equal(request.headers["x-goog-api-key"], "test-gemini-api-key");
   assert.equal(request.body.uses, 1);
-  assert.equal(request.body.liveConnectConstraints.model, "models/test-live-audio");
+  assert.deepEqual(request.body.bidiGenerateContentSetup, config);
+  assert.equal(request.body.liveConnectConstraints, undefined);
+  assert.equal(request.body.config, undefined);
   assert.ok(Date.parse(request.body.expireTime) > Date.now());
   assert.ok(Date.parse(request.body.newSessionExpireTime) > Date.now());
   assert.match(getGeminiLiveWebSocketUrl(), /BidiGenerateContentConstrained$/);
   assert.doesNotMatch(JSON.stringify({ token }), /test-gemini-api-key/);
   assert.equal(log.mock.calls.length, 0);
+});
+
+test("Live model identity is preserved with exactly one models/ resource prefix", () => {
+  const previousModel = process.env.GEMINI_LIVE_MODEL;
+  try {
+    for (const model of ["gemini-3.8-live", "models/gemini-3.8-live"]) {
+      process.env.GEMINI_LIVE_MODEL = model;
+      assert.equal(createGeminiLiveSessionConfig().model, "models/gemini-3.8-live");
+      assert.equal(process.env.GEMINI_LIVE_MODEL, model);
+    }
+  } finally {
+    process.env.GEMINI_LIVE_MODEL = previousModel;
+  }
+});
+
+test("documented token name takes precedence while token-only responses remain compatible", async (t) => {
+  for (const [body, expected] of [
+    [{ name: "auth_tokens/documented", token: "legacy-token" }, "auth_tokens/documented"],
+    [{ token: "legacy-token" }, "legacy-token"],
+    [{ name: "", token: "legacy-token" }, "legacy-token"],
+  ]) {
+    t.mock.method(globalThis, "fetch", async () => new Response(JSON.stringify(body)));
+    assert.equal(await createGeminiLiveToken(createGeminiLiveSessionConfig()), expected);
+  }
 });
 
 test("provider failures are sanitized and unconfigured sessions fail closed", async (t) => {
@@ -161,11 +190,14 @@ test("Google diagnostics redact credentials, headers, session data and log contr
 
 test("non-JSON and malformed Google responses log only a safe fallback", async (t) => {
   const log = t.mock.method(console, "error", () => {});
-  for (const body of ["<html>private-session-data test-gemini-api-key</html>", "{malformed"]) {
-    t.mock.method(globalThis, "fetch", async () => new Response(body, { status: 502 }));
+  for (const [body, status] of [
+    ["<html>private-session-data test-gemini-api-key</html>", 404],
+    ["{malformed", 502],
+  ]) {
+    t.mock.method(globalThis, "fetch", async () => new Response(body, { status }));
     await assert.rejects(createGeminiLiveToken({}), { statusCode: 502 });
     assert.deepEqual(log.mock.calls.at(-1).arguments[1], {
-      upstreamStatus: 502,
+      upstreamStatus: status,
       providerStatus: "",
       message: "Google token response was not valid JSON.",
     });

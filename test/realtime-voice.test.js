@@ -96,7 +96,7 @@ const createSession = (options = {}) => {
     createSession: async () => ({
       token: "single-use-token",
       websocketUrl: "wss://voice.example/live",
-      setup: { model: "models/live", config: { responseModalities: ["AUDIO"] } },
+      setup: { model: "models/live", generationConfig: { responseModalities: ["AUDIO"] } },
     }),
     context: { projects: [] },
     history: [],
@@ -170,4 +170,55 @@ test("realtime session reports microphone denial and releases resources on conne
   assert.equal(track.stopped, true);
   assert.match(disconnected.events.errors.at(-1).message, /bağlantısı koptu/);
   assert.ok(disconnected.events.states.includes("error"));
+});
+
+test("backend ephemeral token and constrained wire setup are passed unchanged to Live WebSocket", async (t) => {
+  const {
+    createGeminiLiveSessionConfig,
+    createGeminiLiveToken,
+    getGeminiLiveWebSocketUrl,
+  } = await import("../backend/src/services/ai-voice.service.js");
+  const previousKey = process.env.GEMINI_API_KEY;
+  const previousModel = process.env.GEMINI_LIVE_MODEL;
+  const token = "auth_tokens/session+opaque?value=&";
+  let tokenRequest;
+  let setup;
+  process.env.GEMINI_API_KEY = "test-live-backend-key";
+  process.env.GEMINI_LIVE_MODEL = "gemini-3.8-live";
+  t.mock.method(globalThis, "fetch", async (url, init) => {
+    tokenRequest = { url, body: JSON.parse(init.body) };
+    return new Response(JSON.stringify({ name: token }));
+  });
+  const { session } = createSession({
+    createSession: async (input) => {
+      setup = createGeminiLiveSessionConfig(input);
+      return {
+        token: await createGeminiLiveToken(setup),
+        websocketUrl: getGeminiLiveWebSocketUrl(),
+        setup,
+      };
+    },
+  });
+  try {
+    await session.start();
+    const socket = FakeWebSocket.latest;
+    const url = new URL(socket.url);
+    assert.equal(tokenRequest.url, "https://generativelanguage.googleapis.com/v1beta/auth_tokens");
+    assert.equal(url.pathname,
+      "/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained");
+    assert.equal(url.searchParams.get("access_token"), token);
+    assert.deepEqual([...url.searchParams.keys()], ["access_token"]);
+    assert.deepEqual(socket.sent[0], { setup: tokenRequest.body.bidiGenerateContentSetup });
+    assert.deepEqual(socket.sent[0].setup, setup);
+    assert.equal(setup.model, "models/gemini-3.8-live");
+    assert.deepEqual(setup.generationConfig.responseModalities, ["AUDIO"]);
+    assert.equal(setup.config, undefined);
+    assert.doesNotMatch(socket.url + JSON.stringify(socket.sent), /test-live-backend-key/);
+  } finally {
+    session.stop();
+    if (previousKey === undefined) delete process.env.GEMINI_API_KEY;
+    else process.env.GEMINI_API_KEY = previousKey;
+    if (previousModel === undefined) delete process.env.GEMINI_LIVE_MODEL;
+    else process.env.GEMINI_LIVE_MODEL = previousModel;
+  }
 });
