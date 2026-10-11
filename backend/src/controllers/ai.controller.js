@@ -96,7 +96,7 @@ export const createAiVoiceSession = async (req, res, next) => {
     history.length > 12 ||
     history.some((message) =>
       !["user", "assistant"].includes(message?.role) ||
-      typeof message?.text !== "string' ||
+      typeof message?.text !== "string" ||
       message.text.length > 2_000
     )
   ) {

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { after, before, test } from "node:test";
+import { after, afterEach, before, beforeEach, test } from "node:test";
 
 const TEST_API_KEY = "test-ai-key-not-a-secret";
 const savedEnv = {};
@@ -37,6 +37,15 @@ after(() => {
     if (savedEnv[key] === undefined) delete process.env[key];
     else process.env[key] = savedEnv[key];
   }
+});
+
+beforeEach(() => {
+  requests = [];
+  responses = [];
+});
+
+afterEach(() => {
+  assert.equal(responses.length, 0, "Every queued AI provider response must be consumed");
 });
 
 const completion = (message) => ({ status: 200, body: { choices: [{ message }] } });
