@@ -128,11 +128,15 @@ app.post(
 // ============================================================
 
 app.get("/health", async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  const renderCommit = process.env.RENDER_GIT_COMMIT || "";
+  const commit = /^[a-f0-9]{40}$/i.test(renderCommit) ? renderCommit : null;
   const supabase = getIntegrationAdmin();
   if (!supabase) {
     return res.status(503).json({
       status: "degraded",
       service: "ddpro-backend",
+      commit,
       database: {
         provider: "supabase",
         ready: false,
@@ -175,6 +179,7 @@ app.get("/health", async (req, res) => {
       return res.status(503).json({
         status: "degraded",
         service: "ddpro-backend",
+        commit,
         database: {
           provider: "supabase",
           ready: false,
@@ -187,6 +192,7 @@ app.get("/health", async (req, res) => {
     return res.status(200).json({
       status: "ok",
       service: "ddpro-backend",
+      commit,
       database: {
         provider: "supabase",
         ready: true,
@@ -199,6 +205,7 @@ app.get("/health", async (req, res) => {
     return res.status(503).json({
       status: "degraded",
       service: "ddpro-backend",
+      commit,
       database: {
         provider: "supabase",
         ready: false,

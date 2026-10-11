@@ -1,9 +1,9 @@
 const MAX_CONTEXT_LENGTH = 24_000;
 const MAX_HISTORY_LENGTH = 8_000;
 const GEMINI_TOKEN_URL =
-  "https://generativelanguage.googleapis.com/v1beta/auth_tokens";
+  "https://generativelanguage.googleapis.com/v1alpha/auth_tokens";
 const GEMINI_LIVE_WEBSOCKET_URL =
-  "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained";
+  "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContentConstrained";
 
 const voiceInstructions = (context, history) => [
   "Sen DDPro AI Asistanısın. Kullanıcıyla gerçek zamanlı sesli konuşuyorsun.",

@@ -61,7 +61,7 @@ test("single-use Live token is created server-side and the permanent key is not 
   const config = createGeminiLiveSessionConfig({ context: {}, history: [] });
   const token = await createGeminiLiveToken(config);
   assert.equal(token, "auth_tokens/one-use-session");
-  assert.equal(request.url, "https://generativelanguage.googleapis.com/v1beta/auth_tokens");
+  assert.equal(request.url, "https://generativelanguage.googleapis.com/v1alpha/auth_tokens");
   assert.equal(request.headers["x-goog-api-key"], "test-gemini-api-key");
   assert.equal(request.body.uses, 1);
   assert.deepEqual(request.body.bidiGenerateContentSetup, config);
