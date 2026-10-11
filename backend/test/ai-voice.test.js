@@ -53,7 +53,8 @@ test("Gemini Live config requests Turkish audio, VAD, and safe context-only beha
   });
 });
 
-test("single-use Live token is created server-side and the permanent key is not returned", async () => {
+test("single-use Live token is created server-side and the permanent key is not returned", async (t) => {
+  const log = t.mock.method(console, "error", () => {});
   const config = createGeminiLiveSessionConfig({ context: {}, history: [] });
   const token = await createGeminiLiveToken(config);
   assert.equal(token, "auth_tokens/one-use-session");
@@ -65,9 +66,11 @@ test("single-use Live token is created server-side and the permanent key is not 
   assert.ok(Date.parse(request.body.newSessionExpireTime) > Date.now());
   assert.match(getGeminiLiveWebSocketUrl(), /BidiGenerateContentConstrained$/);
   assert.doesNotMatch(JSON.stringify({ token }), /test-gemini-api-key/);
+  assert.equal(log.mock.calls.length, 0);
 });
 
-test("provider failures are sanitized and unconfigured sessions fail closed", async () => {
+test("provider failures are sanitized and unconfigured sessions fail closed", async (t) => {
+  const log = t.mock.method(console, "error", () => {});
   const oldKey = process.env.GEMINI_API_KEY;
   delete process.env.GEMINI_API_KEY;
   await assert.rejects(createGeminiLiveToken({}), (error) => {
@@ -86,8 +89,122 @@ test("provider failures are sanitized and unconfigured sessions fail closed", as
     createGeminiLiveToken(createGeminiLiveSessionConfig({ context: {}, history: [] })),
     (error) => {
       assert.equal(error.code, "AI_VOICE_SESSION_FAILED");
+      assert.equal(error.statusCode, 502);
+      assert.equal(error.expose, true);
+      assert.equal(error.message, "Realtime voice session could not be created.");
       assert.doesNotMatch(error.message, /leaked detail|test-gemini-api-key/);
       return true;
     }
   );
+  assert.equal(log.mock.calls.length, 1);
+  assert.equal(log.mock.calls[0].arguments[1].upstreamStatus, 401);
+  assert.doesNotMatch(JSON.stringify(log.mock.calls), /test-gemini-api-key/);
+});
+
+test("Google HTTP status and safe error fields are logged without other response data", async (t) => {
+  const log = t.mock.method(console, "error", () => {});
+  t.mock.method(globalThis, "fetch", async () => new Response(JSON.stringify({
+    error: {
+      status: "INVALID_ARGUMENT",
+      message: "Invalid liveConnectConstraints configuration.",
+      details: [{ secret: "private-google-detail" }],
+    },
+    token: "private-access-token",
+    headers: { Authorization: "private-header" },
+  }), { status: 400 }));
+  await assert.rejects(createGeminiLiveToken({}), {
+    message: "Realtime voice session could not be created.",
+    statusCode: 502,
+    code: "AI_VOICE_SESSION_FAILED",
+    expose: true,
+  });
+  assert.deepEqual(log.mock.calls[0].arguments, [
+    "Gemini Live token request failed:",
+    {
+      upstreamStatus: 400,
+      providerStatus: "INVALID_ARGUMENT",
+      message: "Invalid liveConnectConstraints configuration.",
+    },
+  ]);
+  assert.equal(log.mock.calls.length, 1);
+});
+
+test("Google diagnostics redact credentials, headers, session data and log control characters", async (t) => {
+  const log = t.mock.method(console, "error", () => {});
+  const sessionConfig = { config: { systemInstruction: { parts: [{ text: "private-session-data" }] } } };
+  t.mock.method(globalThis, "fetch", async () => new Response(JSON.stringify({
+    token: "private-response-token",
+    name: "auth_tokens/private-response-name",
+    error: {
+      status: "PERMISSION_DENIED",
+      message: [
+        process.env.GEMINI_API_KEY,
+        encodeURIComponent(process.env.GEMINI_API_KEY),
+        "access_token=opaque-access-token",
+        ["Bearer", "opaque-bearer-token"].join(" "),
+        "ya29.google-access-token",
+        "auth_tokens/unreturned-token",
+        "private-response-token",
+        "auth_tokens/private-response-name",
+        "private-session-data",
+        "\nContent-Type: private-request-header",
+      ].join(" "),
+    },
+  }), { status: 403 }));
+  await assert.rejects(createGeminiLiveToken(sessionConfig), { statusCode: 502 });
+  const diagnostic = log.mock.calls[0].arguments[1];
+  assert.equal(diagnostic.upstreamStatus, 403);
+  assert.equal(diagnostic.providerStatus, "PERMISSION_DENIED");
+  assert.doesNotMatch(diagnostic.message,
+    /test-gemini-api-key|opaque-access-token|opaque-bearer-token|ya29\.|auth_tokens\/|private-|[\u0000-\u001f\u007f]/);
+});
+
+test("non-JSON and malformed Google responses log only a safe fallback", async (t) => {
+  const log = t.mock.method(console, "error", () => {});
+  for (const body of ["<html>private-session-data test-gemini-api-key</html>", "{malformed"]) {
+    t.mock.method(globalThis, "fetch", async () => new Response(body, { status: 502 }));
+    await assert.rejects(createGeminiLiveToken({}), { statusCode: 502 });
+    assert.deepEqual(log.mock.calls.at(-1).arguments[1], {
+      upstreamStatus: 502,
+      providerStatus: "",
+      message: "Google token response was not valid JSON.",
+    });
+  }
+});
+
+test("rate limits and missing tokens preserve the existing client-facing failure", async (t) => {
+  const log = t.mock.method(console, "error", () => {});
+  for (const status of [429, 200]) {
+    t.mock.method(globalThis, "fetch", async () => new Response(JSON.stringify({
+      error: { status: { secret: "private-status" }, message: ["private-message"] },
+    }), { status }));
+    await assert.rejects(createGeminiLiveToken({}), {
+      message: "Realtime voice session could not be created.",
+      statusCode: status === 429 ? 429 : 502,
+      code: "AI_VOICE_SESSION_FAILED",
+      expose: true,
+    });
+    const diagnostic = log.mock.calls.at(-1).arguments[1];
+    assert.equal(diagnostic.upstreamStatus, status);
+    assert.equal(diagnostic.providerStatus, "");
+    assert.equal(diagnostic.message, `Google API request failed (HTTP ${status}).`);
+  }
+});
+
+test("network errors and timeouts do not log sensitive transport errors", async (t) => {
+  const log = t.mock.method(console, "error", () => {});
+  for (const name of ["Error", "TimeoutError"]) {
+    t.mock.method(globalThis, "fetch", async () => {
+      const cause = new Error("private-request-header test-gemini-api-key");
+      cause.name = name;
+      throw cause;
+    });
+    await assert.rejects(createGeminiLiveToken({}), {
+      message: "Realtime voice provider could not be reached.",
+      statusCode: 502,
+      code: name === "TimeoutError" ? "AI_VOICE_PROVIDER_TIMEOUT" : "AI_VOICE_PROVIDER_UNAVAILABLE",
+      expose: true,
+    });
+  }
+  assert.equal(log.mock.calls.length, 0);
 });

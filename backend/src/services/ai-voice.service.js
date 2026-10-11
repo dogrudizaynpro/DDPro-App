@@ -88,6 +88,28 @@ export const createGeminiLiveToken = async (sessionConfig) => {
   const data = await response.json().catch(() => null);
   const token = typeof data?.token === "string" ? data.token : data?.name;
   if (!response.ok || typeof token !== "string" || !token) {
+    const credentials = [data?.token, data?.name].filter((value) => typeof value === "string");
+    JSON.stringify(sessionConfig, (_key, value) => {
+      if (typeof value === "string") credentials.push(value);
+      return value;
+    });
+    const diagnostic = new GoogleApiError(response.status, {
+      error: {
+        status: data?.error?.status,
+        message: data?.error?.message,
+      },
+    }, credentials);
+    const safeDiagnosticText = (value) => value
+      .replace(/\bauth_tokens\/[^\s"'&,;]+/gi, "[REDACTED]")
+      .replace(/(?:x-goog-api-key|authorization|content-type|cookie|set-cookie)\s*["']?\s*[:=].*/gi, "[REDACTED]")
+      .slice(0, 500);
+    console.error("Gemini Live token request failed:", {
+      upstreamStatus: response.status,
+      providerStatus: safeDiagnosticText(diagnostic.googleApiError.providerStatus || ""),
+      message: data === null
+        ? "Google token response was not valid JSON."
+        : safeDiagnosticText(diagnostic.message),
+    });
     const error = new Error("Realtime voice session could not be created.");
     error.statusCode = response.status === 429 ? 429 : 502;
     error.code = "AI_VOICE_SESSION_FAILED";
@@ -99,3 +121,4 @@ export const createGeminiLiveToken = async (sessionConfig) => {
 };
 
 export const getGeminiLiveWebSocketUrl = () => GEMINI_LIVE_WEBSOCKET_URL;
+import { GoogleApiError } from "./google-api-error.js";
