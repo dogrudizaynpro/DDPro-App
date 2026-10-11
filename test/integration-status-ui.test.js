@@ -10,32 +10,43 @@ const serviceSource = await readFile(
   new URL("../src/services/integrations.service.js", import.meta.url),
   "utf8",
 );
+const appSource = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
 
-test("integration dashboard keeps initial status pending until the configured AI model responds", () => {
+test("integration dashboard uses one shared status and separates loading from provider health", () => {
   assert.match(source, /useSyncExternalStore\(/);
-  assert.match(source, /const \[status, setStatus\] = useState\(integrationSnapshot\.status\)/);
+  assert.match(source, /const status = integrationSnapshot\.status/);
   assert.match(source, /const \[statusLoading, setStatusLoading\] = useState\(integrationSnapshot\.refreshing\)/);
-  assert.match(source, /integrationSnapshot\.status\) setStatus\(integrationSnapshot\.status\)/);
-  assert.match(source, /value\.ai\?\.configured && hasStaleIntegrationTest\(value\.ai\)/);
+  assert.doesNotMatch(source, /setStatus\(|applyAiVerification/);
+  assert.match(source, /value\.ai\?\.configured && hasStaleIntegrationTest\(value\.ai, receivedAt\)/);
   assert.match(source, /value = await getIntegrationStatusOnce\(\)/);
-  assert.match(source, /const applyAiVerification = \(status, testResult, testError\)/);
-  assert.match(source, /const connected = !testError && testResult\?\.data\?\.connected === true/);
-  assert.match(source, /setStatus\(applyAiVerification\(nextStatus, aiTestResult, aiTestError\)\)/);
-  assert.match(source, /aiTestResult: provider === "ai" \? testResult : undefined/);
-  assert.match(source, /integration\.id === "ai"\) return "TEST EDİLİYOR"/);
-  assert.match(source, /integration\.id === "crm"\) return "CRM VERİ ERİŞİMİ DOĞRULANIYOR"/);
   assert.match(source, /if \(!status\) return "DURUM ALINAMADI"/);
-  assert.match(source, /Entegrasyon bağlantıları ve AI sağlayıcı yanıtı doğrulanıyor/);
+  assert.match(source, /Entegrasyon durumları yenileniyor; son doğrulanmış sonuçlar korunuyor/);
   assert.match(source, /DURUM KONTROL EDİLİYOR/);
   assert.match(source, /state === "authorization_required"/);
-  assert.match(source, /const isChecking = statusLoading \|\| integrationSnapshot\.refreshing \|\| testing === integration\.id/);
+  assert.match(source, /Bağlantı test ediliyor; son doğrulanmış sonuç korunuyor/);
   assert.match(source, /const pendingIntegrationTests = new Map\(\)/);
-  assert.match(source, /integrationStatusMaxAge = INTEGRATION_STATUS_MAX_AGE/);
   assert.match(source, /SON DOĞRULAMA · API YENİLENEMEDİ/);
   assert.doesNotMatch(source.match(/const refresh = async[\s\S]*?const startGoogleOAuth/)?.[0] || "", /setStatus\(null\)/);
   const labelBlock = source.match(/const integrationStatusLabel = \([\s\S]*?\n  };/)?.[0] || "";
-  assert.ok(labelBlock.indexOf('testing === integration.id') < labelBlock.indexOf('if (statusLoading || integrationSnapshot.refreshing)'));
-  assert.ok(labelBlock.indexOf('if (statusLoading || integrationSnapshot.refreshing)') < labelBlock.indexOf('if (!status)'));
+  assert.match(labelBlock, /if \(!status && \(statusLoading \|\| integrationSnapshot\.refreshing\)\)/);
+  assert.doesNotMatch(labelBlock, /testing === integration.id/);
+  assert.match(source, /connection\?\.connected && !hasRefreshFailure && !statusIsStale/);
+  assert.match(source, /isIntegrationStatusStale\(connection, now, integrationSnapshot\.updatedAt\)/);
+});
+
+test("CRM storage health and browser authorization are shown independently", () => {
+  assert.match(source, /CRM depolama sağlığı: \{connection\?\.connected/);
+  assert.match(source, /Kullanıcı oturum yetkisi: \{isGoogleConnected/);
+  assert.match(source, /integration\.requiresOAuth && !isGoogleConnected/);
+});
+
+test("shell and both integration views subscribe to the same authority without clearing it on navigation", () => {
+  assert.match(appSource, /useSyncExternalStore\(\s*subscribeToIntegrationStatus,\s*getIntegrationStatusSnapshot/);
+  assert.match(appSource, /const integrationState = integrationSnapshot\.status/);
+  assert.doesNotMatch(appSource, /setIntegrationState\(/);
+  assert.match(source, /moduleId === "settings"\) return <IntegrationSettings/);
+  assert.match(source, /moduleId === "integrations"\) return <IntegrationSettings[^;]*hubMode/);
+  assert.doesNotMatch(source, /<IntegrationSettings[^>]*key=/);
 });
 
 test("service failures do not disable Google retries or masquerade as configuration success", () => {
