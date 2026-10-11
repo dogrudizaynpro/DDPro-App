@@ -139,17 +139,33 @@ export const getDocumentDownload = async (ownerAccount, id, { preview = false } 
   return { ...record, download_url: data.signedUrl };
 };
 
-export const deleteDocument = async (ownerAccount, id) => {
+export const deleteDocument = async (ownerAccount, id, client = requireDatabase()) => {
   if (!UUID_PATTERN.test(id || "")) throw fail("Document id must be a valid UUID.");
-  const client = requireDatabase();
-  const { data: record, error: lookupError } = await client.from("document_records").select("storage_key")
+  const { data: record, error: lookupError } = await client.from("document_records").select("storage_key,content_type")
     .eq("id", id).eq("owner_account", ownerAccount).maybeSingle();
   if (lookupError) throw lookupError;
   if (!record) return false;
-  const { error: storageError } = await client.storage.from(BUCKET).remove([record.storage_key]);
+  const storage = client.storage.from(BUCKET);
+  const { data: file, error: downloadError } = await storage.download(record.storage_key);
+  if (downloadError) throw downloadError;
+  if (!file) throw fail("Document storage object could not be read before deletion.", 503);
+  const fileBuffer = Buffer.from(await file.arrayBuffer());
+  const { error: storageError } = await storage.remove([record.storage_key]);
   if (storageError) throw storageError;
   const { data, error } = await client.from("document_records").delete()
     .eq("id", id).eq("owner_account", ownerAccount).select("id").maybeSingle();
-  if (error) throw error;
+  if (error) {
+    const { error: restoreError } = await storage.upload(record.storage_key, fileBuffer, {
+      contentType: record.content_type,
+      upsert: true,
+    });
+    if (restoreError) {
+      throw Object.assign(
+        new Error("Document metadata deletion failed and the storage object could not be restored."),
+        { statusCode: 503, expose: true, code: "DOCUMENT_DELETE_RECOVERY_FAILED" }
+      );
+    }
+    throw error;
+  }
   return Boolean(data);
 };
