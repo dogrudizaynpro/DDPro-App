@@ -67,7 +67,7 @@ test("Turkish speech output waits for browser voices and installs handlers befor
       getVoices: () => [
         { lang: "en-US", name: "English Female" },
         { lang: "tr-TR", name: "Turkish Default" },
-        { lang: "tr-TR", name: "Turkish Default" },
+        { lang: "tr-TR", name: "Turkish Alternate" },
       ],
       speak: (utterance) => {
         assert.equal(typeof utterance.onstart, "function");
@@ -78,7 +78,7 @@ test("Turkish speech output waits for browser voices and installs handlers befor
         utterance.onend();
       },
     },
-  });
+  };
   const utterance = await speakTurkishText("  Merhaba  ", browser, {
     onstart: () => events.push("start"),
     onend: () => events.push("end"),

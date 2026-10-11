@@ -290,6 +290,7 @@ function AIModule({
       }
     };
     recognition.onerror = (event) => {
+      if (!["starting", "listening"].includes(voiceOperationRef.current)) return;
       const errors = {
         "not-allowed": "Mikrofon izni reddedildi. Tarayıcı izinlerini kontrol edin.",
         "service-not-allowed": "Mikrofon izni reddedildi. Tarayıcı izinlerini kontrol edin.",
@@ -297,11 +298,7 @@ function AIModule({
         "audio-capture": "Mikrofon kullanılamıyor.",
       };
       voiceRecognitionErrorRef.current = true;
-      if (["starting", "listening"].includes(voiceOperationRef.current)) {
-        voiceOperationRef.current = "idle";
-      }
-      setVoiceListening(false);
-      setVoicePhase("error");
+      setVoicePhase("listening");
       const errorMessage = errors[event.error] || "Sesli komut alınamadı. Tekrar deneyin.";
       setVoiceStatus(errorMessage);
       setVoiceError(errorMessage);
@@ -316,6 +313,8 @@ function AIModule({
           if (wasStopping) {
             setVoicePhase("idle");
             setVoiceStatus("Mikrofon dinlemesi durduruldu.");
+          } else {
+            setVoicePhase("error");
           }
           return;
         }

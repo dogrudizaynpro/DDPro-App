@@ -159,7 +159,7 @@ for (const fail of [false, true]) {
   });
 }
 
-const createVoiceInput = (send) => {
+const createVoiceInput = (send, overrides = {}) => {
   const state = { spoken: [], errors: [], inputs: [], phases: [], statuses: [], transcripts: [] };
   const context = {
     voiceListening: false, voiceOperationRef: { current: "idle" }, aiSending: false,
@@ -182,6 +182,7 @@ const createVoiceInput = (send) => {
     setVoiceListening: (listening) => { context.voiceListening = listening; },
     stopSpeech: () => { context.voiceRequestRef.current += 1; },
     speakResponse: (text) => state.spoken.push(text),
+    ...overrides,
   };
   const start = moduleSource.indexOf("  const toggleVoiceInput =");
   const end = moduleSource.indexOf("  const activateRole =", start);
@@ -235,7 +236,22 @@ test("empty recognition ending without speech reports a distinct silence error",
 test("microphone permission denial is reported separately", () => {
   const voice = createVoiceInput(() => {});
   voice.recognition.onerror({ error: "not-allowed" });
+  voice.recognition.onend();
   assert.match(voice.state.errors.at(-1), /Mikrofon izni reddedildi/);
+});
+
+test("unsupported browsers and interim speech are handled without sending incomplete text", () => {
+  const unsupported = createVoiceInput(() => {}, { SpeechRecognition: null });
+  assert.match(unsupported.state.errors.at(-1), /desteklemiyor/);
+
+  let sent = false;
+  const voice = createVoiceInput(() => { sent = true; });
+  voice.recognition.onresult({
+    results: [{ isFinal: false, 0: { transcript: "Eksik metin" } }],
+  });
+  assert.equal(sent, false);
+  assert.equal(voice.state.transcripts.at(-1), "Eksik metin");
+  assert.ok(voice.state.statuses.at(-1).includes("metne dönüştürülüyor"));
 });
 
 test("cancelled or unmounted voice requests cannot speak their late responses", async () => {
