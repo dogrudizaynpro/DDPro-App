@@ -257,7 +257,7 @@ const getCachedIntegrationStatus = () => {
   if (!integrationStatusCache ||
       Date.now() - integrationStatusCache.cachedAt >= integrationStatusCacheLifetime) return null;
   const hasExpiredConnection = Object.values(integrationStatusCache.status).some((connection) => {
-    if (!connection?.connected || !connection.lastTest?.testedAt) return false;
+    if (!connection?.lastTest?.testedAt) return false;
     const age = Date.now() - Date.parse(connection.lastTest.testedAt);
     return !Number.isFinite(age) || age < 0 || age >= integrationStatusCacheLifetime;
   });
