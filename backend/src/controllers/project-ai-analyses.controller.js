@@ -59,6 +59,9 @@ const claimAnalysis = async (supabase, { ownerAccount, projectId, requestId, com
 
   const existing = await getAnalysisRecord(supabase, ownerAccount, requestId);
   if (!existing) throw insertError;
+  if (existing.project_id !== projectId || existing.command !== command) {
+    throw requestError("The project analysis request ID was already used for another command.", 409, "AI_ANALYSIS_IDEMPOTENCY_CONFLICT");
+  }
   if (existing.status === "success") return { record: existing, replayed: true };
 
   const age = Date.now() - Date.parse(existing.updated_at);
@@ -90,12 +93,16 @@ const claimAnalysis = async (supabase, { ownerAccount, projectId, requestId, com
   throw requestError("This project analysis is already in progress.", 409, "AI_ANALYSIS_IN_PROGRESS");
 };
 
-export const listProjectAiAnalyses = async (req, res, next) => {
+export const createProjectAiAnalysesController = ({
+  getAdmin = getIntegrationAdmin,
+  complete = requestAiCompletion,
+} = {}) => ({
+listProjectAiAnalyses: async (req, res, next) => {
   const projectId = parseProjectId(req.params.projectId);
   if (!projectId) {
     return res.status(400).json({ status: "error", message: "Project ID is invalid." });
   }
-  const supabase = getIntegrationAdmin();
+  const supabase = getAdmin();
   if (!supabase) {
     return res.status(503).json({ status: "error", message: "Project analysis storage is unavailable." });
   }
@@ -113,9 +120,9 @@ export const listProjectAiAnalyses = async (req, res, next) => {
   } catch (error) {
     return next(error);
   }
-};
+},
 
-export const createProjectAiAnalysis = async (req, res, next) => {
+createProjectAiAnalysis: async (req, res, next) => {
   const projectId = parseProjectId(req.params.projectId);
   const command = typeof req.body?.command === "string" ? req.body.command.trim() : "";
   const requestId = req.body?.requestId;
@@ -126,7 +133,7 @@ export const createProjectAiAnalysis = async (req, res, next) => {
     return res.status(400).json({ status: "error", message: "Project analysis command must be between 1 and 8000 characters." });
   }
 
-  const supabase = getIntegrationAdmin();
+  const supabase = getAdmin();
   if (!supabase) {
     return res.status(503).json({ status: "error", message: "Project analysis storage is unavailable." });
   }
@@ -151,7 +158,7 @@ export const createProjectAiAnalysis = async (req, res, next) => {
       return res.status(200).json({ status: "success", data: claim.record, replayed: true });
     }
 
-    const completion = await requestAiCompletion({
+    const completion = await complete({
       message: command,
       context: { selectedProject: getProjectContext(project) },
       integrationAccount: req.integrationAccount,
@@ -191,4 +198,9 @@ export const createProjectAiAnalysis = async (req, res, next) => {
     }
     return next(error);
   }
-};
+},
+});
+
+const projectAiAnalysesController = createProjectAiAnalysesController();
+export const listProjectAiAnalyses = projectAiAnalysesController.listProjectAiAnalyses;
+export const createProjectAiAnalysis = projectAiAnalysesController.createProjectAiAnalysis;

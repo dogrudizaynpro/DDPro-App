@@ -56,8 +56,8 @@ test("a selected project stays in the route while switching modules and returnin
     context
   );
   navigate("ai-assistant");
-  assert.equal(state.hash, "#/ai-assistant?id=project-7");
+  assert.equal(state.hash, `${moduleRouteMap["ai-assistant"]}?id=project-7`);
   state.activeModule = "ai-assistant";
   navigate("projects");
-  assert.equal(state.hash, "#/projeler?id=project-7");
+  assert.equal(state.hash, `${moduleRouteMap.projects}?id=project-7`);
 });

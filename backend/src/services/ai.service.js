@@ -147,6 +147,7 @@ const requestProviderCompletion = async (messages, { readOnly = false } = {}) =>
       });
       const retryableStatus = [408, 429, 500, 502, 503, 504].includes(response.status);
       if (!retryableStatus || attempt + 1 === AI_PROVIDER_MAX_ATTEMPTS) break;
+      await response.body?.cancel().catch(() => {});
     } catch (error) {
       if (attempt + 1 === AI_PROVIDER_MAX_ATTEMPTS) {
         throw createProviderError(
