@@ -18,6 +18,7 @@ import { getProjects } from "../services/projects.service.js";
 import { createReport, deleteReport, getReports } from "../services/reports.service.js";
 import DDProIcon from "../components/DDProIcon.jsx";
 import DDProActionButton from "../components/DDProActionButton.jsx";
+import SystemImagesGallery from "./SystemImagesGallery.jsx";
 import {
   formatDateOnly,
   formatDateTime,
@@ -1347,6 +1348,7 @@ export function CatalogWorkspace({ moduleId, definition = moduleDefinitions[modu
   const [editing, setEditing] = useState(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [imageRefreshToken, setImageRefreshToken] = useState(0);
 
   const refresh = async () => {
     setLoading(true);
@@ -1354,6 +1356,7 @@ export function CatalogWorkspace({ moduleId, definition = moduleDefinitions[modu
     try {
       const data = await getCatalogRecords(moduleId);
       setRecords(data);
+      if (moduleId === "systems") setImageRefreshToken((current) => current + 1);
     } catch (loadError) {
       setRecords([]);
       setError(loadError.message || "Kayıtlar backend'den alınamadı.");
@@ -1541,6 +1544,13 @@ export function CatalogWorkspace({ moduleId, definition = moduleDefinitions[modu
                 })}
                 {moduleId === "material-analysis" ? <p><strong>Toplam malzeme maliyeti:</strong> {record.total_cost == null ? record.verification_status : `${record.currency} ${record.total_cost}`}</p> : null}
                 <small>{formatDateTime(record.created_at)}</small>
+                {moduleId === "systems" ? (
+                  <SystemImagesGallery
+                    systemId={record.id}
+                    systemName={record.name}
+                    refreshToken={imageRefreshToken}
+                  />
+                ) : null}
               </div>
               <div className="module-toolbar">
                 <DDProActionButton icon="edit" label={`${record.name} kaydını düzenle`} disabled={busy} onClick={() => { setEditing(record); setFormOpen(true); }} />

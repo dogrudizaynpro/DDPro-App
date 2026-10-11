@@ -113,7 +113,7 @@ test("migrations loaded from disk are numbered, unique and include the core prod
   assert.deepEqual(versions, [...versions].sort((left, right) => left - right));
   assert.equal(new Set(versions).size, versions.length);
   const allSql = migrations.map((migration) => migration.sql).join("\n");
-  for (const table of ["crm_contacts", "offers", "research_items", "ai_usage_events", "ai_file_imports", "ai_operation_audit_events", "whatsapp_inbound_messages"]) {
+  for (const table of ["crm_contacts", "offers", "research_items", "system_images", "ai_usage_events", "ai_file_imports", "ai_operation_audit_events", "whatsapp_inbound_messages"]) {
     assert.ok(serviceRoleTables.includes(table));
     assert.match(allSql, new RegExp(`CREATE TABLE IF NOT EXISTS (public\\.)?${table} \\(`));
   }
