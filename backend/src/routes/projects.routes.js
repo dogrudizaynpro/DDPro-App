@@ -22,6 +22,10 @@ import {
   previewProjectSpreadsheetUpload,
 } from "../controllers/project-import.controller.js";
 import { parseAiChatUpload } from "../middleware/ai-file-upload.js";
+import {
+  createProjectAiAnalysis,
+  listProjectAiAnalyses,
+} from "../controllers/project-ai-analyses.controller.js";
 
 const router = express.Router();
 
@@ -65,6 +69,8 @@ router.post("/import/spreadsheet/preview", rateLimit({
 
 // GET /:id - Get project by ID
 router.get("/:id", getProjectById);
+router.get("/:projectId/analyses", listProjectAiAnalyses);
+router.post("/:projectId/analyses", createProjectAiAnalysis);
 
 // POST / - Create project
 router.post("/", createProject);

@@ -67,6 +67,11 @@ const SYSTEM_INSTRUCTIONS = [
   "When a file is attached, analyze only the content actually supplied, suggest the relevant DDPro module, and present extracted values as a draft. Never create or modify records unless the user explicitly requests that specific change and later confirms its preview.",
   "Never claim to have searched the web or sent Gmail. Calendar and application record writes require confirmation.",
 ].join(" ");
+const AI_PROVIDER_MAX_ATTEMPTS = 2;
+const AI_PROVIDER_RETRY_DELAY_MS = 250;
+const READ_RECORDS_TOOL = AI_TOOL_DEFINITIONS.find(
+  (tool) => tool.function.name === AI_TOOL_NAMES.readRecords
+);
 
 const createProviderError = (message, code) => {
   const error = new Error(message);
@@ -95,7 +100,7 @@ const sanitizeProviderError = (data) => {
     .slice(0, 500);
 };
 
-const requestProviderCompletion = async (messages) => {
+const requestProviderCompletion = async (messages, { readOnly = false } = {}) => {
   let providerUrl;
   try {
     providerUrl = new URL(AI_API_URL);
@@ -119,31 +124,41 @@ const requestProviderCompletion = async (messages) => {
   }
 
   let response;
-  try {
-    response = await fetch(providerUrl, {
-      method: "POST",
-      headers: {
-        Authorization: "Bearer " + AI_API_KEY,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: AI_MODEL,
-        messages,
-        tools: AI_TOOL_DEFINITIONS,
-        tool_choice: "auto",
-        ...(/^gpt-5\.6-luna(?:-\d{4}-\d{2}-\d{2})?$/i.test(AI_MODEL)
-          ? { reasoning_effort: "none" }
-          : {}),
-      }),
-      signal: AbortSignal.timeout(30_000),
-    });
-  } catch (error) {
-    throw createProviderError(
-      error.name === "TimeoutError"
-        ? "AI provider request timed out."
-        : "AI provider could not be reached.",
-      error.name === "TimeoutError" ? "AI_PROVIDER_TIMEOUT" : "AI_PROVIDER_UNAVAILABLE"
-    );
+  for (let attempt = 0; attempt < AI_PROVIDER_MAX_ATTEMPTS; attempt += 1) {
+    try {
+      response = await fetch(providerUrl, {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + AI_API_KEY,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: AI_MODEL,
+          messages,
+          tools: readOnly
+            ? [READ_RECORDS_TOOL]
+            : AI_TOOL_DEFINITIONS,
+          tool_choice: "auto",
+          ...(/^gpt-5\.6-luna(?:-\d{4}-\d{2}-\d{2})?$/i.test(AI_MODEL)
+            ? { reasoning_effort: "none" }
+            : {}),
+        }),
+        signal: AbortSignal.timeout(30_000),
+      });
+      const retryableStatus = [408, 429, 500, 502, 503, 504].includes(response.status);
+      if (!retryableStatus || attempt + 1 === AI_PROVIDER_MAX_ATTEMPTS) break;
+      await response.body?.cancel().catch(() => {});
+    } catch (error) {
+      if (attempt + 1 === AI_PROVIDER_MAX_ATTEMPTS) {
+        throw createProviderError(
+          error.name === "TimeoutError"
+            ? "AI provider request timed out."
+            : "AI provider could not be reached.",
+          error.name === "TimeoutError" ? "AI_PROVIDER_TIMEOUT" : "AI_PROVIDER_UNAVAILABLE"
+        );
+      }
+    }
+    await new Promise((resolve) => setTimeout(resolve, AI_PROVIDER_RETRY_DELAY_MS));
   }
   const data = await response.json().catch(() => null);
   return { response, data };
@@ -229,7 +244,13 @@ const getProjectFilePreview = (file, sourceFingerprint) => {
   return null;
 };
 
-export const requestAiCompletion = async ({ message, context = {}, integrationAccount, attachment }) => {
+export const requestAiCompletion = async ({
+  message,
+  context = {},
+  integrationAccount,
+  attachment,
+  readOnly = false,
+}) => {
   if (!AI_API_URL || !AI_API_KEY || !AI_MODEL) {
     const error = new Error("AI provider is not configured on the backend.");
     error.statusCode = 503;
@@ -268,7 +289,7 @@ export const requestAiCompletion = async ({ message, context = {}, integrationAc
     { role: "user", content: userContent },
   ];
   for (let turn = 0; turn < 4; turn += 1) {
-    const { response, data } = await requestProviderCompletion(messages);
+    const { response, data } = await requestProviderCompletion(messages, { readOnly });
     if (!response.ok) {
       const toolRejected = [400, 422].includes(response.status);
       const providerMessage = sanitizeProviderError(data);
@@ -301,6 +322,12 @@ export const requestAiCompletion = async ({ message, context = {}, integrationAc
       const name = toolCall?.function?.name;
       const args = parseToolArguments(toolCall);
       if (name === AI_TOOL_NAMES.prepareWrite) {
+        if (readOnly) {
+          throw createProviderError(
+            "Project analysis cannot prepare operational writes.",
+            "AI_TOOL_UNAVAILABLE"
+          );
+        }
         if (projectImport) {
           toolResults.push({
             tool_call_id: toolCall.id,

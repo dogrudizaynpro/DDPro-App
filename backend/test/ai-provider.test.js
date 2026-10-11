@@ -248,6 +248,39 @@ test("HTTP 400 from the provider surfaces a safe error without exposing the API 
   for (const { body } of requests) assert.equal("temperature" in body, false);
 });
 
+test("transient AI provider responses retry once after a bounded delay", async () => {
+  responses.push(
+    { status: 503, body: { error: { message: "temporarily unavailable" } } },
+    completion({ role: "assistant", content: "Recovered response" })
+  );
+  const result = await requestAiCompletion({ message: "Connection check.", context: {} });
+  assert.equal(result.answer, "Recovered response");
+  assert.equal(requests.length, 2);
+});
+
+test("read-only project analyses cannot request operational writes", async () => {
+  responses.push(completion({
+    role: "assistant",
+    content: null,
+    tool_calls: [{
+      id: "call_project_write",
+      type: "function",
+      function: {
+        name: "prepare_write",
+        arguments: JSON.stringify({ resource: "projects", operation: "delete", record: { id: "project-1" } }),
+      },
+    }],
+  }));
+  await assert.rejects(
+    requestAiCompletion({ message: "Analyze this project.", context: {}, readOnly: true }),
+    (error) => error.code === "AI_TOOL_UNAVAILABLE"
+  );
+  assert.deepEqual(
+    requests[0].body.tools.map(({ function: tool }) => tool.name),
+    ["read_records"]
+  );
+});
+
 test("AI provider network failures remain understandable and never expose credentials", async () => {
   globalThis.fetch = async () => {
     throw new Error(`Request failed with ${TEST_API_KEY}`);

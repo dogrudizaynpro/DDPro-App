@@ -132,6 +132,7 @@ before(async () => {
       }
       const rows = {
         projects: projectRows, crm_contacts: crmRows, offers: [], research_items: [],
+        project_ai_analyses: [],
       }[table];
       if (rows) {
         if (table === "crm_contacts") {
@@ -776,7 +777,7 @@ test("backend CRM and Supabase health use read-only storage checks without Googl
   assert.equal(data.gmail.authenticated, false);
   assert.equal(providerRequests, providerRequestsBefore);
   assert.deepEqual(storageProbeMethods.slice(probesBefore).map(({ table }) => table).sort(),
-    ["crm_contacts", "offers", "projects", "research_items"]);
+    ["crm_contacts", "offers", "project_ai_analyses", "projects", "research_items"]);
   crmStorageFailure = true;
   try {
     const failed = await originalFetch(`${baseUrl}/api/integrations/status`);

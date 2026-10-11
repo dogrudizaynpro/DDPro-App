@@ -8,8 +8,12 @@ const start = source.indexOf("  const sendProjectCommand = async");
 const end = source.indexOf("\n\n  return (", start);
 assert.ok(start >= 0 && end > start);
 
-const createAnalysis = ({ sendAiMessage, projectCommand = "Riskleri analiz et" }) => {
-  const state = { analysis: null };
+const createAnalysis = ({
+  createProjectAiAnalysis,
+  projectCommand = "Riskleri analiz et",
+  requestId = "request-1",
+}) => {
+  const state = { analysis: null, history: [], savedDraft: null };
   const context = {
     selectedProject: {
       id: "project-7",
@@ -27,47 +31,85 @@ const createAnalysis = ({ sendAiMessage, projectCommand = "Riskleri analiz et" }
       notes: "Mevcut proje notu",
     },
     projectCommand,
-    sendAiMessage,
+    projectCommandDraft: { projectId: "project-7", command: projectCommand, requestId },
+    createProjectAiAnalysis,
     projectAnalysisPendingRef: { current: false },
+    projectAnalysisRequestRef: { current: 0 },
     setProjectAnalysis: (value) => { state.analysis = value; },
+    setProjectAnalysisHistory: (value) => {
+      state.history = typeof value === "function" ? value(state.history) : value;
+    },
+    setProjectCommandDraft: (value) => { state.draft = value; },
+    saveProjectAnalysisDraft: (value) => { state.savedDraft = value; },
+    createAnalysisRequestId: () => "request-next",
   };
   const run = runInNewContext(`${source.slice(start, end)}; sendProjectCommand;`, context);
   return { run, state, context };
 };
 
-test("project analysis sends the selected project and displays the returned answer", async () => {
+test("project analysis sends the selected project and persists the returned answer", async () => {
   let payload;
   const { run, state } = createAnalysis({
-    sendAiMessage: async (...args) => {
+    createProjectAiAnalysis: async (...args) => {
       payload = args;
-      return { status: "success", text: "Önerilen analiz" };
+      return {
+        id: "analysis-1",
+        result: { answer: "Önerilen analiz" },
+        status: "success",
+        command: "Riskleri analiz et",
+      };
     },
   });
   await run();
-  assert.equal(payload[0], "Riskleri analiz et");
-  assert.equal(payload[1], "");
-  assert.equal(payload[2].selectedProject.name, "İstanbul Ofis");
-  assert.equal(payload[2].selectedProject.areaM2, 120);
+  assert.equal(payload[0], "project-7");
+  assert.equal(payload[1].command, "Riskleri analiz et");
+  assert.equal(payload[1].requestId, "request-1");
   assert.equal(state.analysis.status, "success");
   assert.equal(state.analysis.text, "Önerilen analiz");
+  assert.equal(state.history[0].id, "analysis-1");
+  assert.equal(state.savedDraft.requestId, "request-next");
 });
 
 test("project analysis blocks duplicate requests and shows provider failure", async () => {
-  let resolve;
+  let reject;
   let calls = 0;
   const { run, state, context } = createAnalysis({
-    sendAiMessage: () => {
+    createProjectAiAnalysis: () => {
       calls += 1;
-      return new Promise((finish) => { resolve = finish; });
+      return new Promise((_resolve, fail) => { reject = fail; });
     },
   });
   const first = run();
   const second = run();
   assert.equal(calls, 1);
   assert.equal(state.analysis.status, "loading");
-  resolve({ status: "unavailable", text: "AI sağlayıcısından yanıt alınamadı (zaman aşımı)." });
+  reject(new Error("AI sağlayıcısından yanıt alınamadı (zaman aşımı)."));
   await Promise.all([first, second]);
   assert.equal(state.analysis.status, "unavailable");
   assert.equal(state.analysis.text, "AI sağlayıcısından yanıt alınamadı (zaman aşımı).");
   assert.equal(context.projectAnalysisPendingRef.current, false);
+});
+
+test("project analysis preserves its command and idempotency key after a network failure", async () => {
+  const { run, state } = createAnalysis({
+    createProjectAiAnalysis: async () => { throw new Error("Network unavailable"); },
+  });
+  await run();
+  assert.equal(state.analysis.status, "unavailable");
+  assert.equal(state.analysis.text, "Network unavailable");
+  assert.equal(state.savedDraft, null);
+});
+
+test("a stale project analysis response cannot overwrite the currently selected project's state", async () => {
+  let resolve;
+  const { run, state, context } = createAnalysis({
+    createProjectAiAnalysis: () => new Promise((finish) => { resolve = finish; }),
+  });
+  const pending = run();
+  context.projectAnalysisRequestRef.current += 1;
+  context.projectAnalysisPendingRef.current = false;
+  resolve({ id: "old-analysis", result: { answer: "Old project response" } });
+  await pending;
+  assert.equal(state.analysis.status, "loading");
+  assert.equal(state.history.length, 0);
 });
