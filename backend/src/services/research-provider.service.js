@@ -1,63 +1,84 @@
-const API_URL = process.env.RESEARCH_API_URL;
-const API_KEY = process.env.RESEARCH_API_KEY;
+const TAVILY_ENDPOINT = "https://api.tavily.com/search";
+
+const createProviderError = (message, statusCode) => {
+  const error = new Error(message);
+  error.statusCode = statusCode;
+  error.expose = true;
+  return error;
+};
+
+const isValidHttpUrl = (value) => {
+  if (typeof value !== "string" || !/^https?:\/\/\S+$/i.test(value)) {
+    return false;
+  }
+
+  try {
+    const url = new URL(value);
+    return ["http:", "https:"].includes(url.protocol) && Boolean(url.hostname);
+  } catch {
+    return false;
+  }
+};
 
 export const searchResearchProvider = async (query) => {
-  if (!API_URL || !API_KEY) {
-    const error = new Error("Web research provider is not configured.");
-    error.statusCode = 503;
-    error.expose = true;
-    throw error;
+  const apiKey = process.env.RESEARCH_API_KEY;
+  if (!apiKey) {
+    throw createProviderError("Web research provider is not configured.", 503);
   }
 
-  let url;
+  const url = new URL(TAVILY_ENDPOINT);
+  if (url.protocol !== "https:") {
+    throw createProviderError("Research provider URL must use HTTPS.", 503);
+  }
+
+  const signal = AbortSignal.timeout(30_000);
+  let response;
   try {
-    url = new URL(API_URL);
+    response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        api_key: apiKey,
+        query,
+        include_answer: true,
+        max_results: 10,
+      }),
+      signal,
+    });
   } catch {
-    const error = new Error("RESEARCH_API_URL must be a valid HTTPS URL.");
-    error.statusCode = 503;
-    error.expose = true;
-    throw error;
-  }
-  if (url.protocol !== "https:" && !["localhost", "127.0.0.1", "::1"].includes(url.hostname)) {
-    const error = new Error("Research provider URL must use HTTPS.");
-    error.statusCode = 503;
-    error.expose = true;
-    throw error;
+    throw createProviderError(
+      signal.aborted ? "Research provider request timed out." : "Research provider request failed.",
+      signal.aborted ? 504 : 502
+    );
   }
 
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      Authorization: "Bearer " + API_KEY,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ query }),
-    signal: AbortSignal.timeout(30_000),
-  });
   if (!response.ok) {
-    const error = new Error(`Research provider request failed (HTTP ${response.status}).`);
-    error.statusCode = 502;
-    error.expose = true;
-    throw error;
+    throw createProviderError(`Research provider request failed (HTTP ${response.status}).`, 502);
   }
 
-  const payload = await response.json();
+  let payload;
+  try {
+    payload = await response.json();
+  } catch {
+    throw createProviderError("Research provider returned an invalid response.", 502);
+  }
+
   if (!Array.isArray(payload?.results)) {
-    const error = new Error("Research provider response must contain a results array.");
-    error.statusCode = 502;
-    error.expose = true;
-    throw error;
+    throw createProviderError("Research provider response must contain a results array.", 502);
   }
 
-  return payload.results.slice(0, 30).map((item) => ({
-    source: typeof item?.source === "string" ? item.source.slice(0, 300) : "",
-    product: typeof item?.product === "string" ? item.product.slice(0, 300) : "",
-    manufacturer: typeof item?.manufacturer === "string" ? item.manufacturer.slice(0, 300) : "",
-    technicalInfo: typeof item?.technicalInfo === "string" ? item.technicalInfo.slice(0, 4_000) : "",
-    price: typeof item?.price === "string" ? item.price.slice(0, 200) : "",
-    priceVerification: "Doğrulanmadı",
-    url: typeof item?.url === "string" && /^https?:\/\/\S+$/i.test(item.url) ? item.url : "",
-    date: new Date().toISOString(),
-    status: "Harici sonuç · kullanıcı doğrulaması bekliyor",
-  }));
+  return payload.results
+    .slice(0, 10)
+    .filter((item) => isValidHttpUrl(item?.url))
+    .map((item) => ({
+      source: typeof item?.content === "string" ? item.content.slice(0, 300) : "",
+      product: typeof item?.title === "string" ? item.title.slice(0, 300) : "",
+      manufacturer: "",
+      technicalInfo: typeof item?.content === "string" ? item.content.slice(0, 4_000) : "",
+      price: "",
+      priceVerification: "Doğrulanmadı",
+      url: item.url,
+      date: new Date().toISOString(),
+      status: "Harici sonuç · kullanıcı doğrulaması bekliyor",
+    }));
 };
