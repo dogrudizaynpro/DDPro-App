@@ -89,6 +89,22 @@ test("Turkish voice preference only chooses voices actually offered by the brows
   assert.equal(selectTurkishSpeechVoice([{ lang: "en-US", name: "Female" }]), null);
 });
 
+test("speech synthesis preserves Turkish names, technical terms, measurements and amounts verbatim", () => {
+  const text = "İstanbul'daki DDPro Yapı A.Ş. projesinde 120 m² cephe, 12 mm derz ve 3.250.000 TL bütçe.";
+  let spoken;
+  class Utterance {
+    constructor(value) { this.text = value; }
+  }
+  speakTurkishText(text, {
+    SpeechSynthesisUtterance: Utterance,
+    speechSynthesis: {
+      getVoices: () => [{ lang: "tr-TR", name: "Turkish Female" }],
+      speak: (utterance) => { spoken = utterance; },
+    },
+  });
+  assert.equal(spoken.text, text);
+});
+
 test("Turkish speech output reports unsupported browsers and empty responses", () => {
   assert.throws(() => speakTurkishText("Yanıt", {}), /desteklemiyor/);
   assert.throws(() => speakTurkishText("  ", {
