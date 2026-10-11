@@ -1503,6 +1503,10 @@ button > .ddpro-icon-medallion {
   font-size: 11px;
 }
 
+.ai-form .ai-voice-transcript {
+  overflow-wrap: anywhere;
+}
+
 .ai-form .ai-attachment-preview {
   flex: 1 0 100%;
   min-width: 0;
