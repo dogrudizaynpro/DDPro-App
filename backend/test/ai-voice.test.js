@@ -208,3 +208,37 @@ test("network errors and timeouts do not log sensitive transport errors", async 
   }
   assert.equal(log.mock.calls.length, 0);
 });
+
+test("production instructions redact partial context and history echoes", async (t) => {
+  const log = t.mock.method(console, "error", () => {});
+  const config = createGeminiLiveSessionConfig({
+    context: { customer: "PrivateCustomer PrivateSurname" },
+    history: [{ role: "user", text: "ConfidentialConversation privatebudget" }],
+  });
+  t.mock.method(globalThis, "fetch", async () => new Response(JSON.stringify({
+    error: {
+      status: "INVALID_ARGUMENT",
+      message: "Invalid instruction: PrivateCustomer ConfidentialConversation privatebudget",
+    },
+  }), { status: 400 }));
+  await assert.rejects(createGeminiLiveToken(config), { code: "AI_VOICE_SESSION_FAILED" });
+  assert.doesNotMatch(JSON.stringify(log.mock.calls), /PrivateCustomer|ConfidentialConversation|privatebudget/);
+});
+
+test("malformed Unicode in session data cannot replace the generic client error", async (t) => {
+  const log = t.mock.method(console, "error", () => {});
+  t.mock.method(globalThis, "fetch", async () => new Response(JSON.stringify({
+    error: { status: "INVALID_ARGUMENT", message: "Invalid instruction" },
+  }), { status: 400 }));
+  await assert.rejects(createGeminiLiveToken({ config: { text: "\ud800" } }), {
+    message: "Realtime voice session could not be created.",
+    statusCode: 502,
+    code: "AI_VOICE_SESSION_FAILED",
+    expose: true,
+  });
+  assert.deepEqual(log.mock.calls[0].arguments[1], {
+    upstreamStatus: 400,
+    providerStatus: "",
+    message: "Google token error details could not be safely logged.",
+  });
+});

@@ -90,15 +90,25 @@ export const createGeminiLiveToken = async (sessionConfig) => {
   if (!response.ok || typeof token !== "string" || !token) {
     const credentials = [data?.token, data?.name].filter((value) => typeof value === "string");
     JSON.stringify(sessionConfig, (_key, value) => {
-      if (typeof value === "string") credentials.push(value);
+      if (typeof value === "string") {
+        credentials.push(value, ...(value.match(/[\p{L}\p{N}_-]+/gu) || []));
+      }
       return value;
     });
-    const diagnostic = new GoogleApiError(response.status, {
-      error: {
-        status: data?.error?.status,
-        message: data?.error?.message,
-      },
-    }, credentials);
+    let diagnostic;
+    try {
+      diagnostic = new GoogleApiError(response.status, {
+        error: {
+          status: data?.error?.status,
+          message: data?.error?.message,
+        },
+      }, credentials);
+    } catch {
+      diagnostic = {
+        message: "Google token error details could not be safely logged.",
+        googleApiError: {},
+      };
+    }
     const safeDiagnosticText = (value) => value
       .replace(/\bauth_tokens\/[^\s"'&,;]+/gi, "[REDACTED]")
       .replace(/(?:x-goog-api-key|authorization|content-type|cookie|set-cookie)\s*["']?\s*[:=].*/gi, "[REDACTED]")
