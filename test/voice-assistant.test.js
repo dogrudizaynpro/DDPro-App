@@ -3,6 +3,7 @@ import { test } from "node:test";
 import {
   getTurkishSpeechRecognition,
   isSuccessfulAiResponse,
+  selectTurkishSpeechVoice,
   sendVoiceCommand,
   speakTurkishText,
 } from "../src/utils/voice-assistant.js";
@@ -60,12 +61,48 @@ test("Turkish speech output is sent to browser synthesis in Turkish", () => {
   }
   const browser = {
     SpeechSynthesisUtterance: Utterance,
-    speechSynthesis: { speak: (utterance) => spoken.push(utterance) },
+    speechSynthesis: {
+      getVoices: () => [
+        { lang: "en-US", name: "English Female" },
+        { lang: "tr-TR", name: "Turkish Female" },
+        { lang: "tr-TR", name: "Turkish Default" },
+      ],
+      speak: (utterance) => spoken.push(utterance),
+    },
   };
   const utterance = speakTurkishText("  Merhaba  ", browser);
   assert.equal(utterance.text, "Merhaba");
   assert.equal(utterance.lang, "tr-TR");
+  assert.equal(utterance.voice.name, "Turkish Female");
+  assert.equal(utterance.rate, 0.95);
+  assert.equal(utterance.pitch, 1);
   assert.deepEqual(spoken, [utterance]);
+});
+
+test("Turkish voice preference only chooses voices actually offered by the browser", () => {
+  const voices = [
+    { lang: "en-US", name: "English Female" },
+    { lang: "tr-TR", name: "Turkish Default" },
+    { lang: "tr-TR", name: "Filiz" },
+  ];
+  assert.equal(selectTurkishSpeechVoice(voices), voices[2]);
+  assert.equal(selectTurkishSpeechVoice([{ lang: "en-US", name: "Female" }]), null);
+});
+
+test("speech synthesis preserves Turkish names, technical terms, measurements and amounts verbatim", () => {
+  const text = "İstanbul'daki DDPro Yapı A.Ş. projesinde 120 m² cephe, 12 mm derz ve 3.250.000 TL bütçe.";
+  let spoken;
+  class Utterance {
+    constructor(value) { this.text = value; }
+  }
+  speakTurkishText(text, {
+    SpeechSynthesisUtterance: Utterance,
+    speechSynthesis: {
+      getVoices: () => [{ lang: "tr-TR", name: "Turkish Female" }],
+      speak: (utterance) => { spoken = utterance; },
+    },
+  });
+  assert.equal(spoken.text, text);
 });
 
 test("Turkish speech output reports unsupported browsers and empty responses", () => {

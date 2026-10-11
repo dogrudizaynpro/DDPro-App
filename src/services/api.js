@@ -154,14 +154,14 @@ export const fetchAPI = async (endpoint, options = {}) => {
     } } }
     : response;
   try {
-    return withRestoreDiagnostics(await requestAPI(normalizedEndpoint, options, sessionControl));
+    return withRestoreDiagnostics(await requestWithSafeRetry(normalizedEndpoint, options, sessionControl));
   } catch (error) {
     if (!needsSession || (!requiresBrowserSession(normalizedEndpoint) && !isStatus) ||
         error.status !== 401 || error.code === "GOOGLE_CONNECTION_REQUIRED") throw error;
     // Only DDPro authentication failures may restore/retry, never Google API failures.
     const currentSession = sessionStorage.getItem(SESSION_KEY);
     if (currentSession && currentSession !== attemptedSession) {
-      return requestAPI(normalizedEndpoint, options);
+      return requestWithSafeRetry(normalizedEndpoint, options);
     }
     if (!pendingSessionRestore && currentSession) clearBrowserSession();
     try {
@@ -171,7 +171,26 @@ export const fetchAPI = async (endpoint, options = {}) => {
       if (!isStatus || restoreFailure.status !== 401) throw restoreFailure;
       restoreError = restoreFailure;
     }
-    return withRestoreDiagnostics(await requestAPI(normalizedEndpoint, options));
+    return withRestoreDiagnostics(await requestWithSafeRetry(normalizedEndpoint, options));
+  }
+};
+
+const requestWithSafeRetry = async (endpoint, options, sessionControl = false) => {
+  const method = (options.method || "GET").toUpperCase();
+  const retryableMethod = ["GET", "HEAD", "OPTIONS"].includes(method);
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await requestAPI(endpoint, options, sessionControl);
+    } catch (error) {
+      const transient = ["API_TIMEOUT_ERROR", "API_NETWORK_ERROR"].includes(error.code);
+      if (!retryableMethod || !transient || attempt >= 1 || options.signal?.aborted) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      if (options.signal?.aborted) {
+        const aborted = new Error("API request was aborted.");
+        aborted.name = "AbortError";
+        throw aborted;
+      }
+    }
   }
 };
 
@@ -252,6 +271,10 @@ const requestAPI = async (endpoint, options, sessionControl = false) => {
       error = new Error(`API request timed out after ${requestTimeoutMs} ms.`);
       error.name = "TimeoutError";
       error.code = "API_TIMEOUT_ERROR";
+    } else if (error.name === "TypeError" && !error.status) {
+      error = new Error("Network connection to the API failed.");
+      error.name = "NetworkError";
+      error.code = "API_NETWORK_ERROR";
     }
     // Re-throw with additional context
     console.warn("API request unavailable:", { status: error.status, code: error.code });

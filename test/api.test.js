@@ -49,7 +49,7 @@ beforeEach(() => {
   window.location.hash = "";
 });
 
-test("API requests abort on timeout and expose a stable timeout error", async () => {
+test("API GET requests make one bounded retry after a timeout", async () => {
   response = (_url, options) => new Promise((_resolve, reject) => {
     options.signal.addEventListener("abort", () => reject(options.signal.reason), {
       once: true,
@@ -62,8 +62,39 @@ test("API requests abort on timeout and expose a stable timeout error", async ()
     assert.match(error.message, /timed out after 5 ms/);
     return true;
   });
-  assert.equal(requests.length, 1);
+  assert.equal(requests.length, 2);
   assert.equal("timeoutMs" in requests[0].options, false);
+});
+
+test("API retries transient network errors only for safe methods", async () => {
+  let attempts = 0;
+  response = async () => {
+    attempts += 1;
+    if (attempts === 1) throw new TypeError("Failed to fetch");
+    return Response.json({ status: "success", data: { ok: true } });
+  };
+  assert.equal((await fetchAPI("/health")).data.ok, true);
+  assert.equal(requests.length, 2);
+
+  requests = [];
+  attempts = 0;
+  response = async () => {
+    attempts += 1;
+    throw new TypeError("Failed to fetch");
+  };
+  await assert.rejects(fetchAPI("/api/ai/chat", {
+    method: "POST", body: JSON.stringify({ message: "Test" }),
+  }), (error) => error.code === "API_NETWORK_ERROR");
+  assert.equal(requests.length, 1);
+});
+
+test("API cancellation during retry backoff prevents a second request", async () => {
+  response = async () => { throw new TypeError("Failed to fetch"); };
+  const controller = new AbortController();
+  const pending = fetchAPI("/health", { signal: controller.signal });
+  setTimeout(() => controller.abort(), 20);
+  await assert.rejects(pending, (error) => error.name === "AbortError");
+  assert.equal(requests.length, 1);
 });
 
 test("AI write confirmation posts only the opaque action ID through the authenticated backend API", async () => {

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getCrmContacts } from "../services/operations-integrations.service.js";
 import { formatDateTime } from "../utils/date-time.js";
 import {
@@ -51,7 +51,8 @@ function ProjectsModule({
   selectedProjectId,
   onNavigate,
   refreshProjects,
-  setAiInput,
+  sendAiMessage,
+  aiSending = false,
 }) {
   const selectedProject = projects.find((project) => project.id === selectedProjectId);
   const [projectTitle, setProjectTitle] = useState("");
@@ -66,6 +67,8 @@ function ProjectsModule({
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [projectCommand, setProjectCommand] = useState("");
+  const [projectAnalysis, setProjectAnalysis] = useState(null);
+  const projectAnalysisPendingRef = useRef(false);
   const [status, setStatus] = useState("");
   const [detailsStatus, setDetailsStatus] = useState("");
   const [crmContacts, setCrmContacts] = useState([]);
@@ -98,6 +101,7 @@ function ProjectsModule({
     setCrmContactId(selectedProject?.crmContactId || "");
     setDetailsStatus("");
     setProjectCommand("");
+    setProjectAnalysis(null);
     setSpreadsheetPreview(null);
     setSpreadsheetError("");
     setSpreadsheetResult(null);
@@ -282,12 +286,42 @@ function ProjectsModule({
     }
   };
 
-  const sendProjectCommand = () => {
-    if (!selectedProject || !projectCommand.trim()) return;
-    setAiInput(
-      `Proje: ${selectedProject.name}\nİstek: ${projectCommand.trim()}\nÖnce analiz et ve öneri sun. Dosya yükleme veya kayıt değişikliği yapma; onay gerektiren işlemleri açıkça belirt.`
-    );
-    onNavigate("ai-assistant");
+  const sendProjectCommand = async () => {
+    const request = projectCommand.trim();
+    if (!selectedProject || !request || !sendAiMessage || projectAnalysisPendingRef.current) return;
+    projectAnalysisPendingRef.current = true;
+    setProjectAnalysis({ status: "loading", text: "Seçili proje AI tarafından analiz ediliyor…" });
+    const projectContext = {
+      id: selectedProject.id,
+      name: selectedProject.name,
+      type: selectedProject.type,
+      status: selectedProject.status,
+      customer: selectedProject.customer,
+      company: selectedProject.company,
+      location: selectedProject.location,
+      product: selectedProject.product,
+      areaM2: selectedProject.areaM2,
+      systems: selectedProject.systems,
+      startDate: selectedProject.startDate,
+      endDate: selectedProject.endDate,
+      notes: selectedProject.notes,
+    };
+    try {
+      const response = await sendAiMessage(request, "", { selectedProject: projectContext });
+      setProjectAnalysis(response?.status === "success"
+        ? { status: "success", text: response.text }
+        : {
+          status: "unavailable",
+          text: response?.text || "AI analiz yanıtı alınamadı. Bağlantınızı kontrol edip yeniden deneyin.",
+        });
+    } catch (error) {
+      setProjectAnalysis({
+        status: "unavailable",
+        text: error.message || "AI analiz isteği tamamlanamadı. Tekrar deneyin.",
+      });
+    } finally {
+      projectAnalysisPendingRef.current = false;
+    }
   };
 
   return (
@@ -360,7 +394,15 @@ function ProjectsModule({
                 value={projectCommand}
                 onChange={(event) => setProjectCommand(event.target.value)}
               />
-              <button type="button" disabled={!projectCommand.trim()} onClick={sendProjectCommand}>AI ile analiz et</button>
+              <button type="button" disabled={!projectCommand.trim() || aiSending || projectAnalysis?.status === "loading"} onClick={sendProjectCommand}>
+                {projectAnalysis?.status === "loading" ? "Analiz ediliyor…" : "AI ile analiz et"}
+              </button>
+              {projectAnalysis ? (
+                <p className={`status-banner ${projectAnalysis.status === "unavailable" ? "warning" : projectAnalysis.status === "success" ? "success" : "info"}`}
+                  role={projectAnalysis.status === "unavailable" ? "alert" : "status"}>
+                  {projectAnalysis.text}
+                </p>
+              ) : null}
             </section>
             <section className="project-assets-section">
               <div className="panel-header"><h3>Fotoğraflar ve proje belgeleri</h3></div>
