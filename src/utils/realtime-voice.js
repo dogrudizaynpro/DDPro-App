@@ -112,18 +112,34 @@ export class RealtimeVoiceSession {
       };
       const url = `${session.websocketUrl}?access_token=${encodeURIComponent(session.token)}`;
       this.socket = new this.browser.WebSocket(url);
+      this.socket.binaryType = "arraybuffer";
       this.socket.onopen = () => {
         this.socket.send(JSON.stringify({ setup: session.setup }));
       };
-      this.socket.onmessage = (event) => {
+      let messageQueue = Promise.resolve();
+      const handleMessage = async (event) => {
+        if (this.intentionalClose) return;
         let data;
         try {
-          data = JSON.parse(event.data);
+          const frame = event.data;
+          const text = typeof frame === "string" ? frame
+            : typeof frame?.text === "function" ? await frame.text()
+              : new TextDecoder().decode(frame);
+          data = JSON.parse(text);
+          if (!data || typeof data !== "object" || Array.isArray(data)) {
+            throw new Error("Invalid Live message envelope.");
+          }
         } catch {
-          this.fail(new Error("Ses sağlayıcısından geçersiz yanıt alındı."));
-          finish(new Error("Ses sağlayıcısından geçersiz yanıt alındı."));
+          console.error("Gemini Live message decoding failed:", {
+            stage: "websocket_decode",
+            frameType: typeof event.data === "string" ? "text" : "binary",
+          });
+          const error = new Error("Ses sağlayıcısından geçersiz yanıt alındı.");
+          finish(error);
+          this.fail(error);
           return;
         }
+        if (this.intentionalClose) return;
         if (data.setupComplete) {
           try {
             this.startAudioInput();
@@ -137,6 +153,10 @@ export class RealtimeVoiceSession {
           return;
         }
         if (data.error) {
+          console.error("Gemini Live provider rejected session:", {
+            stage: "websocket_provider",
+            providerCode: Number.isInteger(data.error.code) ? data.error.code : null,
+          });
           const error = new Error("Sesli sohbet sağlayıcısı isteği tamamlayamadı.");
           finish(error);
           this.fail(error);
@@ -144,13 +164,28 @@ export class RealtimeVoiceSession {
         }
         this.handleServerContent(data.serverContent);
       };
+      // Blob decoding is asynchronous; preserve setup/audio/transcript frame order.
+      this.socket.onmessage = (event) => {
+        messageQueue = messageQueue.then(() => handleMessage(event)).catch(() => {
+          const error = new Error("Sesli sohbet yanıtı işlenemedi.");
+          finish(error);
+          this.fail(error);
+        });
+        return messageQueue;
+      };
       this.socket.onerror = () => {
+        console.error("Gemini Live transport failed:", { stage: "websocket_transport" });
         const error = new Error("Sesli sohbet bağlantısı kurulamadı.");
         finish(error);
         this.fail(error);
       };
-      this.socket.onclose = () => {
+      this.socket.onclose = (event) => {
         if (this.intentionalClose) return;
+        console.error("Gemini Live connection closed:", {
+          stage: "websocket_close",
+          closeCode: Number.isInteger(event?.code) ? event.code : null,
+          wasClean: event?.wasClean === true,
+        });
         const error = new Error("Sesli sohbet bağlantısı koptu. Yeniden bağlanmayı deneyin.");
         finish(error);
         this.fail(error);

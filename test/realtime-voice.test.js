@@ -31,7 +31,7 @@ class FakeWebSocket {
   }
 
   emit(value) {
-    this.onmessage?.({ data: JSON.stringify(value) });
+    return this.onmessage?.({ data: JSON.stringify(value) });
   }
 
   close() {
@@ -130,16 +130,16 @@ test("realtime session streams microphone audio, transcripts, and stops playback
   assert.equal(inputFrame.realtimeInput.audio.mimeType, "audio/pcm;rate=16000");
 
   const audio = btoa(String.fromCharCode(0, 0, 1, 0));
-  socket.emit({
+  await socket.emit({
     serverContent: {
       modelTurn: { parts: [{ inlineData: { mimeType: "audio/pcm;rate=24000", data: audio } }] },
     },
   });
   assert.equal(FakeAudioContext.latest.createdSources[0].started, true);
-  socket.emit({ serverContent: { interrupted: true } });
+  await socket.emit({ serverContent: { interrupted: true } });
   assert.equal(FakeAudioContext.latest.createdSources[0].stopped, true);
 
-  socket.emit({
+  await socket.emit({
     serverContent: {
       inputTranscription: { text: "Merhaba" },
       outputTranscription: { text: "Merhaba, nasıl yardımcı olayım?" },
@@ -170,6 +170,64 @@ test("realtime session reports microphone denial and releases resources on conne
   assert.equal(track.stopped, true);
   assert.match(disconnected.events.errors.at(-1).message, /bağlantısı koptu/);
   assert.ok(disconnected.events.states.includes("error"));
+});
+
+test("Live binary JSON setup and audio frames decode as Blob or ArrayBuffer in arrival order", async () => {
+  for (const frameType of ["blob", "arraybuffer"]) {
+    class BinaryWebSocket extends FakeWebSocket {
+      send(value) {
+        const message = JSON.parse(value);
+        this.sent.push(message);
+        if (message.setup) {
+          const blob = new Blob([JSON.stringify({ setupComplete: {} })]);
+          queueMicrotask(async () => this.onmessage({
+            data: frameType === "blob" ? blob : await blob.arrayBuffer(),
+          }));
+        }
+      }
+    }
+    const { session, events } = createSession({
+      browser: { ...createBrowser(), WebSocket: BinaryWebSocket },
+    });
+    try {
+      await session.start();
+      const socket = FakeWebSocket.latest;
+      assert.equal(socket.binaryType, "arraybuffer");
+      const audio = btoa(String.fromCharCode(0, 0, 1, 0));
+      const audioFrame = new Blob([JSON.stringify({
+        serverContent: {
+          modelTurn: { parts: [{ inlineData: { mimeType: "audio/pcm;rate=24000", data: audio } }] },
+          outputTranscription: { text: "Merhaba" },
+        },
+      })]);
+      const first = socket.onmessage({
+        data: frameType === "blob" ? audioFrame : await audioFrame.arrayBuffer(),
+      });
+      const second = socket.emit({ serverContent: { turnComplete: true } });
+      await Promise.all([first, second]);
+      assert.equal(FakeAudioContext.latest.createdSources[0].started, true);
+      assert.deepEqual(events.transcripts, [["assistant", "Merhaba"]]);
+      assert.deepEqual(events.errors, []);
+    } finally {
+      session.stop();
+    }
+  }
+});
+
+test("invalid binary JSON logs metadata only and releases the microphone", async (t) => {
+  const log = t.mock.method(console, "error", () => {});
+  const { session, events } = createSession();
+  await session.start();
+  const track = session.stream.getTracks()[0];
+  await FakeWebSocket.latest.onmessage({
+    data: new Blob(["private-token private-conversation invalid JSON"]),
+  });
+  assert.equal(track.stopped, true);
+  assert.match(events.errors[0].message, /geçersiz yanıt/);
+  assert.deepEqual(log.mock.calls[0].arguments[1], {
+    stage: "websocket_decode", frameType: "binary",
+  });
+  assert.doesNotMatch(JSON.stringify(log.mock.calls), /private-/);
 });
 
 test("backend ephemeral token and constrained wire setup are passed unchanged to Live WebSocket", async (t) => {
@@ -203,9 +261,9 @@ test("backend ephemeral token and constrained wire setup are passed unchanged to
     await session.start();
     const socket = FakeWebSocket.latest;
     const url = new URL(socket.url);
-    assert.equal(tokenRequest.url, "https://generativelanguage.googleapis.com/v1beta/auth_tokens");
+    assert.equal(tokenRequest.url, "https://generativelanguage.googleapis.com/v1alpha/auth_tokens");
     assert.equal(url.pathname,
-      "/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained");
+      "/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContentConstrained");
     assert.equal(url.searchParams.get("access_token"), token);
     assert.deepEqual([...url.searchParams.keys()], ["access_token"]);
     assert.deepEqual(socket.sent[0], { setup: tokenRequest.body.bidiGenerateContentSetup });
