@@ -281,6 +281,43 @@ test("read-only project analyses cannot request operational writes", async () =>
   );
 });
 
+test("orchestrator tool policies restrict advertised and executable DDPro tools", async () => {
+  responses.push(completion({ role: "assistant", content: "General answer." }));
+  assert.equal((await requestAiCompletion({
+    message: "General question.",
+    context: {},
+    toolPolicy: "none",
+  })).answer, "General answer.");
+  assert.equal("tools" in requests[0].body, false);
+
+  requests = [];
+  responses.push(completion({
+    role: "assistant",
+    content: null,
+    tool_calls: [{
+      id: "call_disallowed_write",
+      type: "function",
+      function: {
+        name: "prepare_write",
+        arguments: JSON.stringify({ resource: "projects", operation: "create", record: { name: "X" } }),
+      },
+    }],
+  }));
+  await assert.rejects(
+    requestAiCompletion({
+      message: "List projects.",
+      context: {},
+      integrationAccount: "owner@example.com",
+      toolPolicy: "read",
+    }),
+    (error) => error.code === "AI_TOOL_UNAVAILABLE"
+  );
+  assert.deepEqual(
+    requests[0].body.tools.map(({ function: tool }) => tool.name),
+    ["read_records"]
+  );
+});
+
 test("AI provider network failures remain understandable and never expose credentials", async () => {
   globalThis.fetch = async () => {
     throw new Error(`Request failed with ${TEST_API_KEY}`);

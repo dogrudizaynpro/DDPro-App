@@ -2,9 +2,9 @@ import {
   getAiUsageCount,
   getAiProviderStatus,
   recordAiUsage,
-  requestAiCompletion,
   confirmAiAction,
 } from "../services/ai.service.js";
+import { orchestrateAiCommand } from "../services/ai-orchestrator.service.js";
 import {
   createGeminiLiveSessionConfig,
   createGeminiLiveToken,
@@ -64,7 +64,7 @@ export const createAiCompletion = async (req, res, next) => {
   }
 
   try {
-    const completion = await requestAiCompletion({
+    const completion = await orchestrateAiCommand({
       message,
       context,
       attachment: req.aiFile,
@@ -73,7 +73,12 @@ export const createAiCompletion = async (req, res, next) => {
     await recordAiUsage(req.integrationAccount);
     return res.status(200).json({
       status: "success",
-      data: { ...completion, provider: getAiProviderStatus().provider },
+      data: {
+        ...completion,
+        ...(completion.orchestration.intent === "web_research"
+          ? {}
+          : { provider: getAiProviderStatus().provider }),
+      },
     });
   } catch (error) {
     return next(error);
