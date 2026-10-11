@@ -254,7 +254,7 @@ const integrationProbes = (status) => [
 
 const pendingIntegrationTests = new Map();
 
-const integrationStatusCacheLifetime = INTEGRATION_STATUS_MAX_AGE;
+const integrationStatusMaxAge = INTEGRATION_STATUS_MAX_AGE;
 const getIntegrationStatusOnce = () => getIntegrationStatus();
 
 const testIntegrationConnectionOnce = (provider) => {
@@ -270,7 +270,7 @@ const testIntegrationConnectionOnce = (provider) => {
 const hasStaleIntegrationTest = (connection) => {
   const testedAt = Date.parse(connection?.lastTest?.testedAt || "");
   const age = Date.now() - testedAt;
-  return !Number.isFinite(testedAt) || age < 0 || age >= integrationStatusCacheLifetime;
+  return !Number.isFinite(testedAt) || age < 0 || age >= integrationStatusMaxAge;
 };
 
 const applyAiVerification = (status, testResult, testError) => {

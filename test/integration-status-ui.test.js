@@ -30,7 +30,7 @@ test("integration dashboard keeps initial status pending until the configured AI
   assert.match(source, /state === "authorization_required"/);
   assert.match(source, /const isChecking = statusLoading \|\| integrationSnapshot\.refreshing \|\| testing === integration\.id/);
   assert.match(source, /const pendingIntegrationTests = new Map\(\)/);
-  assert.match(source, /integrationStatusCacheLifetime = INTEGRATION_STATUS_MAX_AGE/);
+  assert.match(source, /integrationStatusMaxAge = INTEGRATION_STATUS_MAX_AGE/);
   assert.match(source, /SON DOĞRULAMA · API YENİLENEMEDİ/);
   assert.doesNotMatch(source.match(/const refresh = async[\s\S]*?const startGoogleOAuth/)?.[0] || "", /setStatus\(null\)/);
   const labelBlock = source.match(/const integrationStatusLabel = \([\s\S]*?\n  };/)?.[0] || "";
