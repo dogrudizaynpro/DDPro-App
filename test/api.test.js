@@ -139,7 +139,7 @@ test("WhatsApp readiness and safe test failures are supplied by the backend with
   assert.equal(requests.some(({ url }) => url.endsWith("/google/logout")), false);
 });
 
-test("OAuth exchange precedes concurrent Gmail and Calendar status reads and stores only the browser session", async () => {
+test("OAuth exchange precedes deduplicated Gmail and Calendar status reads and stores only the browser session", async () => {
   storage.delete("ddpro_browser_session");
   storage.set("ddpro_oauth_verifier", "browser-verifier");
   window.location.hash = "#/ayarlar?integration=google_connected&exchange_code=one-time-code";
@@ -157,7 +157,7 @@ test("OAuth exchange precedes concurrent Gmail and Calendar status reads and sto
   const [gmailStatus, calendarStatus] = await Promise.all([first, second, replay]);
   assert.equal(gmailStatus.gmail.connected, true);
   assert.equal(calendarStatus.googleCalendar.connected, true);
-  assert.equal(requests.length, 3);
+  assert.equal(requests.length, 2);
   assert.ok(requests.slice(1).every(({ options }) =>
     options.headers.Authorization === ["Bearer", "exchanged-browser-session"].join(" ")));
   assert.equal(storage.get("ddpro_browser_session"), "exchanged-browser-session");
