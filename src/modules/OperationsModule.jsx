@@ -1,6 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import {
   getIntegrationStatus,
+  getIntegrationStatusSnapshot,
+  INTEGRATION_STATUS_MAX_AGE,
+  isIntegrationStatusStale,
+  subscribeToIntegrationStatus,
   testIntegrationConnection,
 } from "../services/integrations.service.js";
 import { CAN_USE_LOCAL_FALLBACK } from "../services/api.js";
@@ -248,34 +252,10 @@ const integrationProbes = (status) => [
   ["research", status.research?.configured],
 ].filter(([, configured]) => configured).map(([provider]) => provider);
 
-const integrationStatusCacheLifetime = 5 * 60 * 1000;
-let integrationStatusCache;
-let pendingIntegrationStatusRequest;
 const pendingIntegrationTests = new Map();
 
-const getCachedIntegrationStatus = () => {
-  if (!integrationStatusCache ||
-      Date.now() - integrationStatusCache.cachedAt >= integrationStatusCacheLifetime) return null;
-  const hasExpiredConnection = Object.values(integrationStatusCache.status).some((connection) => {
-    if (!connection?.lastTest?.testedAt) return false;
-    const age = Date.now() - Date.parse(connection.lastTest.testedAt);
-    return !Number.isFinite(age) || age < 0 || age >= integrationStatusCacheLifetime;
-  });
-  return hasExpiredConnection ? null : integrationStatusCache.status;
-};
-
-const getIntegrationStatusOnce = () => {
-  if (pendingIntegrationStatusRequest) return pendingIntegrationStatusRequest;
-  const pending = getIntegrationStatus().then((status) => {
-    integrationStatusCache = { status, cachedAt: Date.now() };
-    return status;
-  });
-  pendingIntegrationStatusRequest = pending;
-  pending.finally(() => {
-    if (pendingIntegrationStatusRequest === pending) pendingIntegrationStatusRequest = null;
-  }).catch(() => {});
-  return pending;
-};
+const integrationStatusCacheLifetime = INTEGRATION_STATUS_MAX_AGE;
+const getIntegrationStatusOnce = () => getIntegrationStatus();
 
 const testIntegrationConnectionOnce = (provider) => {
   if (pendingIntegrationTests.has(provider)) return pendingIntegrationTests.get(provider);
@@ -337,12 +317,28 @@ const probeConfiguredIntegrations = async (status) => {
 };
 
 function IntegrationSettings({ onNavigate, hubMode = false }) {
-  const [status, setStatus] = useState(getCachedIntegrationStatus);
-  const [statusLoading, setStatusLoading] = useState(() => !getCachedIntegrationStatus());
+  const integrationSnapshot = useSyncExternalStore(
+    subscribeToIntegrationStatus,
+    getIntegrationStatusSnapshot,
+    getIntegrationStatusSnapshot,
+  );
+  const [status, setStatus] = useState(integrationSnapshot.status);
+  const [statusLoading, setStatusLoading] = useState(integrationSnapshot.refreshing);
   const [statusRefreshFailed, setStatusRefreshFailed] = useState(false);
+  const [now, setNow] = useState(Date.now);
   const [error, setError] = useState("");
   const [testing, setTesting] = useState("");
   const [notice, setNotice] = useState("");
+
+  useEffect(() => {
+    if (integrationSnapshot.status) setStatus(integrationSnapshot.status);
+    setStatusRefreshFailed(Boolean(integrationSnapshot.error));
+  }, [integrationSnapshot.status, integrationSnapshot.error]);
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => setNow(Date.now()), 30_000);
+    return () => window.clearInterval(intervalId);
+  }, []);
 
   const refresh = async ({ verifyAi = false, aiTestResult, aiTestError } = {}) => {
     setError("");
@@ -369,11 +365,6 @@ function IntegrationSettings({ onNavigate, hubMode = false }) {
 
   useEffect(() => {
     let active = true;
-    const cachedStatus = getCachedIntegrationStatus();
-    if (cachedStatus) {
-      setStatus(cachedStatus);
-      setStatusLoading(false);
-    }
     const queryString = window.location.hash.split("?")[1] || "";
     const oauthResult = new URLSearchParams(queryString);
     if (oauthResult.get("integration") === "google_error") {
@@ -435,16 +426,25 @@ function IntegrationSettings({ onNavigate, hubMode = false }) {
   };
 
   const integrationStatusLabel = (integration, connection, configured) => {
+    const stale = isIntegrationStatusStale(connection, now);
     if (testing === integration.id) {
       return integration.id === "ai" ? "TEST EDİLİYOR" : "BAĞLANTI TEST EDİLİYOR";
     }
-    if (statusLoading) {
+    if (statusLoading || integrationSnapshot.refreshing) {
+      if (connection?.connected) {
+        return stale
+          ? "SON DOĞRULAMA ESKİ · YENİDEN KONTROL EDİLİYOR"
+          : "SON DOĞRULAMA · YENİDEN KONTROL EDİLİYOR";
+      }
       if (integration.id === "ai") return "TEST EDİLİYOR";
       if (integration.id === "crm") return "CRM VERİ ERİŞİMİ DOĞRULANIYOR";
       return "DURUM KONTROL EDİLİYOR";
     }
     if (!status) return "DURUM ALINAMADI";
-    if (statusRefreshFailed && connection?.connected) return "SON DOĞRULAMA · API YENİLENEMEDİ";
+    if ((statusRefreshFailed || integrationSnapshot.error) && connection?.connected) {
+      return "SON DOĞRULAMA · API YENİLENEMEDİ";
+    }
+    if (connection?.connected && stale) return "SON DOĞRULAMA ESKİ · DURUM BELİRSİZ";
     return statusLabel({ connected: connection?.connected, configured, status: connection?.status });
   };
 
@@ -513,6 +513,7 @@ function IntegrationSettings({ onNavigate, hubMode = false }) {
       <div className="operations-grid">
         {integrationCatalog.map((integration) => {
           const connection = providerStatus(integration);
+          const statusIsStale = isIntegrationStatusStale(connection, now);
           const configured = integration.id === "gmail" || integration.id === "googleCalendar"
             ? connection?.oauthFlowAvailable
             : integration.id === "website"
@@ -521,10 +522,11 @@ function IntegrationSettings({ onNavigate, hubMode = false }) {
                 ? connection?.configured
                 : connection?.configured;
           const isGoogleConnected = status?.google?.authenticated;
-          const isChecking = statusLoading || testing === integration.id;
-          const stateClass = connection?.connected && !isChecking && !statusRefreshFailed
+          const isChecking = statusLoading || integrationSnapshot.refreshing || testing === integration.id;
+          const hasRefreshFailure = statusRefreshFailed || Boolean(integrationSnapshot.error);
+          const stateClass = connection?.connected && !isChecking && !hasRefreshFailure && !statusIsStale
             ? " is-connected"
-            : !isChecking && (connection?.status === "test_failed" || (!status && error) || statusRefreshFailed)
+            : !isChecking && (connection?.status === "test_failed" || (!status && error) || hasRefreshFailure || statusIsStale)
               ? " has-error"
               : "";
           return (
@@ -532,13 +534,13 @@ function IntegrationSettings({ onNavigate, hubMode = false }) {
               <div>
                 <div className="integration-card-heading"><h3>{integration.title}</h3><span className={`integration-state${stateClass}`}>{integrationStatusLabel(integration, connection, configured)}</span></div>
                 <p>{integration.description}</p>
-                {connection ? <p>{statusRefreshFailed ? "Son başarılı API yanıtındaki durum — güncel bağlantı yeniden doğrulanamadı. " : ""}Yapılandırma: {connection.configured ? "HAZIR" : "EKSİK"} · Servis yetkisi: {connection.authorized === true ? "DOĞRULANDI" : connection.authorized === false ? "GEREKLİ" : "DOĞRULANMADI"} · Erişim: {connection.reachable === true ? "ERİŞİLEBİLİR" : connection.reachable === false ? "ERİŞİLEMİYOR" : "DOĞRULANMADI"} · İşlev: {connection.working === true ? "DOĞRULANDI" : connection.working === false ? "BAŞARISIZ" : "TEST EDİLMEDİ"}</p> : null}
+                {connection ? <p>{statusIsStale || hasRefreshFailure || isChecking ? "Son başarılı API yanıtındaki durum güncel bağlantı olarak doğrulanmadı. " : ""}Yapılandırma: {connection.configured ? "HAZIR" : "EKSİK"} · Servis yetkisi: {connection.authorized === true ? "DOĞRULANDI" : connection.authorized === false ? "GEREKLİ" : "DOĞRULANMADI"} · Erişim: {connection.reachable === true ? "ERİŞİLEBİLİR" : connection.reachable === false ? "ERİŞİLEMİYOR" : "DOĞRULANMADI"} · İşlev: {connection.working === true ? "DOĞRULANDI" : connection.working === false ? "BAŞARISIZ" : "TEST EDİLMEDİ"}</p> : null}
                 {integration.id === "whatsapp" && status ? (
                   <p>Outbound: {connection?.sendConfigured ? "HAZIR" : "YAPILANDIRMA GEREKLİ"} · Webhook: {connection?.webhookConfigured ? "HAZIR" : "YAPILANDIRMA GEREKLİ"}</p>
                 ) : null}
                 <small><strong>Gerekli backend yapılandırması</strong><br />{integration.variables.join(" · ")}<br />
                   {connection?.lastTest?.testedAt ? `Son test: ${formatDateTime(connection.lastTest.testedAt)}` : "Henüz bağlantı testi çalıştırılmadı."}
-                  {connection?.checkedAt ? <span className="integration-check-time">Son kontrol: {formatDateTime(connection.checkedAt)}</span> : null}
+                  {(connection?.checkedAt || integrationSnapshot.checkedAt) ? <span className="integration-check-time">Son kontrol: {formatDateTime(connection?.checkedAt || integrationSnapshot.checkedAt)}</span> : null}
                   {connection?.lastTest?.error ? <span className="integration-error">{formatGoogleIntegrationError({ message: connection.lastTest.error, googleApiError: connection.lastTest.googleApiError })}</span> : null}
                   {integration.id === "whatsapp" ? <span className="integration-secret-note">BAĞLI, başarılı Meta telefon kaydı testini gösterir; yapılandırma tek başına yeterli değildir. Webhook teslimatı ve mesaj gönderimi ayrıca canlı sistemde sınanmalıdır. API sürümü belirtilmezse v23.0 kullanılır.</span> : null}
                   <div className="module-toolbar integration-actions">
