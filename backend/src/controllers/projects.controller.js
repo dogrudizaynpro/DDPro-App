@@ -94,6 +94,90 @@ const getProjectPayload = (body = {}, preserveMissing = false) => {
   };
 };
 
+export const getProjectUpdatePayload = (body = {}) => {
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    const error = new Error("Project update must be an object");
+    error.statusCode = 400;
+    throw error;
+  }
+  const updates = {};
+  if (Object.hasOwn(body, "name")) {
+    const name = optionalProjectText(body.name, "name", 250);
+    if (!name) {
+      const error = new Error("Project name is required");
+      error.statusCode = 400;
+      throw error;
+    }
+    updates.name = name;
+  }
+  for (const [field, maxLength] of [
+    ["project_type", 500],
+    ["customer", 500],
+    ["company", 500],
+    ["location", 1000],
+    ["product", 1000],
+    ["start_date", 100],
+    ["end_date", 100],
+  ]) {
+    if (Object.hasOwn(body, field)) {
+      updates[field] = optionalProjectText(body[field], field, maxLength);
+    }
+  }
+  if (Object.hasOwn(body, "status")) {
+    if (typeof body.status !== "string" || !body.status.trim()) {
+      const error = new Error("Project status is invalid");
+      error.statusCode = 400;
+      throw error;
+    }
+    updates.status = body.status.trim();
+  }
+  if (Object.hasOwn(body, "area_m2")) {
+    const areaM2 = body.area_m2 === null || body.area_m2 === "" ? null : Number(body.area_m2);
+    if (areaM2 !== null && (!Number.isFinite(areaM2) || areaM2 < 0)) {
+      const error = new Error("Project area must be non-negative");
+      error.statusCode = 400;
+      throw error;
+    }
+    updates.area_m2 = areaM2;
+  }
+  if (Object.hasOwn(body, "systems")) {
+    if (!Array.isArray(body.systems) || body.systems.length > 100 ||
+        body.systems.some((item) => typeof item !== "string" || item.length > 150)) {
+      const error = new Error("Project systems are invalid");
+      error.statusCode = 400;
+      throw error;
+    }
+    updates.systems = body.systems.map((item) => item.trim()).filter(Boolean);
+  }
+  if (Object.hasOwn(body, "notes")) {
+    if (typeof body.notes !== "string" || body.notes.length > 20_000) {
+      const error = new Error("Project notes are invalid");
+      error.statusCode = 400;
+      throw error;
+    }
+    updates.notes = body.notes.trim();
+  }
+  if (Object.hasOwn(body, "crm_contact_id")) {
+    const id = body.crm_contact_id;
+    if (id !== null && id !== "" && (typeof id !== "string" || !/^[\da-f-]{36}$/i.test(id))) {
+      const error = new Error("CRM contact id is invalid");
+      error.statusCode = 400;
+      throw error;
+    }
+    updates.crm_contact_id = id || null;
+  }
+  if (Object.hasOwn(body, "cover_document_id")) {
+    const id = body.cover_document_id;
+    if (id !== null && id !== "" && (typeof id !== "string" || !/^[\da-f-]{36}$/i.test(id))) {
+      const error = new Error("Project cover document id is invalid");
+      error.statusCode = 400;
+      throw error;
+    }
+    updates.cover_document_id = id || null;
+  }
+  return updates;
+};
+
 export const createProjectRecord = async (supabase, body, importSourceKey = null) => {
   const payload = getProjectPayload(body, Boolean(importSourceKey));
   if (importSourceKey) payload.import_source_key = importSourceKey;
@@ -228,57 +312,9 @@ export const updateProject = async (req, res, next) => {
       });
     }
 
-    const updates = {};
-    const {
-      status,
-      area_m2: areaM2,
-      systems,
-      notes,
-      crm_contact_id: crmContactId,
-      cover_document_id: coverDocumentId,
-    } = req.body || {};
-
-    if (status !== undefined) {
-      if (typeof status !== "string" || !status.trim()) {
-        return res.status(400).json({ status: "error", message: "Project status is invalid." });
-      }
-      updates.status = status.trim();
-    }
-
-    if (areaM2 !== undefined) {
-      const parsedArea = areaM2 === null || areaM2 === "" ? null : Number(areaM2);
-      if (parsedArea !== null && (!Number.isFinite(parsedArea) || parsedArea < 0)) {
-        return res.status(400).json({ status: "error", message: "Project area must be non-negative." });
-      }
-      updates.area_m2 = parsedArea;
-    }
-
-    if (systems !== undefined) {
-      if (!Array.isArray(systems) || systems.length > 100 || systems.some((item) => typeof item !== "string" || item.length > 150)) {
-        return res.status(400).json({ status: "error", message: "Project systems are invalid." });
-      }
-      updates.systems = systems.map((item) => item.trim()).filter(Boolean);
-    }
-
-    if (notes !== undefined) {
-      if (typeof notes !== "string" || notes.length > 20_000) {
-        return res.status(400).json({ status: "error", message: "Project notes are invalid." });
-      }
-      updates.notes = notes.trim();
-    }
-
-    if (crmContactId !== undefined) {
-      if (crmContactId !== null && crmContactId !== "" && !/^[\da-f-]{36}$/i.test(crmContactId)) {
-        return res.status(400).json({ status: "error", message: "CRM contact id is invalid." });
-      }
-      updates.crm_contact_id = crmContactId || null;
-    }
-
+    const updates = getProjectUpdatePayload(req.body);
+    const coverDocumentId = updates.cover_document_id;
     if (coverDocumentId !== undefined) {
-      if (coverDocumentId !== null && coverDocumentId !== "" &&
-          (typeof coverDocumentId !== "string" || !/^[\da-f-]{36}$/i.test(coverDocumentId))) {
-        return res.status(400).json({ status: "error", message: "Project cover document id is invalid." });
-      }
       if (coverDocumentId) {
         const { data: cover, error: coverError } = await supabase
           .from("document_records")

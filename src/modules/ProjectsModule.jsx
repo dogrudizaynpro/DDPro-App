@@ -54,9 +54,16 @@ function ProjectsModule({
   setAiInput,
 }) {
   const selectedProject = projects.find((project) => project.id === selectedProjectId);
+  const [projectTitle, setProjectTitle] = useState("");
   const [areaM2, setAreaM2] = useState("");
   const [systems, setSystems] = useState("");
   const [notes, setNotes] = useState("");
+  const [customer, setCustomer] = useState("");
+  const [company, setCompany] = useState("");
+  const [location, setLocation] = useState("");
+  const [product, setProduct] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
   const [projectCommand, setProjectCommand] = useState("");
   const [status, setStatus] = useState("");
   const [detailsStatus, setDetailsStatus] = useState("");
@@ -75,9 +82,16 @@ function ProjectsModule({
   const projectDocuments = documents.filter((document) => document.project_id === selectedProject?.id);
 
   useEffect(() => {
+    setProjectTitle(selectedProject?.name || "");
     setAreaM2(selectedProject?.areaM2 ?? "");
     setSystems((selectedProject?.systems || []).join(", "));
     setNotes(selectedProject?.notes || "");
+    setCustomer(selectedProject?.customer || "");
+    setCompany(selectedProject?.company || "");
+    setLocation(selectedProject?.location || "");
+    setProduct(selectedProject?.product || "");
+    setStartDate(selectedProject?.startDate || "");
+    setEndDate(selectedProject?.endDate || "");
     setStatus(selectedProject?.status || "Aktif");
     setCrmContactId(selectedProject?.crmContactId || "");
     setDetailsStatus("");
@@ -138,9 +152,16 @@ function ProjectsModule({
   const saveProjectDetails = async (event) => {
     event.preventDefault();
     const saved = await updateProject(selectedProject.id, {
+      name: projectTitle,
       areaM2,
       systems: systems.split(",").map((item) => item.trim()).filter(Boolean),
       notes,
+      customer,
+      company,
+      location,
+      product,
+      startDate,
+      endDate,
       status,
       crmContactId,
     });
@@ -300,6 +321,7 @@ function ProjectsModule({
               Proje bilgileri ve dosyalar yetkili backend üzerinden yönetilir. Fotoğraf bulunmadığında temsili proje görseli gösterilmez.
             </p>
             <form className="data-form project-detail-form" onSubmit={saveProjectDetails}>
+              <label>Proje adı<input value={projectTitle} onChange={(event) => setProjectTitle(event.target.value)} maxLength={250} required /></label>
               <label>Durum<select value={status} onChange={(event) => setStatus(event.target.value)}>
                 <option>Aktif</option>
                 <option>Beklemede</option>
@@ -308,6 +330,12 @@ function ProjectsModule({
               <label>m²<input type="number" min="0" step="any" value={areaM2} onChange={(event) => setAreaM2(event.target.value)} /></label>
               <label>Sistemler (virgülle ayırın)<input value={systems} onChange={(event) => setSystems(event.target.value)} /></label>
               <label>Proje notları<textarea rows={4} value={notes} onChange={(event) => setNotes(event.target.value)} /></label>
+              <label>Müşteri / işveren<input value={customer} onChange={(event) => setCustomer(event.target.value)} maxLength={500} /></label>
+              <label>Firma<input value={company} onChange={(event) => setCompany(event.target.value)} maxLength={500} /></label>
+              <label>Konum<input value={location} onChange={(event) => setLocation(event.target.value)} maxLength={1000} /></label>
+              <label>Uygulanan ürün<input value={product} onChange={(event) => setProduct(event.target.value)} maxLength={1000} /></label>
+              <label>Başlangıç tarihi<input value={startDate} onChange={(event) => setStartDate(event.target.value)} maxLength={100} /></label>
+              <label>Bitiş tarihi<input value={endDate} onChange={(event) => setEndDate(event.target.value)} maxLength={100} /></label>
               <label>Bağlı CRM müşterisi
                 <select value={crmContactId} onChange={(event) => setCrmContactId(event.target.value)}>
                   <option value="">Müşteri bağlama</option>
@@ -424,6 +452,12 @@ function ProjectsModule({
             value={projectType}
             onChange={(event) => setProjectType(event.target.value)}
           />
+          <label>Müşteri / işveren<input name="customer" maxLength={500} /></label>
+          <label>Firma<input name="company" maxLength={500} /></label>
+          <label>Konum<input name="location" maxLength={1000} /></label>
+          <label>Uygulanan ürün<input name="product" maxLength={1000} /></label>
+          <label>Başlangıç tarihi<input name="start_date" maxLength={100} /></label>
+          <label>Bitiş tarihi<input name="end_date" maxLength={100} /></label>
 
           <select
             value={projectStatus}

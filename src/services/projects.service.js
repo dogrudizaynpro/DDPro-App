@@ -136,7 +136,7 @@ const toProjectPayload = (project = {}) => {
     throw new Error("Project name is required");
   }
 
-  return {
+  const payload = {
     name,
     project_type:
       typeof project?.type === "string" && project.type.trim()
@@ -149,6 +149,18 @@ const toProjectPayload = (project = {}) => {
         ? project.status.trim()
         : "Aktif",
   };
+  for (const [field, aliases] of [
+    ["customer", ["customer"]],
+    ["company", ["company"]],
+    ["location", ["location"]],
+    ["product", ["product"]],
+    ["start_date", ["startDate", "start_date"]],
+    ["end_date", ["endDate", "end_date"]],
+  ]) {
+    const source = aliases.find((key) => Object.hasOwn(project || {}, key));
+    if (source) payload[field] = project[source] || null;
+  }
+  return payload;
 };
 
 export const createProject = async (project) => {
@@ -196,11 +208,25 @@ export const previewProjectSpreadsheetUpload = async (file) => {
 export const updateProject = async (id, project) => {
   if (!id) throw new Error("Project ID is required");
   const payload = {};
+  if (Object.hasOwn(project, "name")) payload.name = project.name;
+  if (Object.hasOwn(project, "type")) payload.project_type = project.type;
+  if (Object.hasOwn(project, "projectType")) payload.project_type = project.projectType;
   if (Object.hasOwn(project, "status")) payload.status = project.status;
   if (Object.hasOwn(project, "areaM2")) payload.area_m2 = project.areaM2 === "" ? null : Number(project.areaM2);
   if (Object.hasOwn(project, "systems")) payload.systems = Array.isArray(project.systems) ? project.systems : [];
   if (Object.hasOwn(project, "notes")) payload.notes = typeof project.notes === "string" ? project.notes.trim() : "";
   if (Object.hasOwn(project, "crmContactId")) payload.crm_contact_id = project.crmContactId || null;
+  for (const [field, aliases] of [
+    ["customer", ["customer"]],
+    ["company", ["company"]],
+    ["location", ["location"]],
+    ["product", ["product"]],
+    ["start_date", ["startDate", "start_date"]],
+    ["end_date", ["endDate", "end_date"]],
+  ]) {
+    const source = aliases.find((key) => Object.hasOwn(project, key));
+    if (source) payload[field] = project[source] || null;
+  }
   if (Object.hasOwn(project, "coverDocumentId")) {
     payload.cover_document_id = project.coverDocumentId || null;
   }

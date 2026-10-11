@@ -31,7 +31,7 @@ import {
 } from "./services/ai.service.js";
 import { getCatalogRecords } from "./services/catalog.service.js";
 import { getReports } from "./services/reports.service.js";
-import { getDocuments } from "./services/documents.service.js";
+import { getDocumentDownload, getDocuments } from "./services/documents.service.js";
 import { getFinanceCosts } from "./services/finance.service.js";
 import {
   getCrmContacts,
@@ -43,6 +43,10 @@ import {
   formatDateOnly,
   formatDateTime,
 } from "./utils/date-time.js";
+import {
+  getVerifiedProjectCoordinates,
+  toWorldMapPoint,
+} from "./utils/project-location.js";
 import {
   createResearchItem as createProcurementRequest,
   deleteResearchItem as deleteProcurementRequest,
@@ -623,6 +627,7 @@ function App() {
   const [aiUsageFetchState, setAiUsageFetchState] = useState("loading");
   const [calendarEvents, setCalendarEvents] = useState([]);
   const [calendarFetchState, setCalendarFetchState] = useState("loading");
+  const [dashboardCoverUrls, setDashboardCoverUrls] = useState({});
 
   const [showProjectForm, setShowProjectForm] = useState(false);
   const [showProcurementForm, setShowProcurementForm] = useState(false);
@@ -711,6 +716,28 @@ function App() {
       });
     return () => { active = false; };
   }, [integrationState?.google?.authenticated]);
+
+  useEffect(() => {
+    let active = true;
+    const coverProjects = projects
+      .filter((project) => project.status === "Aktif" && project.coverDocumentId)
+      .slice(0, 4);
+    if (!integrationState?.google?.authenticated || coverProjects.length === 0) {
+      setDashboardCoverUrls({});
+      return () => { active = false; };
+    }
+    Promise.all(coverProjects.map(async (project) => {
+      try {
+        const document = await getDocumentDownload(project.coverDocumentId, { preview: true });
+        return [project.id, document.download_url];
+      } catch {
+        return [project.id, ""];
+      }
+    })).then((entries) => {
+      if (active) setDashboardCoverUrls(Object.fromEntries(entries.filter(([, url]) => url)));
+    });
+    return () => { active = false; };
+  }, [integrationState?.google?.authenticated, projects]);
 
   useEffect(() => {
     let active = true;
@@ -1397,6 +1424,7 @@ function App() {
     event.preventDefault();
 
     if (!projectName.trim()) return;
+    const formValues = Object.fromEntries(new FormData(event.currentTarget).entries());
     projectsTouchedRef.current += 1;
     let shouldResetForm = false;
 
@@ -1405,6 +1433,12 @@ function App() {
       name: projectName.trim(),
       type: projectType.trim() || "Genel Proje",
       status: projectStatus,
+      customer: formValues.customer || "",
+      company: formValues.company || "",
+      location: formValues.location || "",
+      product: formValues.product || "",
+      startDate: formValues.start_date || "",
+      endDate: formValues.end_date || "",
       date: formatDate(),
     };
 
@@ -1983,12 +2017,13 @@ function App() {
       return null;
     }
 
-    let crmContext = getStoredData("ddpro_crm_contacts_v1");
+    let crmContext = [];
+    let crmContextUnavailable = false;
     try {
       const response = await getCrmContacts();
       crmContext = response.data || [];
     } catch {
-      // Existing locally stored contacts remain available as context when authenticated CRM is offline.
+      crmContextUnavailable = true;
     }
 
     let liveIntegrationContext;
@@ -2064,6 +2099,7 @@ function App() {
           status,
           source,
         })),
+      crmDataStatus: crmContextUnavailable ? "unavailable" : "loaded",
       calendar: getStoredData("ddpro_calendar_events_v1")
         .slice(0, 20)
         .map(({ title, type, date, project, notes }) => ({
@@ -2354,7 +2390,7 @@ function App() {
           </div>
 
           <div className="project-map-canvas">
-            <svg className="world-map" viewBox="0 0 600 320" aria-hidden="true">
+            <svg className="world-map" viewBox="0 0 600 320" role="group" aria-label="Proje konum haritası">
               <defs>
                 <pattern id={`${dashboardMapId}-grid`} width="28" height="28" patternUnits="userSpaceOnUse">
                   <path d="M 28 0 L 0 0 0 28" fill="none" stroke="currentColor" strokeWidth="0.7" />
@@ -2370,19 +2406,36 @@ function App() {
               </g>
               <circle className="map-orbit" cx="304" cy="157" r="100" />
               <circle className="map-orbit map-orbit-inner" cx="304" cy="157" r="65" />
-              <g className="map-network" aria-hidden="true">
-                <path d="M138 129 236 104 316 157 401 109 482 166 365 218 236 205 138 129" />
-                <circle cx="138" cy="129" r="5" />
-                <circle cx="236" cy="104" r="4" />
-                <circle cx="316" cy="157" r="6" />
-                <circle cx="401" cy="109" r="4" />
-                <circle cx="482" cy="166" r="5" />
-                <circle cx="365" cy="218" r="4" />
-                <circle cx="236" cy="205" r="4" />
+              <g className="verified-project-pins">
+                {projects.map((project) => {
+                  const coordinates = getVerifiedProjectCoordinates(project);
+                  if (!coordinates || !project.id) return null;
+                  const point = toWorldMapPoint(coordinates);
+                  return (
+                    <g
+                      key={project.id}
+                      className="verified-project-pin"
+                      role="button"
+                      tabIndex="0"
+                      aria-label={`${project.name} projesini aç`}
+                      onClick={() => handleModuleNavigation("projects", { id: project.id })}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          handleModuleNavigation("projects", { id: project.id });
+                        }
+                      }}
+                    >
+                      <title>{project.name}</title>
+                      <circle cx={point.x} cy={point.y} r="9" />
+                      <circle className="verified-project-pin-core" cx={point.x} cy={point.y} r="3" />
+                    </g>
+                  );
+                })}
               </g>
-              <rect width="600" height="320" fill={`url(#${dashboardMapId}-dots)`} />
+              <rect width="600" height="320" fill={`url(#${dashboardMapId}-dots)`} pointerEvents="none" />
             </svg>
-            <div className="map-legend"><span aria-hidden="true" /> Proje ağı görünümü</div>
+            <div className="map-legend"><span aria-hidden="true" /> {projects.some((project) => getVerifiedProjectCoordinates(project)) ? "Doğrulanmış proje konumları" : "Doğrulanmış konum bilgisi bulunan proje yok"}</div>
           </div>
         </section>
 
@@ -2424,6 +2477,9 @@ function App() {
                   <span className={`project-preview-mark mark-${index % 4}`} aria-hidden="true">
                     {project.name.slice(0, 1).toLocaleUpperCase("tr-TR")}
                   </span>
+                  {dashboardCoverUrls[project.id] ? (
+                    <img className="dashboard-project-cover" src={dashboardCoverUrls[project.id]} alt="" loading="lazy" />
+                  ) : null}
                   <span className="project-preview-copy">
                     <strong>{project.name}</strong>
                     <small>{project.type || "Genel Proje"}</small>
