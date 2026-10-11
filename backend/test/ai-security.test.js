@@ -39,6 +39,19 @@ test("AI chat requires an authenticated Google browser session", async () => {
   assert.equal((await response.json()).code, "BROWSER_SESSION_REQUIRED");
 });
 
+test("realtime AI voice token provisioning requires an authenticated Google browser session", async () => {
+  const response = await fetch(`${baseUrl}/api/ai/voice/session`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Origin: "https://dogrudizaynpro.github.io",
+    },
+    body: JSON.stringify({ context: {}, history: [] }),
+  });
+  assert.equal(response.status, 401);
+  assert.equal((await response.json()).code, "BROWSER_SESSION_REQUIRED");
+});
+
 test("project AI analysis reads and writes require an authenticated Google browser session", async () => {
   const projectId = "4bc6f5a6-0b6c-4ddb-b29b-208c84c344d0";
   const read = await fetch(`${baseUrl}/api/projects/${projectId}/analyses`, {

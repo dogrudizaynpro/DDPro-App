@@ -8,6 +8,7 @@ import {
   readOperationalRecords,
 } from "./ai-tools.service.js";
 import { prepareAiAttachment } from "./ai-file.service.js";
+import { isGeminiLiveConfigured } from "./ai-voice.service.js";
 import { mapProjectSheetRow } from "../controllers/project-import.controller.js";
 
 const AI_API_URL = process.env.AI_API_URL;
@@ -26,6 +27,7 @@ export const getAiProviderStatus = () => ({
   configured: Boolean(AI_API_URL && AI_API_KEY && AI_MODEL),
   provider: getProviderHostname(),
   modelConfigured: Boolean(AI_MODEL),
+  realtimeVoiceConfigured: isGeminiLiveConfigured(),
 });
 
 export const recordAiUsage = async (ownerAccount) => {
