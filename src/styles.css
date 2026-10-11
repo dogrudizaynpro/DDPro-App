@@ -2021,15 +2021,6 @@ button > .ddpro-icon-medallion {
   filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.78));
 }
 
-.map-network {
-  filter: drop-shadow(0 0 7px rgba(165, 214, 75, 0.8));
-}
-
-.map-network path {
-  stroke: rgba(165, 214, 75, 0.46);
-  stroke-dasharray: 2 5;
-}
-
 .map-center-stat strong {
   color: #fffef5;
   text-shadow: 0 0 16px rgba(165, 214, 75, 0.26), 0 2px 8px #000;
@@ -2657,18 +2648,27 @@ select:focus-visible {
   stroke-dasharray: 1 7;
 }
 
-.map-network {
-  fill: var(--emerald);
-  stroke: rgba(165, 214, 75, 0.23);
-  stroke-width: 1;
-  filter: drop-shadow(0 0 5px rgba(165, 214, 75, 0.65));
+.verified-project-pin {
+  cursor: pointer;
+  fill: #a5d64b;
+  filter: drop-shadow(0 0 5px rgba(165, 214, 75, 0.8));
+  outline: none;
 }
 
-.map-network path {
-  fill: none;
-  stroke: rgba(165, 214, 75, 0.33);
-  stroke-width: 1.1;
-  stroke-dasharray: 3 6;
+.verified-project-pin > circle:first-of-type {
+  fill: rgba(165, 214, 75, 0.28);
+  stroke: #a5d64b;
+  stroke-width: 2;
+}
+
+.verified-project-pin .verified-project-pin-core {
+  fill: #f5ffd9;
+  stroke: none;
+}
+
+.verified-project-pin:focus > circle:first-of-type {
+  stroke: #fff;
+  stroke-width: 3;
 }
 
 .map-center-stat {
@@ -2758,6 +2758,16 @@ select:focus-visible {
   font-size: 16px;
   font-weight: 700;
   box-shadow: inset 0 1px rgba(255, 255, 255, 0.1);
+}
+
+.dashboard-project-cover {
+  width: 45px;
+  height: 43px;
+  flex: 0 0 45px;
+  display: block;
+  border: 1px solid rgba(165, 214, 75, 0.2);
+  border-radius: 6px;
+  object-fit: cover;
 }
 
 .project-preview-mark::after {
@@ -4200,17 +4210,7 @@ textarea::placeholder {
     0 0 0 3px rgba(0, 0, 0, 0.24);
 }
 
-.dashboard-shell .map-network circle {
-  stroke: rgba(220, 241, 179, 0.88);
-  stroke-width: 1.6;
-  filter: drop-shadow(0 0 6px rgba(165, 214, 75, 0.95));
-}
 
-.dashboard-shell .map-network path {
-  stroke: rgba(165, 214, 75, 0.52);
-  stroke-width: 1.5;
-  filter: drop-shadow(0 0 5px rgba(165, 214, 75, 0.65));
-}
 
 .dashboard-shell .project-preview {
   min-height: 70px;
