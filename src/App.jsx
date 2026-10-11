@@ -1424,7 +1424,9 @@ function App() {
     event.preventDefault();
 
     if (!projectName.trim()) return;
-    const formValues = Object.fromEntries(new FormData(event.currentTarget).entries());
+    const formValues = event.currentTarget
+      ? Object.fromEntries(new FormData(event.currentTarget).entries())
+      : {};
     projectsTouchedRef.current += 1;
     let shouldResetForm = false;
 
@@ -2386,7 +2388,7 @@ function App() {
         <section className="panel project-map-panel">
           <div className="panel-header">
             <h2>PROJE HARİTASI</h2>
-            <span className="panel-kicker">DDPRO GLOBAL AĞI</span>
+            <span className="panel-kicker">DOĞRULANMIŞ KONUM VERİSİ</span>
           </div>
 
           <div className="project-map-canvas">
@@ -2435,7 +2437,11 @@ function App() {
               </g>
               <rect width="600" height="320" fill={`url(#${dashboardMapId}-dots)`} pointerEvents="none" />
             </svg>
-            <div className="map-legend"><span aria-hidden="true" /> {projects.some((project) => getVerifiedProjectCoordinates(project)) ? "Doğrulanmış proje konumları" : "Doğrulanmış konum bilgisi bulunan proje yok"}</div>
+            <div className="map-legend">
+              {projects.some((project) => getVerifiedProjectCoordinates(project)) ? (
+                <><span aria-hidden="true" /> Doğrulanmış proje konumları</>
+              ) : "Doğrulanmış konum bilgisi bulunan proje yok"}
+            </div>
           </div>
         </section>
 
@@ -2474,12 +2480,13 @@ function App() {
                   type="button"
                   onClick={() => handleModuleNavigation("projects", { id: project.id })}
                 >
-                  <span className={`project-preview-mark mark-${index % 4}`} aria-hidden="true">
-                    {project.name.slice(0, 1).toLocaleUpperCase("tr-TR")}
-                  </span>
                   {dashboardCoverUrls[project.id] ? (
                     <img className="dashboard-project-cover" src={dashboardCoverUrls[project.id]} alt="" loading="lazy" />
-                  ) : null}
+                  ) : (
+                    <span className={`project-preview-mark mark-${index % 4}`} aria-hidden="true">
+                      {project.name.slice(0, 1).toLocaleUpperCase("tr-TR")}
+                    </span>
+                  )}
                   <span className="project-preview-copy">
                     <strong>{project.name}</strong>
                     <small>{project.type || "Genel Proje"}</small>

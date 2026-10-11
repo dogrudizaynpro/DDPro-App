@@ -55,6 +55,7 @@ function ProjectsModule({
 }) {
   const selectedProject = projects.find((project) => project.id === selectedProjectId);
   const [projectTitle, setProjectTitle] = useState("");
+  const [projectTypeValue, setProjectTypeValue] = useState("");
   const [areaM2, setAreaM2] = useState("");
   const [systems, setSystems] = useState("");
   const [notes, setNotes] = useState("");
@@ -83,6 +84,7 @@ function ProjectsModule({
 
   useEffect(() => {
     setProjectTitle(selectedProject?.name || "");
+    setProjectTypeValue(selectedProject?.type || "");
     setAreaM2(selectedProject?.areaM2 ?? "");
     setSystems((selectedProject?.systems || []).join(", "));
     setNotes(selectedProject?.notes || "");
@@ -153,6 +155,7 @@ function ProjectsModule({
     event.preventDefault();
     const saved = await updateProject(selectedProject.id, {
       name: projectTitle,
+      type: projectTypeValue,
       areaM2,
       systems: systems.split(",").map((item) => item.trim()).filter(Boolean),
       notes,
@@ -322,6 +325,7 @@ function ProjectsModule({
             </p>
             <form className="data-form project-detail-form" onSubmit={saveProjectDetails}>
               <label>Proje adı<input value={projectTitle} onChange={(event) => setProjectTitle(event.target.value)} maxLength={250} required /></label>
+              <label>Proje türü<input value={projectTypeValue} onChange={(event) => setProjectTypeValue(event.target.value)} maxLength={500} /></label>
               <label>Durum<select value={status} onChange={(event) => setStatus(event.target.value)}>
                 <option>Aktif</option>
                 <option>Beklemede</option>

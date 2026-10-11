@@ -159,7 +159,9 @@ export const getProjectUpdatePayload = (body = {}) => {
   }
   if (Object.hasOwn(body, "crm_contact_id")) {
     const id = body.crm_contact_id;
-    if (id !== null && id !== "" && (typeof id !== "string" || !/^[\da-f-]{36}$/i.test(id))) {
+    if (id !== null && id !== "" && (
+      typeof id !== "string" || !/^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/i.test(id)
+    )) {
       const error = new Error("CRM contact id is invalid");
       error.statusCode = 400;
       throw error;
@@ -168,7 +170,9 @@ export const getProjectUpdatePayload = (body = {}) => {
   }
   if (Object.hasOwn(body, "cover_document_id")) {
     const id = body.cover_document_id;
-    if (id !== null && id !== "" && (typeof id !== "string" || !/^[\da-f-]{36}$/i.test(id))) {
+    if (id !== null && id !== "" && (
+      typeof id !== "string" || !/^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/i.test(id)
+    )) {
       const error = new Error("Project cover document id is invalid");
       error.statusCode = 400;
       throw error;
