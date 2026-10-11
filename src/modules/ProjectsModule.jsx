@@ -3,6 +3,8 @@ import { getCrmContacts } from "../services/operations-integrations.service.js";
 import { formatDateTime } from "../utils/date-time.js";
 import {
   importAiFileProjects,
+  createProjectAiAnalysis,
+  getProjectAiAnalyses,
   previewProjectSpreadsheetUpload,
 } from "../services/projects.service.js";
 import {
@@ -31,6 +33,33 @@ const ASSET_LABELS = {
   before: "Uygulama öncesi",
   progress: "Uygulama süreci",
   completed: "Tamamlanan iş",
+};
+const PROJECT_ANALYSIS_DRAFT_KEY = (projectId) =>
+  `ddpro_project_analysis_draft_v1_${encodeURIComponent(projectId || "none")}`;
+const createAnalysisRequestId = () =>
+  globalThis.crypto?.randomUUID?.() ||
+  "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (character) => {
+    const value = Math.floor(Math.random() * 16);
+    return (character === "x" ? value : (value & 0x3) | 0x8).toString(16);
+  });
+const getProjectAnalysisDraft = (projectId) => {
+  const emptyDraft = { projectId, command: "", requestId: createAnalysisRequestId() };
+  if (!projectId) return emptyDraft;
+  try {
+    const saved = JSON.parse(localStorage.getItem(PROJECT_ANALYSIS_DRAFT_KEY(projectId)) || "null");
+    if (saved?.projectId === projectId && typeof saved.command === "string" &&
+        typeof saved.requestId === "string") return saved;
+  } catch {
+    // Keep the project form usable if browser storage is unavailable.
+  }
+  return emptyDraft;
+};
+const saveProjectAnalysisDraft = (draft) => {
+  try {
+    localStorage.setItem(PROJECT_ANALYSIS_DRAFT_KEY(draft.projectId), JSON.stringify(draft));
+  } catch {
+    // The in-memory draft remains available for this visit.
+  }
 };
 
 function ProjectsModule({
@@ -66,9 +95,16 @@ function ProjectsModule({
   const [product, setProduct] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-  const [projectCommand, setProjectCommand] = useState("");
+  const [projectCommandDraft, setProjectCommandDraft] = useState(() =>
+    getProjectAnalysisDraft(selectedProjectId)
+  );
+  const projectCommand = projectCommandDraft.projectId === selectedProjectId
+    ? projectCommandDraft.command
+    : "";
   const [projectAnalysis, setProjectAnalysis] = useState(null);
+  const [projectAnalysisHistory, setProjectAnalysisHistory] = useState([]);
   const projectAnalysisPendingRef = useRef(false);
+  const projectAnalysisRequestRef = useRef(0);
   const [status, setStatus] = useState("");
   const [detailsStatus, setDetailsStatus] = useState("");
   const [crmContacts, setCrmContacts] = useState([]);
@@ -86,6 +122,9 @@ function ProjectsModule({
   const projectDocuments = documents.filter((document) => document.project_id === selectedProject?.id);
 
   useEffect(() => {
+    let active = true;
+    projectAnalysisRequestRef.current += 1;
+    projectAnalysisPendingRef.current = false;
     setProjectTitle(selectedProject?.name || "");
     setProjectTypeValue(selectedProject?.type || "");
     setAreaM2(selectedProject?.areaM2 ?? "");
@@ -100,11 +139,38 @@ function ProjectsModule({
     setStatus(selectedProject?.status || "Aktif");
     setCrmContactId(selectedProject?.crmContactId || "");
     setDetailsStatus("");
-    setProjectCommand("");
-    setProjectAnalysis(null);
+    setProjectCommandDraft(getProjectAnalysisDraft(selectedProject?.id || ""));
+    setProjectAnalysisHistory([]);
+    setProjectAnalysis(selectedProject
+      ? { status: "loading", text: "Kayıtlı proje analizleri yükleniyor…" }
+      : null);
     setSpreadsheetPreview(null);
     setSpreadsheetError("");
     setSpreadsheetResult(null);
+    if (selectedProject) {
+      getProjectAiAnalyses(selectedProject.id)
+        .then((analyses) => {
+          if (!active) return;
+          const successful = analyses.filter((analysis) =>
+            analysis.status === "success" && typeof analysis.result?.answer === "string"
+          );
+          setProjectAnalysisHistory(successful);
+          const latest = successful[0];
+          setProjectAnalysis(latest
+            ? { id: latest.id, status: "success", text: latest.result.answer }
+            : null);
+        })
+        .catch((error) => {
+          if (active) {
+            setProjectAnalysisHistory([]);
+            setProjectAnalysis({
+              status: "unavailable",
+              text: `Kayıtlı proje analizleri yüklenemedi: ${error.message || "Backend erişilemiyor."}`,
+            });
+          }
+        });
+    }
+    return () => { active = false; };
   }, [selectedProject?.id]);
 
   useEffect(() => {
@@ -288,39 +354,40 @@ function ProjectsModule({
 
   const sendProjectCommand = async () => {
     const request = projectCommand.trim();
-    if (!selectedProject || !request || !sendAiMessage || projectAnalysisPendingRef.current) return;
+    if (!selectedProject || !request || projectAnalysisPendingRef.current) return;
     projectAnalysisPendingRef.current = true;
+    const projectId = selectedProject.id;
+    const requestVersion = ++projectAnalysisRequestRef.current;
+    const requestId = projectCommandDraft.projectId === projectId
+      ? projectCommandDraft.requestId
+      : createAnalysisRequestId();
     setProjectAnalysis({ status: "loading", text: "Seçili proje AI tarafından analiz ediliyor…" });
-    const projectContext = {
-      id: selectedProject.id,
-      name: selectedProject.name,
-      type: selectedProject.type,
-      status: selectedProject.status,
-      customer: selectedProject.customer,
-      company: selectedProject.company,
-      location: selectedProject.location,
-      product: selectedProject.product,
-      areaM2: selectedProject.areaM2,
-      systems: selectedProject.systems,
-      startDate: selectedProject.startDate,
-      endDate: selectedProject.endDate,
-      notes: selectedProject.notes,
-    };
     try {
-      const response = await sendAiMessage(request, "", { selectedProject: projectContext });
-      setProjectAnalysis(response?.status === "success"
-        ? { status: "success", text: response.text }
-        : {
-          status: "unavailable",
-          text: response?.text || "AI analiz yanıtı alınamadı. Bağlantınızı kontrol edip yeniden deneyin.",
-        });
+      const analysis = await createProjectAiAnalysis(projectId, { command: request, requestId });
+      if (requestVersion !== projectAnalysisRequestRef.current) return;
+      const saved = {
+        id: analysis.id,
+        status: "success",
+        text: analysis.result?.answer || "",
+      };
+      if (!saved.text) throw new Error("AI sağlayıcısı geçerli bir yanıt döndürmedi.");
+      setProjectAnalysis(saved);
+      setProjectAnalysisHistory((current) => [
+        analysis,
+        ...current.filter((item) => item.id !== analysis.id),
+      ].slice(0, 20));
+      const nextDraft = { projectId, command: projectCommand, requestId: createAnalysisRequestId() };
+      setProjectCommandDraft(nextDraft);
+      saveProjectAnalysisDraft(nextDraft);
     } catch (error) {
-      setProjectAnalysis({
-        status: "unavailable",
-        text: error.message || "AI analiz isteği tamamlanamadı. Tekrar deneyin.",
-      });
+      if (requestVersion === projectAnalysisRequestRef.current) {
+        setProjectAnalysis({
+          status: "unavailable",
+          text: error.message || "AI analiz isteği tamamlanamadı. Komut korundu; bağlantı düzeldiğinde yeniden deneyin.",
+        });
+      }
     } finally {
-      projectAnalysisPendingRef.current = false;
+      if (requestVersion === projectAnalysisRequestRef.current) projectAnalysisPendingRef.current = false;
     }
   };
 
@@ -392,7 +459,19 @@ function ProjectsModule({
                 aria-label="Proje hakkında doğal dilde istek"
                 placeholder="Örn. Uygulama fotoğraflarını ve teknik belgeleri düzenlemek için bir kontrol listesi hazırla."
                 value={projectCommand}
-                onChange={(event) => setProjectCommand(event.target.value)}
+                onChange={(event) => {
+                  const command = event.target.value;
+                  const current = projectCommandDraft.projectId === selectedProject.id
+                    ? projectCommandDraft
+                    : getProjectAnalysisDraft(selectedProject.id);
+                  const nextDraft = {
+                    projectId: selectedProject.id,
+                    command,
+                    requestId: current.command === command ? current.requestId : createAnalysisRequestId(),
+                  };
+                  setProjectCommandDraft(nextDraft);
+                  saveProjectAnalysisDraft(nextDraft);
+                }}
               />
               <button type="button" disabled={!projectCommand.trim() || aiSending || projectAnalysis?.status === "loading"} onClick={sendProjectCommand}>
                 {projectAnalysis?.status === "loading" ? "Analiz ediliyor…" : "AI ile analiz et"}
@@ -402,6 +481,17 @@ function ProjectsModule({
                   role={projectAnalysis.status === "unavailable" ? "alert" : "status"}>
                   {projectAnalysis.text}
                 </p>
+              ) : null}
+              {projectAnalysisHistory.length > 1 ? (
+                <ol className="project-analysis-history" aria-label="Kaydedilmiş proje analizleri">
+                  {projectAnalysisHistory.slice(1).map((analysis) => (
+                    <li key={analysis.id}>
+                      <strong>{analysis.command}</strong>
+                      <p>{analysis.result.answer}</p>
+                      <small>{formatDateTime(analysis.created_at)}</small>
+                    </li>
+                  ))}
+                </ol>
               ) : null}
             </section>
             <section className="project-assets-section">

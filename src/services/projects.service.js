@@ -124,6 +124,22 @@ export const getProjectById = async (id) => {
   }
 };
 
+export const getProjectAiAnalyses = async (id) => {
+  if (!id) throw new Error("Project ID is required");
+  const response = await fetchAPI(`/api/projects/${encodeURIComponent(id)}/analyses`);
+  return response.data || [];
+};
+
+export const createProjectAiAnalysis = async (id, { command, requestId }) => {
+  if (!id) throw new Error("Project ID is required");
+  const response = await fetchAPI(`/api/projects/${encodeURIComponent(id)}/analyses`, {
+    method: "POST",
+    body: JSON.stringify({ command, requestId }),
+    timeoutMs: 250_000,
+  });
+  return response.data;
+};
+
 const toProjectPayload = (project = {}) => {
   const name =
     typeof project?.name === "string" && project.name.trim()

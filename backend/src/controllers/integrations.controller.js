@@ -32,6 +32,7 @@ export const getIntegrationStatus = async (req, res, next) => {
       ["projects", "id"],
       ["offers", "id"],
       ["research_items", "id"],
+      ["project_ai_analyses", "id"],
     ];
     const [coreResults, { error: crmError }, { error: tokenError }] = await Promise.all([
       Promise.all(

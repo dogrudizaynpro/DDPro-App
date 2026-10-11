@@ -44,6 +44,7 @@ export const serviceRoleTables = [
   "ai_tool_confirmations",
   "ai_file_imports",
   "ai_operation_audit_events",
+  "project_ai_analyses",
   "whatsapp_inbound_messages",
 ];
 // Tables that must exist with RLS enabled and no direct client access.
@@ -84,6 +85,17 @@ const verificationQuery = `
           'id', 'owner_account', 'resource', 'operation', 'record_id',
           'record_payload', 'record_snapshot', 'expires_at', 'confirmed_at',
           'created_at'
+        )
+        AND (
+          SELECT count(*) = 11
+          FROM information_schema.columns
+          WHERE table_schema = 'public'
+            AND table_name = 'project_ai_analyses'
+            AND column_name IN (
+              'id', 'owner_account', 'project_id', 'request_id', 'command',
+              'status', 'result', 'failure_code', 'lease_token', 'created_at',
+              'updated_at'
+            )
         )
     ) AS expected_columns,
     has_table_privilege('service_role', table_info.oid, 'SELECT')

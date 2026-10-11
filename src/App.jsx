@@ -78,6 +78,7 @@ const STORAGE_KEYS = {
   customers: "ddpro_customers_v1",
   reports: "ddpro_reports_v1",
 };
+const AI_DRAFT_STORAGE_KEY = "ddpro_ai_draft_v1";
 
 const useCatalogDataState = (resource) => {
   const [value, setValue] = useState(EMPTY_ITEMS);
@@ -653,7 +654,7 @@ function App() {
   const [memoryTitle, setMemoryTitle] = useState("");
   const [memoryContent, setMemoryContent] = useState("");
 
-  const [aiInput, setAiInput] = useState("");
+  const [aiInput, setAiInput] = useState(() => getStoredData(AI_DRAFT_STORAGE_KEY, ""));
   const [aiSending, setAiSending] = useState(false);
   const [aiAttachment, setAiAttachment] = useState(null);
 
@@ -666,6 +667,14 @@ function App() {
       date: formatDate(),
     },
   ]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(AI_DRAFT_STORAGE_KEY, JSON.stringify(aiInput));
+    } catch {
+      // The in-memory draft remains available for this visit.
+    }
+  }, [aiInput]);
 
   useEffect(() => {
     const intervalId = window.setInterval(() => setCurrentDate(new Date()), 60_000);
@@ -1356,8 +1365,9 @@ function App() {
     }
 
     const nextRoute = moduleRouteMap[moduleId] || "/dashboard";
-    const query = moduleId === "projects" && params.id
-      ? `?id=${encodeURIComponent(params.id)}`
+    const projectId = params.id || selectedProjectId;
+    const query = projectId
+      ? `?id=${encodeURIComponent(projectId)}`
       : "";
     const nextHash = `#${nextRoute}${query}`;
     if (window.location.hash !== nextHash) {
@@ -1962,8 +1972,8 @@ function App() {
         attachments: [{ name: attachment.name, status: "Dosya gönderiliyor ve analiz ediliyor…" }],
       } : {}),
     };
+    const draftToClear = aiInput === message ? aiInput : "";
     setAiMessages((currentMessages) => [...currentMessages, userMessage]);
-    if (!attachment) setAiInput("");
     setAiSending(true);
 
     const normalizedMessage = message.toLocaleLowerCase("tr-TR");
@@ -1996,6 +2006,7 @@ function App() {
           ...currentMessages,
           response,
         ]);
+        if (draftToClear) setAiInput((current) => current === draftToClear ? "" : current);
         return response;
       } catch (error) {
         setAiMessages((currentMessages) => [
@@ -2147,8 +2158,8 @@ function App() {
             : item
         ));
         setAiAttachment((current) => current === attachment ? null : current);
-        setAiInput("");
       }
+      if (draftToClear) setAiInput((current) => current === draftToClear ? "" : current);
       getAiUsageCount().then(setAiAnalysisCount).catch(() => {});
       const response = {
         id: createId(),
@@ -2850,7 +2861,9 @@ function App() {
           deleteProject={deleteProject}
           updateProject={updateProject}
           selectedProjectId={selectedProjectId}
-          onNavigate={handleModuleNavigation}
+          onNavigate={(moduleId, params = {}) =>
+            handleModuleNavigation(moduleId, { ...params, id: params.id || selectedProjectId })
+          }
           refreshProjects={async () => setProjects(await getProjects())}
           sendAiMessage={sendAiMessage}
           aiSending={aiSending}
