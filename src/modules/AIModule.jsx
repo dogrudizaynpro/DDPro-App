@@ -93,9 +93,16 @@ function AIModule({
   const [providerStatus, setProviderStatus] = useState("checking");
   const [voiceListening, setVoiceListening] = useState(false);
   const [voiceSpeaking, setVoiceSpeaking] = useState(false);
+  const [voicePhase, setVoicePhase] = useState("idle");
+  const [voiceStatus, setVoiceStatus] = useState("Türkçe sesli komutlar yazılı mesajlarla aynı güvenli AI akışını kullanır.");
+  const [voiceTranscript, setVoiceTranscript] = useState("");
   const [voiceError, setVoiceError] = useState("");
   const recognitionRef = useRef(null);
   const voiceRequestRef = useRef(0);
+  const voiceOperationRef = useRef("idle");
+  const voiceCommandSubmittedRef = useRef(false);
+  const voiceRecognitionErrorRef = useRef(false);
+  const voiceFinalTranscriptRef = useRef("");
   const sendAiMessageRef = useRef(sendAiMessage);
   sendAiMessageRef.current = sendAiMessage;
   const voiceCancellationRef = useRef(false);
@@ -131,21 +138,54 @@ function AIModule({
     };
   }, []);
 
-  const speakResponse = (text) => {
-    try {
-      voiceCancellationRef.current = false;
-      const utterance = speakTurkishText(text);
-      setVoiceError("");
-      setVoiceSpeaking(true);
-      utterance.onend = () => setVoiceSpeaking(false);
-      utterance.onerror = () => {
-        setVoiceSpeaking(false);
-        if (!voiceCancellationRef.current) {
-          setVoiceError("AI yanıtı seslendirilemedi. Tarayıcının ses ayarlarını kontrol edin.");
-        }
-      };
-    } catch (error) {
+  const speakResponse = async (text, expectedRequestId = null) => {
+    if (voiceOperationRef.current !== "idle" && voiceOperationRef.current !== "sending") return;
+    if (aiSending && expectedRequestId === null) return;
+    const requestId = expectedRequestId ?? ++voiceRequestRef.current;
+    voiceOperationRef.current = "speaking";
+    setVoicePhase("preparing-speech");
+    setVoiceStatus("AI yanıtı alındı. Türkçe ses hazırlanıyor…");
+    setVoiceError("");
+    setVoiceSpeaking(true);
+    voiceCancellationRef.current = false;
+    const finishSpeaking = () => {
+      if (requestId !== voiceRequestRef.current) return;
+      voiceOperationRef.current = "idle";
       setVoiceSpeaking(false);
+      setVoicePhase("idle");
+      setVoiceStatus("AI yanıtı seslendirildi.");
+    };
+    try {
+      await speakTurkishText(text, window, {
+        shouldSpeak: () =>
+          requestId === voiceRequestRef.current && voiceOperationRef.current === "speaking",
+        onstart: () => {
+          if (requestId !== voiceRequestRef.current) return;
+          setVoicePhase("speaking");
+          setVoiceStatus("AI yanıtı seslendiriliyor…");
+        },
+        onend: finishSpeaking,
+        onerror: (event) => {
+          if (requestId !== voiceRequestRef.current) return;
+          const cancelled = voiceCancellationRef.current ||
+            ["canceled", "interrupted"].includes(event?.error);
+          voiceOperationRef.current = "idle";
+          setVoiceSpeaking(false);
+          setVoicePhase(cancelled ? "idle" : "error");
+          if (cancelled) {
+            setVoiceStatus("Yanıt seslendirmesi durduruldu.");
+          } else {
+            setVoiceStatus("AI yanıtı seslendirilemedi.");
+            setVoiceError("AI yanıtı seslendirilemedi. Tarayıcının ses ayarlarını kontrol edin.");
+          }
+        },
+      });
+    } catch (error) {
+      if (requestId !== voiceRequestRef.current) return;
+      voiceOperationRef.current = "idle";
+      setVoiceSpeaking(false);
+      setVoicePhase("error");
+      setVoiceStatus("AI yanıtı seslendirilemedi.");
       setVoiceError(error.message);
     }
   };
@@ -154,64 +194,139 @@ function AIModule({
     voiceRequestRef.current += 1;
     voiceCancellationRef.current = true;
     window.speechSynthesis?.cancel();
+    voiceOperationRef.current = "idle";
     setVoiceSpeaking(false);
+    setVoicePhase("idle");
+    setVoiceStatus("Yanıt seslendirmesi durduruldu.");
   };
 
   useEffect(() => () => {
     voiceRequestRef.current += 1;
+    voiceOperationRef.current = "idle";
     recognitionRef.current?.abort();
     window.speechSynthesis?.cancel();
   }, []);
 
   const toggleVoiceInput = () => {
-    if (voiceListening) {
+    if (voiceOperationRef.current === "listening") {
+      voiceRecognitionErrorRef.current = true;
       recognitionRef.current?.stop();
+      voiceOperationRef.current = "stopping";
+      setVoicePhase("stopping");
+      setVoiceStatus("Mikrofon dinlemesi durduruluyor…");
       return;
     }
     if (!SpeechRecognition) {
+      setVoicePhase("error");
+      setVoiceStatus("Tarayıcı mikrofonla konuşma tanımayı desteklemiyor.");
       setVoiceError("Bu tarayıcı sesli komutları desteklemiyor. Yazılı mesaj gönderebilirsiniz.");
       return;
     }
     if (typeof window !== "undefined" && !window.isSecureContext) {
+      setVoicePhase("error");
+      setVoiceStatus("Güvenli bağlantı olmadan mikrofon açılamaz.");
       setVoiceError("Mikrofon için güvenli HTTPS bağlantısı gerekir.");
       return;
     }
-    if (aiSending) return;
+    if (aiSending || voiceOperationRef.current !== "idle") return;
     setVoiceError("");
-    stopSpeech();
+    setVoiceTranscript("");
+    setVoiceStatus("Mikrofon dinlemesi başlatılıyor…");
+    setVoicePhase("starting");
+    voiceOperationRef.current = "listening";
+    voiceCommandSubmittedRef.current = false;
+    voiceRecognitionErrorRef.current = false;
+    voiceFinalTranscriptRef.current = "";
+    const requestId = ++voiceRequestRef.current;
     const recognition = new SpeechRecognition();
     recognition.lang = "tr-TR";
-    recognition.interimResults = false;
+    recognition.interimResults = true;
     recognition.maxAlternatives = 1;
+    recognition.onstart = () => {
+      if (requestId !== voiceRequestRef.current) return;
+      setVoiceListening(true);
+      setVoicePhase("listening");
+      setVoiceStatus("Mikrofon dinliyor. Konuşmaya başlayabilirsiniz.");
+    };
     recognition.onresult = async (event) => {
-      const transcript = Array.from(event.results || [])
+      if (requestId !== voiceRequestRef.current || voiceCommandSubmittedRef.current) return;
+      const results = Array.from(event.results || []);
+      const transcript = results
         .map((result) => result[0]?.transcript || "")
         .join(" ")
         .trim();
-      if (!transcript) {
-        setVoiceError("Sesli komut anlaşılamadı. Tekrar deneyin veya mesajınızı yazın.");
-        return;
+      if (transcript) {
+        setVoiceTranscript(transcript);
+        setVoicePhase("transcribing");
+        setVoiceStatus("Konuşma algılandı; metne dönüştürülüyor…");
       }
-      setAiInput(transcript);
-      const requestId = ++voiceRequestRef.current;
+      const finalTranscript = results
+        .filter((result) => result.isFinal !== false)
+        .map((result) => result[0]?.transcript || "")
+        .join(" ")
+        .trim();
+      if (!finalTranscript) return;
+      voiceCommandSubmittedRef.current = true;
+      voiceFinalTranscriptRef.current = finalTranscript;
+      setVoiceTranscript(finalTranscript);
+      setAiInput(finalTranscript);
+      voiceOperationRef.current = "sending";
+      setVoicePhase("sending");
+      setVoiceStatus("Konuşma metne dönüştürüldü. AI isteği gönderildi; yanıt bekleniyor…");
       try {
-        const response = await sendVoiceCommand(sendAiMessageRef.current, transcript);
-        if (requestId === voiceRequestRef.current) speakResponse(response.text);
+        const response = await sendVoiceCommand(sendAiMessageRef.current, finalTranscript);
+        if (requestId === voiceRequestRef.current) {
+          setVoicePhase("received");
+          setVoiceStatus("Yeni AI yanıtı alındı.");
+          await speakResponse(response.text, requestId);
+        }
       } catch (error) {
-        if (requestId === voiceRequestRef.current) setVoiceError(error.message);
+        if (requestId === voiceRequestRef.current) {
+          voiceOperationRef.current = "idle";
+          setVoicePhase("error");
+          setVoiceStatus("AI isteği başarısız; yanıt seslendirilemedi.");
+          setVoiceError(`AI isteği başarısız: ${error.message}`);
+        }
       }
     };
     recognition.onerror = (event) => {
       const errors = {
-        "not-allowed": "Mikrofon izni verilmedi. Tarayıcı izinlerini kontrol edin.",
-        "no-speech": "Ses algılanmadı. Tekrar deneyin.",
+        "not-allowed": "Mikrofon izni reddedildi. Tarayıcı izinlerini kontrol edin.",
+        "service-not-allowed": "Mikrofon izni reddedildi. Tarayıcı izinlerini kontrol edin.",
+        "no-speech": "Sessizlik algılandı; konuşma alınamadı. Tekrar deneyin.",
         "audio-capture": "Mikrofon kullanılamıyor.",
       };
-      setVoiceError(errors[event.error] || "Sesli komut alınamadı. Tekrar deneyin.");
+      voiceRecognitionErrorRef.current = true;
+      if (["starting", "listening"].includes(voiceOperationRef.current)) {
+        voiceOperationRef.current = "idle";
+      }
+      setVoiceListening(false);
+      setVoicePhase("error");
+      const errorMessage = errors[event.error] || "Sesli komut alınamadı. Tekrar deneyin.";
+      setVoiceStatus(errorMessage);
+      setVoiceError(errorMessage);
     };
     recognition.onend = () => {
       recognitionRef.current = null;
       setVoiceListening(false);
+      if (voiceOperationRef.current === "listening" || voiceOperationRef.current === "stopping") {
+        const wasStopping = voiceOperationRef.current === "stopping";
+        voiceOperationRef.current = "idle";
+        if (wasStopping || voiceRecognitionErrorRef.current) {
+          if (wasStopping) {
+            setVoicePhase("idle");
+            setVoiceStatus("Mikrofon dinlemesi durduruldu.");
+          }
+          return;
+        }
+        if (!voiceFinalTranscriptRef.current) {
+          setVoicePhase("error");
+          setVoiceStatus("Sessizlik algılandı; konuşma alınamadı.");
+          setVoiceError("Sessizlik algılandı; konuşma alınamadı. Tekrar deneyin.");
+        } else {
+          setVoicePhase("idle");
+        }
+      }
     };
     recognitionRef.current = recognition;
     try {
@@ -220,6 +335,9 @@ function AIModule({
     } catch {
       recognitionRef.current = null;
       setVoiceListening(false);
+      voiceOperationRef.current = "idle";
+      setVoicePhase("error");
+      setVoiceStatus("Ses tanıma başlatılamadı.");
       setVoiceError("Ses tanıma başlatılamadı. Tekrar deneyin.");
     }
   };
@@ -538,7 +656,7 @@ function AIModule({
               placeholder="DDPro AI için mesajını yaz..."
               value={aiInput}
               onChange={(event) => setAiInput(event.target.value)}
-              disabled={aiSending}
+              disabled={aiSending || ["starting", "listening", "transcribing", "sending", "received", "preparing-speech", "speaking", "stopping"].includes(voicePhase)}
             />
             <button
               className="ai-attach-button"
@@ -553,25 +671,32 @@ function AIModule({
             <button
               className={`ai-voice-button${voiceListening ? " is-listening" : ""}`}
               type="button"
-              aria-label={voiceListening ? "Sesli komutu durdur" : "Sesli komut başlat"}
+              aria-label={["starting", "listening", "transcribing"].includes(voicePhase) ? "Sesli komutu durdur" : "Sesli komut başlat"}
               aria-pressed={voiceListening}
-              disabled={aiSending}
+              disabled={aiSending || voiceSpeaking || ["sending", "received", "preparing-speech", "speaking"].includes(voicePhase)}
               onClick={toggleVoiceInput}
             >
               <span aria-hidden="true">🎙</span>
-              {voiceListening ? "Dinleniyor…" : "Sesli komut"}
+              {["starting", "listening", "transcribing"].includes(voicePhase) ? "Dinleniyor…" : "Sesli komut"}
             </button>
             <button
               type="button"
               aria-label={voiceSpeaking ? "Sesli AI yanıtını durdur" : "Son AI yanıtını seslendir"}
-              disabled={!voiceSpeaking && (aiSending || !latestAssistantMessage)}
+              disabled={!voiceSpeaking && (
+                aiSending ||
+                !latestAssistantMessage ||
+                ["starting", "listening", "transcribing", "sending", "received", "stopping"].includes(voicePhase)
+              )}
               onClick={() => voiceSpeaking
                 ? stopSpeech()
                 : speakResponse(latestAssistantMessage?.text || "")}
             >
               {voiceSpeaking ? "Yanıtı durdur" : "Yanıtı seslendir"}
             </button>
-            <button type="submit" disabled={aiSending || (!aiInput.trim() && !aiAttachment)}>
+            <button
+              type="submit"
+              disabled={aiSending || (!aiInput.trim() && !aiAttachment) || ["starting", "listening", "transcribing", "sending", "received", "preparing-speech", "speaking", "stopping"].includes(voicePhase)}
+            >
               <span>{aiSending ? (aiAttachment ? "Yükleniyor ve analiz ediliyor…" : "Yanıt bekleniyor…") : "Analizi başlat"}</span>
               <span aria-hidden="true">→</span>
             </button>
@@ -594,13 +719,12 @@ function AIModule({
             ) : null}
             {fileError ? <p className="ai-file-error" role="alert">{fileError}</p> : null}
             {voiceError ? <p className="ai-voice-status" role="alert">{voiceError}</p> : null}
-            {!voiceError ? <p className="ai-voice-status" role="status" aria-live="polite">
-              {voiceListening
-                ? "Mikrofon dinliyor…"
-                : voiceSpeaking
-                  ? "AI yanıtı seslendiriliyor…"
-                  : "Türkçe sesli komutlar yazılı mesajlarla aynı güvenli AI akışını kullanır."}
-            </p> : null}
+            <p className="ai-voice-status" role="status" aria-live="polite">{voiceStatus}</p>
+            {voiceTranscript ? (
+              <p className="ai-voice-status ai-voice-transcript" aria-live="polite">
+                <strong>Algılanan konuşma:</strong> {voiceTranscript}
+              </p>
+            ) : null}
           </form>
         </section>
       </div>

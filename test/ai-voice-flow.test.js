@@ -160,20 +160,26 @@ for (const fail of [false, true]) {
 }
 
 const createVoiceInput = (send) => {
-  const state = { spoken: [], errors: [], inputs: [] };
+  const state = { spoken: [], errors: [], inputs: [], phases: [], statuses: [], transcripts: [] };
   const context = {
-    voiceListening: false, aiSending: false,
+    voiceListening: false, voiceOperationRef: { current: "idle" }, aiSending: false,
     SpeechRecognition: class {
-      start() {}
+      start() { this.onstart?.(); }
     },
     window: { isSecureContext: true },
     recognitionRef: { current: null },
     voiceRequestRef: { current: 0 },
+    voiceCommandSubmittedRef: { current: false },
+    voiceRecognitionErrorRef: { current: false },
+    voiceFinalTranscriptRef: { current: "" },
     sendAiMessageRef: { current: send },
     sendVoiceCommand,
     setAiInput: (input) => state.inputs.push(input),
     setVoiceError: (error) => state.errors.push(error),
-    setVoiceListening: () => {},
+    setVoiceStatus: (status) => state.statuses.push(status),
+    setVoicePhase: (phase) => state.phases.push(phase),
+    setVoiceTranscript: (transcript) => state.transcripts.push(transcript),
+    setVoiceListening: (listening) => { context.voiceListening = listening; },
     stopSpeech: () => { context.voiceRequestRef.current += 1; },
     speakResponse: (text) => state.spoken.push(text),
   };
@@ -182,7 +188,7 @@ const createVoiceInput = (send) => {
   runInNewContext(`${moduleSource.slice(start, end)}; toggleVoiceInput();`, context);
   return { context, state, recognition: context.recognitionRef.current };
 };
-const transcriptEvent = { results: [[{ transcript: "Sesli komut" }]] };
+const transcriptEvent = { results: [{ isFinal: true, 0: { transcript: "Sesli komut" } }] };
 
 test("recognition uses the current send callback rather than the closure from microphone start", async () => {
   const voice = createVoiceInput(() => { throw new Error("Stale callback used"); });
@@ -198,7 +204,38 @@ test("recognition reports failure without speaking a failure or an older answer"
   const voice = createVoiceInput(send);
   await voice.recognition.onresult(transcriptEvent);
   assert.deepEqual(voice.state.spoken, []);
-  assert.match(voice.state.errors.at(-1), /yeni bir AI yanıtı alınamadı/);
+  assert.match(voice.state.errors.at(-1), /AI isteği başarısız.*yeni bir AI yanıtı alınamadı/);
+});
+
+test("voice recognition shows speech and transcript stages and sends a final transcript only once", async () => {
+  let sendCount = 0;
+  const { send, state } = createSender();
+  const voice = createVoiceInput(async (...args) => {
+    sendCount += 1;
+    return send(...args);
+  });
+  const sending = voice.recognition.onresult(transcriptEvent);
+  const duplicate = voice.recognition.onresult(transcriptEvent);
+  await Promise.all([sending, duplicate]);
+  assert.equal(sendCount, 1);
+  assert.equal(state.messages.at(-1).text, "Yeni AI yanıtı");
+  assert.equal(voice.state.inputs.at(-1), "Sesli komut");
+  assert.ok(voice.state.statuses.some((status) => status.includes("Konuşma algılandı")));
+  assert.ok(voice.state.statuses.some((status) => status.includes("AI isteği gönderildi")));
+  assert.ok(voice.state.phases.includes("sending"));
+  assert.equal(voice.context.voiceOperationRef.current, "sending");
+});
+
+test("empty recognition ending without speech reports a distinct silence error", () => {
+  const voice = createVoiceInput(() => {});
+  voice.recognition.onend();
+  assert.match(voice.state.errors.at(-1), /Sessizlik algılandı/);
+});
+
+test("microphone permission denial is reported separately", () => {
+  const voice = createVoiceInput(() => {});
+  voice.recognition.onerror({ error: "not-allowed" });
+  assert.match(voice.state.errors.at(-1), /Mikrofon izni reddedildi/);
 });
 
 test("cancelled or unmounted voice requests cannot speak their late responses", async () => {
