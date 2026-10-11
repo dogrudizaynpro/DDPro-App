@@ -2834,6 +2834,30 @@ function App() {
     [moduleCounts]
   );
 
+  const appendAiVoiceMessage = (role, text) => {
+    if (!["user", "assistant"].includes(role) || typeof text !== "string" || !text.trim()) return;
+    setAiMessages((messages) => [
+      ...messages,
+      {
+        id: createId(),
+        role,
+        text: text.trim(),
+        date: formatDate(),
+        status: "success",
+      },
+    ]);
+  };
+
+  const aiVoiceContext = {
+    projects: projects.slice(0, 20).map(({ id, name, type, status, areaM2 }) => ({
+      id, name, type, status, areaM2,
+    })),
+    offers: offers.slice(0, 20).map(({ id, title, status }) => ({ id, title, status })),
+    procurement: procurementItems.slice(0, 20).map(({ id, name, status, product, manufacturer }) => ({
+      id, name, status, product, manufacturer,
+    })),
+  };
+
   const renderModule = () => {
     if (activeModule === "dashboard") {
       return renderDashboard();
@@ -2953,6 +2977,8 @@ function App() {
         <AIModule
           aiMessages={aiMessages}
           sendAiMessage={sendAiMessage}
+          onVoiceMessage={appendAiVoiceMessage}
+          voiceContext={aiVoiceContext}
           aiInput={aiInput}
           setAiInput={setAiInput}
           aiAttachment={aiAttachment}

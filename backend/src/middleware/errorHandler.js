@@ -55,7 +55,7 @@ export const errorHandler = (err, req, res, next) => {
     }),
     ...(typeof err.code === "string" &&
       (/^AI_OPERATION_AUDIT_[A-Z_]+$/.test(err.code) ||
-        /^AI_(?:ANALYSIS|PROVIDER|TOOL)_[A-Z_]+$/.test(err.code)) && { code: err.code }),
+        /^AI_(?:ANALYSIS|PROVIDER|TOOL|VOICE)_[A-Z_]+$/.test(err.code)) && { code: err.code }),
     ...(isDevelopment && { details: err.message }),
   });
 };

@@ -1496,6 +1496,11 @@ button > .ddpro-icon-medallion {
   background: rgba(34, 197, 94, 0.15);
 }
 
+.ai-form .ai-voice-button.is-speaking {
+  border-color: rgba(96, 165, 250, 0.7);
+  background: rgba(59, 130, 246, 0.16);
+}
+
 .ai-form .ai-voice-status {
   flex: 1 0 100%;
   margin: 0;
