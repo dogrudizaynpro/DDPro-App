@@ -1,7 +1,7 @@
 const MAX_CONTEXT_LENGTH = 24_000;
 const MAX_HISTORY_LENGTH = 8_000;
 const GEMINI_TOKEN_URL =
-  "https://generativelanguage.googleapis.com/v1alpha/authTokens";
+  "https://generativelanguage.googleapis.com/v1beta/auth_tokens";
 const GEMINI_LIVE_WEBSOCKET_URL =
   "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained";
 
@@ -25,9 +25,10 @@ export const createGeminiLiveSessionConfig = ({ context = {}, history = [] } = {
     throw error;
   }
 
+  const model = process.env.GEMINI_LIVE_MODEL || "";
   return {
-    model: process.env.GEMINI_LIVE_MODEL || "",
-    config: {
+    model: model && !model.startsWith("models/") ? `models/${model}` : model,
+    generationConfig: {
       responseModalities: ["AUDIO"],
       speechConfig: {
         voiceConfig: {
@@ -35,14 +36,14 @@ export const createGeminiLiveSessionConfig = ({ context = {}, history = [] } = {
         },
         languageCode: "tr-TR",
       },
-      inputAudioTranscription: {},
-      outputAudioTranscription: {},
-      realtimeInputConfig: {
-        automaticActivityDetection: { disabled: false },
-      },
-      systemInstruction: {
-        parts: [{ text: voiceInstructions(context, history) }],
-      },
+    },
+    inputAudioTranscription: {},
+    outputAudioTranscription: {},
+    realtimeInputConfig: {
+      automaticActivityDetection: { disabled: false },
+    },
+    systemInstruction: {
+      parts: [{ text: voiceInstructions(context, history) }],
     },
   };
 };
@@ -71,7 +72,8 @@ export const createGeminiLiveToken = async (sessionConfig) => {
         uses: 1,
         expireTime: new Date(Date.now() + 30 * 60_000).toISOString(),
         newSessionExpireTime: new Date(Date.now() + 60_000).toISOString(),
-        liveConnectConstraints: sessionConfig,
+        // liveConnectConstraints is an SDK option; REST takes the wire setup.
+        bidiGenerateContentSetup: sessionConfig,
       }),
       signal: AbortSignal.timeout(10_000),
     });
@@ -86,7 +88,9 @@ export const createGeminiLiveToken = async (sessionConfig) => {
   }
 
   const data = await response.json().catch(() => null);
-  const token = typeof data?.token === "string" ? data.token : data?.name;
+  const token = typeof data?.name === "string" && data.name
+    ? data.name
+    : data?.token;
   if (!response.ok || typeof token !== "string" || !token) {
     const credentials = [data?.token, data?.name].filter((value) => typeof value === "string");
     JSON.stringify(sessionConfig, (_key, value) => {
