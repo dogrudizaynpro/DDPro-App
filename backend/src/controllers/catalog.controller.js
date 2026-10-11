@@ -1,4 +1,5 @@
 import { getIntegrationAdmin } from "../config/integration-admin.js";
+import { deleteSystemRecordWithImages } from "../services/system-images.service.js";
 
 const UUID_PATTERN =
   /^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i;
@@ -286,6 +287,10 @@ export const createCatalogController = (resource) => {
         return res.status(400).json({ status: "error", message: "Record id must be a valid UUID." });
       }
       try {
+        if (resource === "systems") {
+          await deleteSystemRecordWithImages(req.params.id, client);
+          return res.status(200).json({ status: "success", data: { id: req.params.id } });
+        }
         const { data, error } = await client.from(table).delete().eq("id", req.params.id).select("id").maybeSingle();
         if (error) return sendDatabaseError(error, res, next);
         if (!data) return res.status(404).json({ status: "error", message: "Record not found." });

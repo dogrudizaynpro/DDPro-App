@@ -39,6 +39,7 @@ export const serviceRoleTables = [
   "message_conversations",
   "messages",
   "document_records",
+  "system_images",
   "ai_usage_events",
   "ai_tool_confirmations",
   "ai_file_imports",
