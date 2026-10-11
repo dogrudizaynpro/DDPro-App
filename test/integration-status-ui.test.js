@@ -8,9 +8,9 @@ const source = await readFile(
 );
 
 test("integration dashboard keeps initial status pending until the configured AI model responds", () => {
-  assert.match(source, /const \[statusLoading, setStatusLoading\] = useState\(true\)/);
-  assert.match(source, /if \(value\.ai\?\.configured\)\s*\{\s*try\s*\{\s*aiTestResult = await testIntegrationConnection\("ai"\)/);
-  assert.match(source, /value = await getIntegrationStatus\(\)/);
+  assert.match(source, /const \[statusLoading, setStatusLoading\] = useState\(\(\) => !getCachedIntegrationStatus\(\)\)/);
+  assert.match(source, /value\.ai\?\.configured && hasStaleIntegrationTest\(value\.ai\)/);
+  assert.match(source, /value = await getIntegrationStatusOnce\(\)/);
   assert.match(source, /const applyAiVerification = \(status, testResult, testError\)/);
   assert.match(source, /const connected = !testError && testResult\?\.data\?\.connected === true/);
   assert.match(source, /setStatus\(applyAiVerification\(nextStatus, aiTestResult, aiTestError\)\)/);
@@ -22,6 +22,11 @@ test("integration dashboard keeps initial status pending until the configured AI
   assert.match(source, /DURUM KONTROL EDİLİYOR/);
   assert.match(source, /state === "authorization_required"/);
   assert.match(source, /const isChecking = statusLoading \|\| testing === integration\.id/);
+  assert.match(source, /const pendingIntegrationTests = new Map\(\)/);
+  assert.match(source, /integrationStatusCacheLifetime = 5 \* 60 \* 1000/);
+  assert.match(source, /SON DOĞRULAMA · API YENİLENEMEDİ/);
+  assert.match(source, /statusRefreshFailed \? "Son başarılı API yanıtındaki durum/);
+  assert.doesNotMatch(source.match(/const refresh = async[\s\S]*?const startGoogleOAuth/)?.[0] || "", /setStatus\(null\)/);
   const labelBlock = source.match(/const integrationStatusLabel = \([\s\S]*?\n  };/)?.[0] || "";
   assert.ok(labelBlock.indexOf('testing === integration.id') < labelBlock.indexOf('if (statusLoading)'));
   assert.ok(labelBlock.indexOf('if (statusLoading)') < labelBlock.indexOf('if (!status)'));

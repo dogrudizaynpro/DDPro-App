@@ -99,6 +99,25 @@ test("AI send displays and returns the identical new successful answer for voice
   assert.equal(state.sending, false);
 });
 
+test("AI send accepts direct project requests and includes the selected project context", async () => {
+  let request;
+  const { send } = createSender({
+    requestAiCompletion: async (value) => {
+      request = value;
+      return { answer: "Proje analizi" };
+    },
+  });
+  const selectedProject = {
+    id: "project-7",
+    name: "İstanbul Ofis",
+    areaM2: 120,
+  };
+  const response = await send("Riskleri analiz et", "", { selectedProject });
+  assert.equal(response.text, "Proje analizi");
+  assert.equal(request.message, "Riskleri analiz et");
+  assert.deepEqual(request.context.selectedProject, selectedProject);
+});
+
 for (const [name, completion] of [
   ["provider rejection", () => Promise.reject(new Error("Provider offline"))],
   ["empty answer", async () => ({ answer: " " })],

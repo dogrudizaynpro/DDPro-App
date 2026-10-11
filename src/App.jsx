@@ -1946,11 +1946,12 @@ function App() {
   };
 
 
-  const sendAiMessage = async (event, messageOverride = "") => {
-    event.preventDefault();
+  const sendAiMessage = async (event, messageOverride = "", contextOverrides = {}) => {
+    event?.preventDefault?.();
 
     const attachment = aiAttachment;
-    const message = messageOverride.trim() || aiInput.trim() || (attachment
+    const submittedMessage = typeof event === "string" ? event : messageOverride;
+    const message = submittedMessage.trim() || aiInput.trim() || (attachment
       ? "Ekli dosyayı analiz et, önemli bilgileri çıkar ve uygun DDPro modülünü öner. Herhangi bir kaydı kendiliğinden oluşturma veya değiştirme."
       : "");
 
@@ -2037,6 +2038,9 @@ function App() {
     }
     const context = {
       integrationStatus: liveIntegrationContext,
+      ...(contextOverrides.selectedProject
+        ? { selectedProject: contextOverrides.selectedProject }
+        : {}),
       projects: projects.slice(0, 30).map(({ id, name, type, status, areaM2, systems, notes }) => ({
         id,
         name,
@@ -2183,18 +2187,16 @@ function App() {
         error.code === "AI_PROVIDER_NOT_CONFIGURED" || error.status === 503
           ? "AI sağlayıcısı şu anda bağlı değil. Gerçek yanıt için backend ortamında AI_API_URL, AI_API_KEY ve AI_MODEL yapılandırılmalıdır."
           : `AI sağlayıcısından yanıt alınamadı (${getApiFailureReason(error)}). Mesajın yanıtlandığı varsayılmadı.`;
-      setAiMessages((currentMessages) => [
-        ...currentMessages,
-        {
-          id: createId(),
-          role: "assistant",
-          text: explanation,
-          date: formatDate(),
-          status: "unavailable",
-          moduleSuggestion: suggestedModuleId,
-        },
-      ]);
-      return null;
+      const failureResponse = {
+        id: createId(),
+        role: "assistant",
+        text: explanation,
+        date: formatDate(),
+        status: "unavailable",
+        moduleSuggestion: suggestedModuleId,
+      };
+      setAiMessages((currentMessages) => [...currentMessages, failureResponse]);
+      return failureResponse;
     } finally {
       setAiSending(false);
     }
@@ -2856,7 +2858,8 @@ function App() {
           selectedProjectId={selectedProjectId}
           onNavigate={handleModuleNavigation}
           refreshProjects={async () => setProjects(await getProjects())}
-          setAiInput={setAiInput}
+          sendAiMessage={sendAiMessage}
+          aiSending={aiSending}
         />
       );
     }
