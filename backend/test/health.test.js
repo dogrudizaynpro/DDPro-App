@@ -14,7 +14,10 @@ before(async () => {
   process.env.SUPABASE_SERVICE_ROLE_KEY = "test-only-service-key";
   const { default: app } = await import("../src/app.js");
   server = app.listen(0, "127.0.0.1");
-  await new Promise((resolve) => server.once("listening", resolve));
+  await new Promise((resolve, reject) => {
+    server.once("listening", resolve);
+    server.once("error", reject);
+  });
   baseUrl = `http://127.0.0.1:${server.address().port}`;
 
   globalThis.fetch = async (input, options) => {
@@ -43,12 +46,23 @@ before(async () => {
 
 after(async () => {
   globalThis.fetch = originalFetch;
-  server.closeAllConnections();
-  await new Promise((resolve) => server.close(resolve));
-  if (previousSupabaseUrl === undefined) delete process.env.SUPABASE_URL;
-  else process.env.SUPABASE_URL = previousSupabaseUrl;
-  if (previousServiceRoleKey === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY;
-  else process.env.SUPABASE_SERVICE_ROLE_KEY = previousServiceRoleKey;
+  try {
+    if (server?.listening) {
+      server.closeAllConnections();
+      await new Promise((resolve, reject) => {
+        server.close((error) => error ? reject(error) : resolve());
+      });
+    }
+  } finally {
+    if (previousSupabaseUrl === undefined) delete process.env.SUPABASE_URL;
+    else process.env.SUPABASE_URL = previousSupabaseUrl;
+    if (previousServiceRoleKey === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+    else process.env.SUPABASE_SERVICE_ROLE_KEY = previousServiceRoleKey;
+  }
+  assert.equal(globalThis.fetch, originalFetch);
+  assert.equal(process.env.SUPABASE_URL, previousSupabaseUrl);
+  assert.equal(process.env.SUPABASE_SERVICE_ROLE_KEY, previousServiceRoleKey);
+  assert.equal(server?.listening ?? false, false);
 });
 
 test("health reports degraded when the system images table is unavailable", async () => {
@@ -58,5 +72,26 @@ test("health reports degraded when the system images table is unavailable", asyn
   assert.equal(response.status, 503);
   assert.equal(body.database.ready, false);
   assert.deepEqual(body.database.unavailableTables, [unavailableTable]);
-  assert.ok(probedTables.includes(unavailableTable));
+  for (const table of [
+    "projects",
+    "offers",
+    "crm_contacts",
+    "report_records",
+    "project_costs",
+    "message_conversations",
+    "messages",
+    "document_records",
+    "ai_usage_events",
+    "project_ai_analyses",
+    "ai_file_imports",
+    "research_items",
+    "integration_tokens",
+    "products",
+    "systems",
+    unavailableTable,
+    "price_analysis",
+    "material_analysis",
+  ]) {
+    assert.ok(probedTables.includes(table), `Expected health check to probe ${table}`);
+  }
 });
