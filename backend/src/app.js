@@ -163,6 +163,7 @@ app.get("/health", async (req, res) => {
       ["integration_tokens", "provider"],
       ["products", "id"],
       ["systems", "id"],
+      ["system_images", "id"],
       ["price_analysis", "id"],
       ["material_analysis", "id"],
     ];
