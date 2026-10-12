@@ -315,7 +315,7 @@ test("OAuth start redirects to Google and callback stores encrypted token and se
   assert.notEqual(savedToken.encrypted_token.ciphertext, "test-access");
 });
 
-test("one-time exchange authenticates browser status and real provider test route", async () => {
+const createBrowserSession = async () => {
   const verifier = randomBytes(32).toString("base64url");
   const challenge = createHash("sha256").update(verifier).digest("base64url");
   const start = await originalFetch(`${baseUrl}/api/integrations/google/start?challenge=${challenge}`, { redirect: "manual" });
@@ -336,8 +336,12 @@ test("one-time exchange authenticates browser status and real provider test rout
   assert.match(persistent, /HttpOnly; Path=\/api\/integrations\/google; Max-Age=2592000; Secure; SameSite=None; Partitioned$/);
   restoreCookie = persistent.split(";")[0];
   assert.equal(exchange.headers.get("cache-control"), "no-store");
-  const session = (await exchange.json()).data.session;
-  browserSession = session;
+  browserSession = (await exchange.json()).data.session;
+  return { session: browserSession, code, verifier };
+};
+
+test("one-time exchange authenticates browser status and real provider test route", async () => {
+  const { session, code, verifier } = await createBrowserSession();
   projectsSheetValues = [
     ["Proje Adı", "Müşteri", "Firma", "Lokasyon", "Proje Türü", "Ürün", "Metraj", "Sistem", "Durum", "Başlangıç Tarihi", "Bitiş Tarihi", "Notlar", "Ek sütun"],
     ["Restored browser project", "Existing customer", "Existing company", "Bursa", "Hospital", "Glass", "80", "Curtain wall", "Aktif", "01.01.2020", "31.12.2020", "Keep existing", "verbatim"],
@@ -1078,6 +1082,7 @@ test("Chromium accepts the production-origin CHIPS cookie and restores after ref
     typeof WebSocket === "undefined" ? "Chromium and native WebSocket are required" : false,
   timeout: 60_000,
 }, async () => {
+  if (!browserSession) await createBrowserSession();
   const profile = await mkdtemp(join(tmpdir(), "ddpro-browser-session-"));
   const { encryptIntegrationToken } = await import("../src/services/integration-vault.service.js");
   const code = randomBytes(32).toString("base64url");
