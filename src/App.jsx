@@ -505,7 +505,7 @@ const getApiStatusCode = (error) =>
 
 const integrationStatusQuestion = (message) => {
   const text = message.toLocaleLowerCase("tr-TR");
-  if (!/bağlı|bagli|bağlant|baglanti|hazır|hazir|durum|entegrasyon|çalışıyor mu|çalışır mı|connected|connection|status|ready/i.test(text)) {
+  if (!/(?:^|[^\p{L}\p{N}_])(?:bağlı\s*(?:mı|mi|mu|mü)|bağlı\s+olup\s+olmadığını|bağlantı\s+durum(?:u|unu|una)?|entegrasyon\s+durum(?:u|unu|una)?|durum(?:u|unu)?\s+(?:nedir|ne|göster|kontrol)|hazır\s*(?:mı|mi|mu|mü)|çalışıyor\s*(?:mu|mı|mi|mü)|çalışır\s*(?:mı|mi|mu|mü)|connected\s*\?|is\s+.+\s+connected|connection\s+status|integration\s+status|status|ready)(?=$|[^\p{L}\p{N}_])/iu.test(text)) {
     return null;
   }
   if (/gmail|e-posta|email/.test(text)) return ["Gmail", "gmail"];

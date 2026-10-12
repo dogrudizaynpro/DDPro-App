@@ -8,6 +8,11 @@ const appSource = await readFile(new URL("../src/App.jsx", import.meta.url), "ut
 const moduleSource = await readFile(new URL("../src/modules/AIModule.jsx", import.meta.url), "utf8");
 const sendStart = appSource.indexOf("  const sendAiMessage = async");
 const sendEnd = appSource.indexOf("  const confirmAiOperationalAction =", sendStart);
+const statusStart = appSource.indexOf("const integrationStatusQuestion =");
+const statusEnd = appSource.indexOf("\nconst describeIntegrationStatus =", statusStart);
+const integrationStatusQuestion = runInNewContext(
+  `${appSource.slice(statusStart, statusEnd)}; integrationStatusQuestion;`,
+);
 const summaryStart = appSource.indexOf("const describeIntegrationStatus =");
 const summaryEnd = appSource.indexOf("\nfunction App()", summaryStart);
 const describeIntegrationStatus = runInNewContext(
@@ -72,7 +77,7 @@ const createSender = (overrides = {}) => {
     setAiInput: (input) => { state.input = input; },
     setAiSending: (sending) => { state.sending = sending; },
     setAiAttachment: () => {},
-    integrationStatusQuestion: () => null,
+    integrationStatusQuestion,
     getStoredData: () => [],
     getCrmContacts: async () => ({ data: [] }),
     getIntegrationStatus: async () => ({ available: true }),
@@ -116,6 +121,74 @@ test("AI send accepts direct project requests and includes the selected project 
   assert.equal(response.text, "Proje analizi");
   assert.equal(request.message, "Riskleri analiz et");
   assert.deepEqual(request.context.selectedProject, selectedProject);
+});
+
+test("research prompts use AI completion and display direct source URLs", async () => {
+  let completionRequest;
+  const { send } = createSender({
+    requestAiCompletion: async (request) => {
+      completionRequest = request;
+      return {
+        answer: "Kaynak özeti\nDoğrudan kaynak URL'si: https://manufacturer.example/linear-ceiling",
+      };
+    },
+  });
+  const message =
+    "Türkiye’deki alüminyum lineer asma tavan üreticilerini araştır. En az 3 sonuç ve her biri için doğrudan kaynak bağlantısı göster.";
+
+  const response = await send(message);
+
+  assert.equal(completionRequest.message, message);
+  assert.match(response.text, /https:\/\/manufacturer\.example\/linear-ceiling/);
+  assert.equal(response.moduleSuggestion, "procurement");
+});
+
+test("source-link requests do not route to integration status", async () => {
+  let completionCalled = false;
+  let statusCalled = false;
+  const { send } = createSender({
+    requestAiCompletion: async () => {
+      completionCalled = true;
+      return { answer: "Araştırma kaynakları." };
+    },
+    getIntegrationStatus: async () => {
+      statusCalled = true;
+      return { available: true };
+    },
+  });
+
+  const response = await send("Kaynak bağlantılarını göster.");
+
+  assert.equal(completionCalled, true);
+  assert.equal(statusCalled, true);
+  assert.match(response.text, /Araştırma kaynakları/);
+  assert.notEqual(response.moduleSuggestion, "integrations");
+});
+
+test("only explicit connection-state questions route to integration status", async () => {
+  for (const [message, expected] of [
+    ["Kaynak bağlantılarını göster.", null],
+    ["Üreticileri araştır.", null],
+    ["İnternette ara.", null],
+    ["Web araştırma servisi bağlı mı?", ["Web araştırma servisi", "research"]],
+  ]) {
+    assert.equal(
+      JSON.stringify(integrationStatusQuestion(message)),
+      JSON.stringify(expected),
+    );
+  }
+
+  let completionCalled = false;
+  const { send, state } = createSender({
+    requestAiCompletion: async () => {
+      completionCalled = true;
+      return { answer: "Araştırma sağlayıcısı bağlı." };
+    },
+    describeIntegrationStatus: () => "Canlı araştırma servisi durumu",
+  });
+  await send("Web araştırma servisi bağlı mı?");
+  assert.equal(completionCalled, false);
+  assert.equal(state.messages.at(-1).text, "Canlı araştırma servisi durumu");
 });
 
 for (const [name, completion] of [

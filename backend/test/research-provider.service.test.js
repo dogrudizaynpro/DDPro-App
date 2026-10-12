@@ -24,14 +24,45 @@ const jsonResponse = (body, status = 200) => new Response(JSON.stringify(body), 
   headers: { "Content-Type": "application/json" },
 });
 
+test("filters off-topic results and deduplicates direct source URLs", async (t) => {
+  mockProvider(t, async () => jsonResponse({
+    results: [
+      {
+        title: "Alüminyum lineer asma tavan sistemleri",
+        content: "Türkiye'de lineer alüminyum tavan uygulamaları.",
+        url: "https://supplier.example/ceiling?utm_source=search",
+      },
+      {
+        title: "Alüminyum lineer asma tavan sistemleri kopya",
+        content: "Aynı kaynak, farklı takip parametresi.",
+        url: "https://supplier.example/ceiling#details",
+      },
+      {
+        title: "Türkiye'deki güneş paneli üreticileri",
+        content: "Güneş paneli ve enerji sistemleri.",
+        url: "https://supplier.example/solar",
+      },
+    ],
+  }));
+
+  const results = await searchResearchProvider(
+    "Türkiye’deki alüminyum lineer asma tavan üreticilerini araştır. En az 3 sonuç ve her biri için doğrudan kaynak bağlantısı göster.",
+  );
+
+  assert.equal(results.length, 1);
+  assert.equal(results[0].url, "https://supplier.example/ceiling?utm_source=search");
+  assert.equal(results[0].manufacturer, "");
+  assert.equal(results[0].price, "");
+});
+
 test("sends a Tavily search request and converts results to the DDPro format", async (t) => {
   let request;
-  const content = "x".repeat(4_100);
+  const content = `aluminum profile ${"x".repeat(4_100)}`;
   mockProvider(t, async (url, options) => {
     request = { url: String(url), ...options, body: JSON.parse(options.body) };
     return jsonResponse({
       results: [{
-        title: "T".repeat(310),
+        title: `Aluminum profile ${"T".repeat(310)}`,
         url: "https://supplier.example/product",
         content,
         score: 0.97,
@@ -52,7 +83,7 @@ test("sends a Tavily search request and converts results to the DDPro format", a
     max_results: 10,
   });
   assert.equal(result.source, content.slice(0, 300));
-  assert.equal(result.product, "T".repeat(300));
+  assert.equal(result.product, `Aluminum profile ${"T".repeat(310)}`.slice(0, 300));
   assert.equal(result.manufacturer, "");
   assert.equal(result.technicalInfo, content.slice(0, 4_000));
   assert.equal(result.price, "");
@@ -66,20 +97,26 @@ test("handles missing and null result fields without inventing data", async (t) 
   mockProvider(t, async () => jsonResponse({
     results: [
       null,
-      { title: null, content: null, url: "https://supplier.example/item", manufacturer: "Unsupported", price: "100" },
+      {
+        title: null,
+        content: "aluminum profile technical data",
+        url: "https://supplier.example/item",
+        manufacturer: "Unsupported",
+        price: "100",
+      },
     ],
   }));
 
-  const results = await searchResearchProvider("query");
+  const results = await searchResearchProvider("aluminum profile");
 
   assert.equal(results.length, 1);
   assert.deepEqual(
     Object.fromEntries(Object.entries(results[0]).filter(([key]) => key !== "date" && key !== "status")),
     {
-      source: "",
+      source: "aluminum profile technical data",
       product: "",
       manufacturer: "",
-      technicalInfo: "",
+      technicalInfo: "aluminum profile technical data",
       price: "",
       priceVerification: "Doğrulanmadı",
       url: "https://supplier.example/item",
@@ -96,7 +133,7 @@ test("leaves price empty when a source does not provide a price field", async (t
     }],
   }));
 
-  const [result] = await searchResearchProvider("query");
+  const [result] = await searchResearchProvider("product without price");
 
   assert.equal(result.price, "");
   assert.equal(result.priceVerification, "Doğrulanmadı");
@@ -112,7 +149,7 @@ test("filters results with invalid or non-HTTP URLs", async (t) => {
     ],
   }));
 
-  const results = await searchResearchProvider("query");
+  const results = await searchResearchProvider("valid");
 
   assert.deepEqual(results.map((result) => result.product), ["Valid"]);
 });

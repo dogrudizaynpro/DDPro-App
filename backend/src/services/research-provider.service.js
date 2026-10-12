@@ -20,6 +20,43 @@ const isValidHttpUrl = (value) => {
   }
 };
 
+const normalizeResearchText = (value) =>
+  value.toLocaleLowerCase("tr-TR").normalize("NFD").replace(/\p{M}/gu, "").replace(/ı/g, "i");
+
+const RESEARCH_STOP_WORDS = new Set([
+  "ara", "arastir", "arastirin", "arastirma", "bul", "goster", "incele",
+  "uretici", "ureticileri", "ureticilerini", "firma", "firmalari",
+  "turkiye", "turkiye'deki", "en", "az", "sonuc", "sonuclari", "her",
+  "biri", "icin", "dogrudan", "kaynak", "baglanti", "baglantisi", "web", "deki",
+  "internette", "lutfen", "ile", "ve", "mi", "mu", "mı", "mü",
+]);
+
+const getResearchTerms = (query) =>
+  normalizeResearchText(query)
+    .match(/[\p{L}\p{N}]{3,}/gu)
+    ?.filter((term) => !RESEARCH_STOP_WORDS.has(term) && !term.startsWith("uretic")) || [];
+
+const isRelevantResearchResult = (query, item) => {
+  const terms = [...new Set(getResearchTerms(query))];
+  if (!terms.length) return true;
+
+  const content = normalizeResearchText(
+    `${item.title || ""} ${item.content || ""} ${item.url || ""}`,
+  );
+  const matchingTerms = terms.filter((term) => content.includes(term));
+  return matchingTerms.length >= Math.min(2, terms.length);
+};
+
+const getCanonicalSourceUrl = (value) => {
+  const url = new URL(value);
+  url.hash = "";
+  for (const key of [...url.searchParams.keys()]) {
+    if (/^(?:utm_.+|fbclid|gclid)$/i.test(key)) url.searchParams.delete(key);
+  }
+  url.pathname = url.pathname.replace(/\/+$/, "") || "/";
+  return url.toString();
+};
+
 export const searchResearchProvider = async (query) => {
   const apiKey = process.env.RESEARCH_API_KEY;
   if (!apiKey) {
@@ -67,14 +104,26 @@ export const searchResearchProvider = async (query) => {
     throw createProviderError("Research provider response must contain a results array.", 502);
   }
 
+  const seenUrls = new Set();
   return payload.results
+    .filter((item) =>
+      item &&
+      isValidHttpUrl(item.url) &&
+      [item.title, item.content].some((value) => typeof value === "string" && value.trim()) &&
+      isRelevantResearchResult(query, item)
+    )
+    .filter((item) => {
+      const canonicalUrl = getCanonicalSourceUrl(item.url);
+      if (seenUrls.has(canonicalUrl)) return false;
+      seenUrls.add(canonicalUrl);
+      return true;
+    })
     .slice(0, 10)
-    .filter((item) => isValidHttpUrl(item?.url))
     .map((item) => ({
-      source: typeof item?.content === "string" ? item.content.slice(0, 300) : "",
-      product: typeof item?.title === "string" ? item.title.slice(0, 300) : "",
+      source: typeof item.content === "string" ? item.content.slice(0, 300) : "",
+      product: typeof item.title === "string" ? item.title.slice(0, 300) : "",
       manufacturer: "",
-      technicalInfo: typeof item?.content === "string" ? item.content.slice(0, 4_000) : "",
+      technicalInfo: typeof item.content === "string" ? item.content.slice(0, 4_000) : "",
       price: "",
       priceVerification: "Doğrulanmadı",
       url: item.url,
