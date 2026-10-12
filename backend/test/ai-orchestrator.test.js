@@ -94,7 +94,12 @@ test("research output excludes malformed, duplicate, and URL-less provider resul
   const orchestrate = createAiOrchestrator({
     search: async () => [
       { product: "No direct URL", technicalInfo: "Unverified", url: "" },
-      { product: "No content", url: "https://supplier.example/empty" },
+      {
+        product: "",
+        source: "",
+        technicalInfo: "",
+        url: "https://supplier.example/empty",
+      },
       {
         product: "Source result",
         technicalInfo: "Source details",

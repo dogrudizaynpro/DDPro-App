@@ -21,7 +21,7 @@ const isValidHttpUrl = (value) => {
 };
 
 const normalizeResearchText = (value) =>
-  value.normalize("NFD").replace(/\p{M}/gu, "").replace(/ı/g, "i").toLocaleLowerCase("tr-TR");
+  value.toLocaleLowerCase("tr-TR").normalize("NFD").replace(/\p{M}/gu, "").replace(/ı/g, "i");
 
 const RESEARCH_STOP_WORDS = new Set([
   "ara", "arastir", "arastirin", "arastirma", "bul", "goster", "incele",
