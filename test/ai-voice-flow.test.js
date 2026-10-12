@@ -172,7 +172,10 @@ test("only explicit connection-state questions route to integration status", asy
     ["İnternette ara.", null],
     ["Web araştırma servisi bağlı mı?", ["Web araştırma servisi", "research"]],
   ]) {
-    assert.deepEqual(integrationStatusQuestion(message), expected);
+    assert.equal(
+      JSON.stringify(integrationStatusQuestion(message)),
+      JSON.stringify(expected),
+    );
   }
 
   let completionCalled = false;

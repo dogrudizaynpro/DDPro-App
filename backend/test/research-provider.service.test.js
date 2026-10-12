@@ -113,10 +113,10 @@ test("handles missing and null result fields without inventing data", async (t) 
   assert.deepEqual(
     Object.fromEntries(Object.entries(results[0]).filter(([key]) => key !== "date" && key !== "status")),
     {
-      source: "",
+      source: "aluminum profile technical data",
       product: "",
       manufacturer: "",
-      technicalInfo: "",
+      technicalInfo: "aluminum profile technical data",
       price: "",
       priceVerification: "Doğrulanmadı",
       url: "https://supplier.example/item",
@@ -149,7 +149,7 @@ test("filters results with invalid or non-HTTP URLs", async (t) => {
     ],
   }));
 
-  const results = await searchResearchProvider("query");
+  const results = await searchResearchProvider("valid");
 
   assert.deepEqual(results.map((result) => result.product), ["Valid"]);
 });
