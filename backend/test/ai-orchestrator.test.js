@@ -84,9 +84,57 @@ test("web research routes only to the configured research adapter and marks sour
   assert.equal(searchContext.taskContext.intent, "web_research");
   assert.match(searchContext.taskContext.id, /^[\da-f-]{36}$/i);
   assert.equal(result.orchestration.intent, "web_research");
-  assert.match(result.answer, /doğrulanmamıştır/);
+  assert.match(result.answer, /Firma üreticiliği DDPro tarafından bağımsız doğrulanmamıştır/);
   assert.match(result.answer, /Fiyat \(doğrulanmadı\): 100/);
-  assert.match(result.answer, /https:\/\/supplier\.example\/item/);
+  assert.match(result.answer, /Doğrudan kaynak URL'si: https:\/\/supplier\.example\/item/);
+  assert.doesNotMatch(result.answer, /Üretici/);
+});
+
+test("research output excludes malformed, duplicate, and URL-less provider results", async () => {
+  const orchestrate = createAiOrchestrator({
+    search: async () => [
+      { product: "No direct URL", technicalInfo: "Unverified", url: "" },
+      { product: "No content", url: "https://supplier.example/empty" },
+      {
+        product: "Source result",
+        technicalInfo: "Source details",
+        url: "https://supplier.example/item?utm_source=one",
+      },
+      {
+        product: "Duplicate result",
+        technicalInfo: "Duplicate details",
+        url: "https://supplier.example/item#details",
+      },
+      { product: "Invalid protocol", technicalInfo: "Details", url: "javascript:alert(1)" },
+    ],
+  });
+
+  const result = await orchestrate({
+    ...authenticatedCommand,
+    message: "İnternette alüminyum profil araştır.",
+  });
+
+  assert.match(result.answer, /Source result/);
+  assert.match(result.answer, /https:\/\/supplier\.example\/item\?utm_source=one/);
+  assert.doesNotMatch(result.answer, /No direct URL|No content|Duplicate result|Invalid protocol/);
+  assert.equal(result.researchResults.length, 1);
+});
+
+test("empty or wholly invalid research results report that research was not possible", async () => {
+  for (const search of [
+    async () => [],
+    async () => [{ product: "Unsupported company", manufacturer: "Verified manufacturer" }],
+  ]) {
+    const orchestrate = createAiOrchestrator({ search });
+    const result = await orchestrate({
+      ...authenticatedCommand,
+      message: "İnternette asma tavan üreticisi araştır.",
+    });
+
+    assert.match(result.answer, /Araştırma yapılamadı/);
+    assert.doesNotMatch(result.answer, /Unsupported company|Verified manufacturer|bağlı|entegrasyon durumu/i);
+    assert.deepEqual(result.researchResults, []);
+  }
 });
 
 test("missing, overlong, combined, and unsupported commands fail without invoking capabilities", async () => {

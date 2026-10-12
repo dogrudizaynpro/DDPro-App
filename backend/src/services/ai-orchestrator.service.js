@@ -15,6 +15,33 @@ const UNSUPPORTED_ACTION_PATTERN =
 const createOrchestrationError = (message, statusCode, code) =>
   Object.assign(new Error(message), { statusCode, code, expose: true });
 
+const isValidResearchUrl = (value) => {
+  if (typeof value !== "string" || !/^https?:\/\/\S+$/i.test(value)) return false;
+  try {
+    return Boolean(new URL(value).hostname);
+  } catch {
+    return false;
+  }
+};
+
+const getResearchResults = (results) => {
+  const seenUrls = new Set();
+  return results.filter((result) => {
+    if (!result || typeof result !== "object" || !isValidResearchUrl(result.url)) return false;
+    const url = new URL(result.url);
+    url.hash = "";
+    for (const key of [...url.searchParams.keys()]) {
+      if (/^(?:utm_.+|fbclid|gclid)$/i.test(key)) url.searchParams.delete(key);
+    }
+    url.pathname = url.pathname.replace(/\/+$/, "") || "/";
+    const canonicalUrl = url.toString();
+    if (seenUrls.has(canonicalUrl)) return false;
+    seenUrls.add(canonicalUrl);
+    return [result.product, result.source, result.technicalInfo]
+      .some((value) => typeof value === "string" && value.trim());
+  });
+};
+
 const getResearchQuery = (message) => message.toLocaleLowerCase("tr-TR")
   .replace(/^\s*(?:lütfen\s+)?/iu, "")
   .replace(/^(?:(?:internette|web(?:'de|de))\s+)/iu, "")
@@ -54,18 +81,17 @@ export const classifyAiCommand = ({ message, attachment } = {}) => {
 
 const formatResearchAnswer = (results) => {
   if (!results.length) {
-    return "Araştırma sağlayıcısı bu sorgu için sonuç döndürmedi. Başka bir sorgu deneyin.";
+    return "Bu sorgu için kaynak URL'si olan, konuyla ilgili araştırma sonucu bulunamadı. Araştırma yapılamadı; başka bir sorgu deneyin.";
   }
 
   return [
-    "Harici araştırma sonuçları aşağıdadır; içerik ve fiyatlar bağımsız olarak doğrulanmamıştır.",
+    "Harici kaynak özetleri aşağıdadır. Firma üreticiliği DDPro tarafından bağımsız doğrulanmamıştır; doğrulanmamış fiyat bilgisi gösterilmez.",
     ...results.map((result, index) => {
-      const title = result.product || result.manufacturer || result.source || `Sonuç ${index + 1}`;
+      const title = result.product || `Kaynak özeti ${index + 1}`;
       const details = [
-        result.manufacturer && result.manufacturer !== title ? result.manufacturer : "",
         result.technicalInfo,
         result.price ? `Fiyat (doğrulanmadı): ${result.price}` : "",
-        result.url ? `Kaynak: ${result.url}` : "Kaynak URL'si sağlayıcı tarafından verilmedi.",
+        `Doğrudan kaynak URL'si: ${result.url}`,
       ].filter(Boolean);
       return `${index + 1}. ${title}${details.length ? `\n${details.join("\n")}` : ""}`;
     }),
@@ -123,17 +149,18 @@ export const createAiOrchestrator = ({
       );
     }
     try {
-      const results = await search(classification.query, {
+      const providerResults = await search(classification.query, {
         taskContext,
         integrationAccount,
       });
-      if (!Array.isArray(results)) {
+      if (!Array.isArray(providerResults)) {
         throw createOrchestrationError(
           "Araştırma sağlayıcısı geçersiz sonuç döndürdü.",
           502,
           "AI_ORCHESTRATOR_INVALID_RESULT"
         );
       }
+      const results = getResearchResults(providerResults);
       result = {
         answer: formatResearchAnswer(results),
         researchResults: results,
