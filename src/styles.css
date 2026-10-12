@@ -4572,13 +4572,66 @@ textarea::placeholder {
 }
 
 @media (max-width: 700px) {
-  .ai-form .ai-attach-button {
+  .ai-module,
+  .ai-workspace,
+  .ai-capabilities,
+  .ai-conversation-panel,
+  .ai-chat,
+  .ai-form {
     width: 100%;
-    flex: 0 0 45px;
+    min-width: 0;
+  }
+
+  .ai-workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ai-message {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+
+  .ai-form {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 45px;
+    align-items: stretch;
+  }
+
+  .ai-form textarea {
+    grid-column: 1 / -1;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .ai-form .ai-attach-button {
+    grid-column: 2;
+    grid-row: 2;
+    width: 45px;
+    min-width: 45px;
+    flex: none;
   }
 
   .ai-form .ai-voice-button {
-    flex: 1 0 100%;
+    grid-column: 1 / -1;
+    grid-row: 3;
+    width: 100%;
+    min-width: 0;
+    justify-content: center;
+    white-space: normal;
+  }
+
+  .ai-form button[type="submit"] {
+    grid-column: 1;
+    grid-row: 2;
+    width: 100%;
+    min-width: 0;
+    justify-content: center;
+  }
+
+  .ai-form .ai-attachment-preview,
+  .ai-form .ai-file-error,
+  .ai-form .ai-voice-status {
+    grid-column: 1 / -1;
   }
 }
 
