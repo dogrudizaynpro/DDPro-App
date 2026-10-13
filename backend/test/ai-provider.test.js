@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { after, afterEach, before, beforeEach, test } from "node:test";
+import { errorHandler } from "../src/middleware/errorHandler.js";
 
 const TEST_API_KEY = "test-ai-key-not-a-secret";
 const savedEnv = {};
@@ -282,6 +283,35 @@ test("transient AI provider responses retry once after a bounded delay", async (
   const result = await requestAiCompletion({ message: "Connection check.", context: {} });
   assert.equal(result.answer, "Recovered response");
   assert.equal(requests.length, 2);
+});
+
+test("tool-free provider rejection preserves upstream status without misdiagnosing a tool request", async (t) => {
+  responses.push({
+    status: 400,
+    body: { error: { message: "Invalid model. private-prompt-echo" } },
+  });
+  const log = t.mock.method(console, "error", () => {});
+  await assert.rejects(requestAiCompletion({
+    message: "General question.",
+    toolPolicy: "none",
+  }), (error) => {
+    assert.equal(error.code, "AI_PROVIDER_REQUEST_FAILED");
+    assert.equal(error.upstreamStatus, 400);
+    assert.doesNotMatch(error.message, /operational tools/);
+    errorHandler(error, {}, {
+      status(code) { assert.equal(code, 502); return this; },
+      json(body) {
+        assert.equal(body.code, "AI_PROVIDER_REQUEST_FAILED");
+        assert.equal(body.upstreamStatus, 400);
+      },
+    }, () => {});
+    return true;
+  });
+  assert.deepEqual(log.mock.calls[0].arguments, [
+    "AI provider error:",
+    { code: "AI_PROVIDER_REQUEST_FAILED", statusCode: 502, upstreamStatus: 400 },
+  ]);
+  assert.doesNotMatch(JSON.stringify(log.mock.calls), /private-prompt-echo|test-ai-key/);
 });
 
 test("read-only project analyses cannot request operational writes", async () => {

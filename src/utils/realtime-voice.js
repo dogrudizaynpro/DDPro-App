@@ -12,6 +12,7 @@ const VOICE_RESOURCE_NAMES = {
   reports: "Rapor kayıtları",
   calendar: "Takvim kayıtları",
   integrations: "Entegrasyon durumu",
+  research: "Web araştırması",
 };
 
 export const resampleToPcm16 = (samples, inputSampleRate) => {
@@ -310,6 +311,8 @@ export class RealtimeVoiceSession {
           ? args.resource
           : name === "read_integration_status"
             ? "integrations"
+            : name === "web_search"
+              ? "research"
             : "";
         const resourceName = VOICE_RESOURCE_NAMES[resource] || "DDPro kayıtları";
         const request = name === "prepare_write"

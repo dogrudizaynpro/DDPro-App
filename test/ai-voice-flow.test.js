@@ -90,9 +90,23 @@ const createSender = (overrides = {}) => {
     getApiFailureReason: (error) => error.message,
     ...overrides,
   };
+
   const send = runInNewContext(`${appSource.slice(sendStart, sendEnd)}; sendAiMessage;`, context);
   return { send, state };
 };
+
+test("written AI preserves research/storage 503 diagnostics instead of blaming the AI model configuration", async () => {
+  for (const message of ["Web research provider is not configured.", "AI usage storage is unavailable."]) {
+    const { send } = createSender({
+      requestAiCompletion: async () => { throw Object.assign(new Error(message), { status: 503 }); },
+    });
+    const response = await send("İnternette panel araştır");
+    assert.equal(response.status, "unavailable");
+    assert.ok(response.text.includes(message));
+    assert.match(response.text, /HTTP 503/);
+    assert.doesNotMatch(response.text, /AI_API_URL|AI_MODEL/);
+  }
+});
 
 test("AI send displays and returns the identical new successful answer for voice output", async () => {
   const { send, state } = createSender();

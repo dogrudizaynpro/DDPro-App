@@ -4,7 +4,7 @@ import {
   recordAiUsage,
   confirmAiAction,
 } from "../services/ai.service.js";
-import { orchestrateAiCommand } from "../services/ai-orchestrator.service.js";
+import { classifyAiCommand, orchestrateAiCommand } from "../services/ai-orchestrator.service.js";
 import { executeOperationalTool } from "../services/ai-tools.service.js";
 import { getIntegrationStatus } from "./integrations.controller.js";
 import {
@@ -156,6 +156,34 @@ export const executeAiVoiceTool = async (req, res, next) => {
     args = { ...args, record };
   }
   try {
+    if (name === "web_search") {
+      const query = typeof args.query === "string" ? args.query.trim() : "";
+      if (!query || query.length > 500 || Object.keys(args).some((key) => key !== "query")) {
+        return res.status(400).json({
+          status: "error",
+          message: "Research query is required and must be at most 500 characters; no other arguments are accepted.",
+        });
+      }
+      const message = `İnternette ${query}`;
+      if (!["web_research", "site_research"].includes(classifyAiCommand({ message }).intent)) {
+        return res.status(422).json({
+          status: "error",
+          message: "This voice tool only supports read-only web research.",
+        });
+      }
+      const completion = await orchestrateAiCommand({
+        message,
+        integrationAccount: req.integrationAccount,
+      });
+      return res.status(200).json({
+        status: "success",
+        data: {
+          type: "records",
+          resource: "research",
+          data: completion.researchResults,
+        },
+      });
+    }
     if (name === "read_integration_status" && Object.keys(args).length) {
       return res.status(400).json({
         status: "error",

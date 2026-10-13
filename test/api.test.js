@@ -17,6 +17,8 @@ let completeGoogleConnection;
 let setBrowserSession;
 let clearBrowserSession;
 let confirmAiAction;
+let requestAiCompletion;
+let executeAiVoiceTool;
 let disconnectGoogle;
 let sendWhatsAppText;
 
@@ -39,7 +41,7 @@ before(async () => {
   ({ fetchAPI, setBrowserSession, clearBrowserSession } = await import("../src/services/api.js"));
   ({ testIntegrationConnection, getIntegrationStatus } = await import("../src/services/integrations.service.js"));
   ({ formatGoogleIntegrationError, completeGoogleConnection, disconnectGoogle, sendWhatsAppText } = await import("../src/services/operations-integrations.service.js"));
-  ({ confirmAiAction } = await import("../src/services/ai.service.js"));
+  ({ confirmAiAction, requestAiCompletion, executeAiVoiceTool } = await import("../src/services/ai.service.js"));
 });
 
 beforeEach(() => {
@@ -117,6 +119,56 @@ test("API cancellation during retry backoff prevents a second request", async ()
   const pending = fetchAPI("/health", { signal: controller.signal });
   setTimeout(() => controller.abort(), 20);
   await assert.rejects(pending, (error) => error.name === "AbortError");
+  assert.equal(requests.length, 1);
+});
+
+test("text AI waits beyond the generic timeout for backend retries and tool turns, including attachments", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  for (const attachment of [undefined, Object.assign(new Blob(["test"], { type: "text/plain" }), { name: "test.txt" })]) {
+    let finish;
+    response = (_url, options) => new Promise((resolve, reject) => {
+      finish = resolve;
+      options.signal.addEventListener("abort", () => reject(options.signal.reason), { once: true });
+    });
+    const pending = requestAiCompletion({ message: "Test", context: {}, attachment });
+    while (!finish) await Promise.resolve();
+    t.mock.timers.tick(60_250);
+    assert.equal(requests.at(-1).options.signal.aborted, false);
+    finish(Response.json({ data: { answer: "Recovered" } }));
+    assert.equal((await pending).answer, "Recovered");
+  }
+  assert.equal(requests.length, 2);
+  assert.match(requests[0].url, /\/api\/ai\/chat$/);
+  assert.equal(requests[0].options.headers.Authorization, ["Bearer", "existing-browser-session"].join(" "));
+  assert.equal(requests[1].options.body instanceof FormData, true);
+});
+
+test("AI chat still has a bounded timeout and does not retry a POST", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  response = (_url, options) => new Promise((_resolve, reject) => {
+    options.signal.addEventListener("abort", () => reject(options.signal.reason), { once: true });
+  });
+  const pending = requestAiCompletion({ message: "Test", context: {} });
+  const rejection = assert.rejects(pending, (error) => error.code === "API_TIMEOUT_ERROR");
+  while (!requests.length) await Promise.resolve();
+  t.mock.timers.tick(300_001);
+  await rejection;
+  assert.equal(requests.length, 1);
+});
+
+test("voice web research can receive the backend provider timeout without changing other API timeouts", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  let finish;
+  response = (_url, options) => new Promise((resolve, reject) => {
+    finish = resolve;
+    options.signal.addEventListener("abort", () => reject(options.signal.reason), { once: true });
+  });
+  const pending = executeAiVoiceTool({ name: "web_search", args: { query: "panel" } });
+  while (!finish) await Promise.resolve();
+  t.mock.timers.tick(30_001);
+  assert.equal(requests[0].options.signal.aborted, false);
+  finish(Response.json({ status: "error", message: "Research provider request timed out." }, { status: 504 }));
+  await assert.rejects(pending, { status: 504, message: "Research provider request timed out." });
   assert.equal(requests.length, 1);
 });
 

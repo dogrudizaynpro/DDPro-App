@@ -348,15 +348,15 @@ export const requestAiCompletion = async ({
       tools: allowedTools,
     });
     if (!response.ok) {
-      const toolRejected = [400, 422].includes(response.status);
+      const toolRejected = allowedTools.length > 0 && [400, 422].includes(response.status);
       const providerMessage = sanitizeProviderError(data);
       const messageSuffix = providerMessage ? ` ${providerMessage}` : "";
-      throw createProviderError(
+      throw Object.assign(createProviderError(
         toolRejected
           ? `AI provider rejected the request containing DDPro operational tools (HTTP ${response.status}).${messageSuffix}`
           : `AI provider request failed (HTTP ${response.status}).${messageSuffix}`,
         toolRejected ? "AI_PROVIDER_TOOL_REQUEST_REJECTED" : "AI_PROVIDER_REQUEST_FAILED"
-      );
+      ), { upstreamStatus: response.status });
     }
 
     const assistantMessage = data?.choices?.[0]?.message;

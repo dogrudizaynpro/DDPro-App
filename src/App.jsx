@@ -2221,9 +2221,9 @@ function App() {
         ));
       }
       const explanation =
-        error.code === "AI_PROVIDER_NOT_CONFIGURED" || error.status === 503
+        error.code === "AI_PROVIDER_NOT_CONFIGURED"
           ? "AI sağlayıcısı şu anda bağlı değil. Gerçek yanıt için backend ortamında AI_API_URL, AI_API_KEY ve AI_MODEL yapılandırılmalıdır."
-          : `AI sağlayıcısından yanıt alınamadı (${getApiFailureReason(error)}). Mesajın yanıtlandığı varsayılmadı.`;
+          : `AI isteği tamamlanamadı (${[error.message || getApiFailureReason(error), error.code, error.status ? `HTTP ${error.status}` : ""].filter(Boolean).join(" · ")}). Mesajın yanıtlandığı varsayılmadı.`;
       const failureResponse = {
         id: createId(),
         role: "assistant",
