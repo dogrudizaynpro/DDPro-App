@@ -1,5 +1,5 @@
 const TAVILY_ENDPOINT = "https://api.tavily.com/search";
-const DDPRO_WEBSITE_HOST = "www.ddizaynpro.com";
+const DDPRO_WEBSITE_HOST = "ddizaynpro.com";
 
 const createProviderError = (message, statusCode) => {
   const error = new Error(message);
@@ -15,7 +15,10 @@ const isValidHttpUrl = (value) => {
 
   try {
     const url = new URL(value);
-    return ["http:", "https:"].includes(url.protocol) && Boolean(url.hostname);
+    return ["http:", "https:"].includes(url.protocol) &&
+      Boolean(url.hostname) &&
+      !url.username &&
+      !url.password;
   } catch {
     return false;
   }
@@ -26,7 +29,7 @@ const isAllowedDdproWebsiteUrl = (value) => {
 
   try {
     const url = new URL(value);
-    return url.hostname.toLowerCase() === DDPRO_WEBSITE_HOST &&
+    return [DDPRO_WEBSITE_HOST, `www.${DDPRO_WEBSITE_HOST}`].includes(url.hostname.toLowerCase()) &&
       !url.username &&
       !url.password &&
       (!url.port || (url.protocol === "http:" && url.port === "80") ||
@@ -40,29 +43,58 @@ const normalizeResearchText = (value) =>
   value.toLocaleLowerCase("tr-TR").normalize("NFD").replace(/\p{M}/gu, "").replace(/ı/g, "i");
 
 const RESEARCH_STOP_WORDS = new Set([
-  "ara", "arastir", "arastirin", "arastirma", "bul", "goster", "incele",
+  "ara", "arastir", "arastirin", "arastirma", "bul", "goster", "hangi", "incele",
   "uretici", "ureticileri", "ureticilerini", "firma", "firmalari",
-  "dogru", "dizayn", "ddpro", "hizmet", "hizmetleri", "sunuyor", "sunan",
+  "dogru", "dizayn", "ddpro", "sunuyor", "sunan", "nelerdir", "neler", "nedir",
+  "pro",
   "turkiye", "turkiye'deki", "en", "az", "sonuc", "sonuclari", "her",
   "biri", "icin", "dogrudan", "kaynak", "baglanti", "baglantisi", "web", "deki",
-  "internette", "lutfen", "ile", "ve", "mi", "mu", "mı", "mü",
+  "internette", "lutfen", "ile", "ve", "mi", "mu", "mı", "mü", "hakkinda",
 ]);
+
+const normalizeResearchTerm = (term) => term.replace(
+  /(?:lar|ler)(?:imiz|ımız|umuz|ümüz|iniz|ınız|unuz|ünüz|i|ı)?$/u,
+  "",
+);
 
 const getResearchTerms = (query) =>
   normalizeResearchText(query)
     .match(/[\p{L}\p{N}]{3,}/gu)
-    ?.filter((term) => !RESEARCH_STOP_WORDS.has(term) && !term.startsWith("uretic")) || [];
+    ?.map(normalizeResearchTerm)
+    .filter((term) => term.length >= 3 && !RESEARCH_STOP_WORDS.has(term) && !term.startsWith("uretic")) || [];
 
-const isRelevantResearchResult = (query, item, { siteOnly = false } = {}) => {
-  if (siteOnly) return true;
+const getResearchRelevance = (query, item) => {
   const terms = [...new Set(getResearchTerms(query))];
-  if (!terms.length) return true;
+  if (!terms.length) return { relevant: false, score: 0, terms };
 
-  const content = normalizeResearchText(
-    `${item.title || ""} ${item.content || ""} ${item.url || ""}`,
+  const title = normalizeResearchText(typeof item.title === "string" ? item.title : "");
+  const content = normalizeResearchText(typeof item.content === "string" ? item.content : "");
+  const matchingTerms = terms.filter((term) =>
+    title.includes(term) || content.includes(term)
   );
-  const matchingTerms = terms.filter((term) => content.includes(term));
-  return matchingTerms.length >= Math.min(2, terms.length);
+  const relevant = matchingTerms.length >= Math.min(2, terms.length);
+  const providerScore = Number.isFinite(item.score) ? Math.max(0, Math.min(item.score, 1)) : 0;
+  const score = matchingTerms.reduce((total, term) =>
+    total + (title.includes(term) ? 4 : 0) +
+      (content.includes(term) ? 2 : 0),
+  0) + providerScore * 0.25;
+  return { relevant, score, terms };
+};
+
+const getRelevantSummary = (content, terms) => {
+  if (typeof content !== "string" || !content.trim()) return "";
+  const sentences = content
+    .split(/(?<=[.!?])\s+|\n+/u)
+    .map((sentence) => sentence.trim())
+    .filter(Boolean);
+  const selected = sentences.filter((sentence) => {
+    const normalized = normalizeResearchText(sentence);
+    return terms.some((term) => normalized.includes(term));
+  }).slice(0, 2);
+  const summary = (selected.length ? selected : [])
+    .join(" ")
+    .trim();
+  return summary.length > 500 ? `${summary.slice(0, 497).trimEnd()}…` : summary;
 };
 
 const getPageDate = (item) => {
@@ -102,7 +134,7 @@ export const searchResearchProvider = async (query, { siteOnly = false } = {}) =
       body: JSON.stringify({
         api_key: apiKey,
         query: siteOnly ? `site:${DDPRO_WEBSITE_HOST} ${query}` : query,
-        include_answer: true,
+        include_answer: false,
         max_results: 10,
       }),
       signal,
@@ -129,31 +161,40 @@ export const searchResearchProvider = async (query, { siteOnly = false } = {}) =
     throw createProviderError("Research provider response must contain a results array.", 502);
   }
 
-  const seenUrls = new Set();
-  return payload.results
+  const rankedResults = payload.results
     .filter((item) =>
       item &&
       isValidHttpUrl(item.url) &&
       (!siteOnly || isAllowedDdproWebsiteUrl(item.url)) &&
-      [item.title, item.content].some((value) => typeof value === "string" && value.trim()) &&
-      isRelevantResearchResult(query, item, { siteOnly })
+      [item.title, item.content].some((value) => typeof value === "string" && value.trim())
     )
-    .filter((item) => {
-      const canonicalUrl = getCanonicalSourceUrl(item.url);
+    .map((item) => ({
+      item,
+      canonicalUrl: getCanonicalSourceUrl(item.url),
+      ...getResearchRelevance(query, item),
+    }))
+    .filter(({ relevant }) => relevant)
+    .sort((first, second) => second.score - first.score);
+  const seenUrls = new Set();
+  return rankedResults
+    .filter(({ canonicalUrl }) => {
       if (seenUrls.has(canonicalUrl)) return false;
       seenUrls.add(canonicalUrl);
       return true;
     })
     .slice(0, 10)
-    .map((item) => ({
-      source: typeof item.content === "string" ? item.content.slice(0, 300) : "",
-      product: typeof item.title === "string" ? item.title.slice(0, 300) : "",
-      manufacturer: "",
-      technicalInfo: typeof item.content === "string" ? item.content.slice(0, 4_000) : "",
-      price: "",
-      priceVerification: "Doğrulanmadı",
-      url: item.url,
-      date: siteOnly ? getPageDate(item) : new Date().toISOString(),
-      status: "Harici sonuç · kullanıcı doğrulaması bekliyor",
-    }));
+    .map(({ item, terms }) => {
+      const summary = getRelevantSummary(item.content, terms);
+      return {
+        source: summary,
+        product: typeof item.title === "string" ? item.title.slice(0, 200) : "",
+        manufacturer: "",
+        technicalInfo: "",
+        price: "",
+        priceVerification: "Doğrulanmadı",
+        url: item.url,
+        date: getPageDate(item) || (siteOnly ? "" : new Date().toISOString()),
+        status: "Harici sonuç · kullanıcı doğrulaması bekliyor",
+      };
+    });
 };

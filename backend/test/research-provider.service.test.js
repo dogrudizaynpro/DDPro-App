@@ -55,7 +55,75 @@ test("filters off-topic results and deduplicates direct source URLs", async (t) 
   assert.equal(results[0].price, "");
 });
 
-test("sends a Tavily search request and converts results to the DDPro format", async (t) => {
+test("ranks relevant results and returns only short query-related summaries", async (t) => {
+  mockProvider(t, async () => jsonResponse({
+    results: [
+      {
+        title: "Asma tavan uygulamaları",
+        content: "Asma tavan hizmetleri için ürün seçenekleri sunulur. Gençlik kampları hakkında bilgiler.",
+        url: "https://supplier.example/ceiling",
+        score: 0.7,
+      },
+      {
+        title: "Alakasız gençlik kampları",
+        content: "Gençlik kampları, yaz etkinlikleri ve konaklama seçenekleri.",
+        url: "https://supplier.example/camps",
+        score: 1,
+      },
+      {
+        title: "Asma tavan hizmetleri ve çözümleri",
+        content: `Asma tavan hizmetleri için doğrudan ürün seçenekleri. Alakasız metin ${"uzun ".repeat(150)}`,
+        url: "https://supplier.example/ceiling?utm_source=search",
+        score: 0.5,
+      },
+      {
+        title: "Acrobat hizmetleri",
+        content: "Adobe Acrobat PDF araçları ve belge düzenleme.",
+        url: "https://supplier.example/acrobat",
+        score: 0.99,
+      },
+    ],
+  }));
+
+  const results = await searchResearchProvider("asma tavan hizmetleri");
+
+  assert.deepEqual(results.map(({ url }) => url), [
+    "https://supplier.example/ceiling?utm_source=search",
+  ]);
+  assert.match(results[0].source, /Asma tavan hizmetleri/);
+  assert.doesNotMatch(results[0].source, /Gençlik kampları|Alakasız metin/);
+  assert.ok(results[0].source.length <= 500);
+  assert.equal(results[0].technicalInfo, "");
+});
+
+test("returns no result when provider pages do not support the requested topic", async (t) => {
+  mockProvider(t, async () => jsonResponse({
+    results: [
+      {
+        title: "KVKK ve kişisel verilerin korunması",
+        content: "Kişisel veriler ve açık rıza hakkında.",
+        url: "https://www.ddizaynpro.com/kvkk",
+      },
+      {
+        title: "Gençlik kampları",
+        content: "Kamp alanları, konaklama ve gençlik faaliyetleri.",
+        url: "https://www.ddizaynpro.com/kamplar",
+      },
+      {
+        title: "Adobe Acrobat",
+        content: "PDF belgelerini oluşturma ve düzenleme.",
+        url: "https://www.ddizaynpro.com/acrob",
+      },
+    ],
+  }));
+
+  assert.deepEqual(
+    await searchResearchProvider("asma tavan hizmetleri", { siteOnly: true }),
+    [],
+  );
+});
+
+test("sends a concise Tavily search request and converts results to the DDPro format", async (t) => {
   let request;
   const content = `aluminum profile ${"x".repeat(4_100)}`;
   mockProvider(t, async (url, options) => {
@@ -79,13 +147,13 @@ test("sends a Tavily search request and converts results to the DDPro format", a
   assert.deepEqual(request.body, {
     api_key: "test-key",
     query: "aluminum profile",
-    include_answer: true,
+    include_answer: false,
     max_results: 10,
   });
-  assert.equal(result.source, content.slice(0, 300));
-  assert.equal(result.product, `Aluminum profile ${"T".repeat(310)}`.slice(0, 300));
+  assert.ok(result.source.length <= 500);
+  assert.equal(result.product, `Aluminum profile ${"T".repeat(310)}`.slice(0, 200));
   assert.equal(result.manufacturer, "");
-  assert.equal(result.technicalInfo, content.slice(0, 4_000));
+  assert.equal(result.technicalInfo, "");
   assert.equal(result.price, "");
   assert.equal(result.priceVerification, "Doğrulanmadı");
   assert.equal(result.url, "https://supplier.example/product");
@@ -106,8 +174,8 @@ test("site-scoped searches use Tavily with an exact DDPro host filter and accept
           published_date: "2026-04-12",
         },
         {
-          title: "Other hostname",
-          content: "Not DDPro.",
+          title: "Apex hostname",
+          content: "Doğru Dizayn Pro hizmetleri.",
           url: "https://ddizaynpro.com/hizmetler",
         },
         {
@@ -130,6 +198,11 @@ test("site-scoped searches use Tavily with an exact DDPro host filter and accept
           content: "Not DDPro.",
           url: "https://supplier.example/hizmetler",
         },
+        {
+          title: "KVKK aydınlatma metni",
+          content: "KVKK ve kişisel verilerin korunması hakkında bilgi.",
+          url: "https://www.ddizaynpro.com/kvkk",
+        },
       ],
     });
   });
@@ -141,9 +214,11 @@ test("site-scoped searches use Tavily with an exact DDPro host filter and accept
 
   assert.equal(request.url, "https://api.tavily.com/search");
   assert.equal(request.body.query,
-    "site:www.ddizaynpro.com Doğru Dizayn Pro hangi hizmetleri sunuyor?");
-  assert.equal(results.length, 1);
-  assert.equal(results[0].url, "https://www.ddizaynpro.com/hizmetler/");
+    "site:ddizaynpro.com Doğru Dizayn Pro hangi hizmetleri sunuyor?");
+  assert.deepEqual(results.map(({ url }) => url), [
+    "https://www.ddizaynpro.com/hizmetler/",
+    "https://ddizaynpro.com/hizmetler",
+  ]);
   assert.equal(results[0].date, "2026-04-12T00:00:00.000Z");
 });
 
@@ -158,24 +233,31 @@ test("handles missing and null result fields without inventing data", async (t) 
         manufacturer: "Unsupported",
         price: "100",
       },
+      {
+        title: { value: "Ignored object title" },
+        content: "aluminum profile technical data",
+        url: "https://supplier.example/object-title",
+      },
     ],
   }));
 
   const results = await searchResearchProvider("aluminum profile");
 
-  assert.equal(results.length, 1);
+  assert.equal(results.length, 2);
   assert.deepEqual(
-    Object.fromEntries(Object.entries(results[0]).filter(([key]) => key !== "date" && key !== "status")),
+    Object.fromEntries(Object.entries(results[0]).filter(([key]) => !["date", "status"].includes(key))),
     {
       source: "aluminum profile technical data",
       product: "",
       manufacturer: "",
-      technicalInfo: "aluminum profile technical data",
+      technicalInfo: "",
       price: "",
       priceVerification: "Doğrulanmadı",
       url: "https://supplier.example/item",
     }
   );
+  assert.equal(results[1].product, "");
+  assert.equal(results[1].source, "aluminum profile technical data");
 });
 
 test("leaves price empty when a source does not provide a price field", async (t) => {
@@ -200,6 +282,7 @@ test("filters results with invalid or non-HTTP URLs", async (t) => {
       { title: "Missing", url: null },
       { title: "Unsupported protocol", url: "javascript:alert(1)" },
       { title: "Invalid URL", url: "https://?bad" },
+      { title: "Embedded credentials", url: "https://user@supplier.example/item" },
     ],
   }));
 

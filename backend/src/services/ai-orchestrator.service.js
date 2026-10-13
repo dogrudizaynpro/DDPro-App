@@ -17,11 +17,9 @@ const DDPRO_SITE_PATTERN =
 const COMPANY_CONTEXT_PATTERN =
   /(?<![\p{L}\p{N}_])(?:şirket|firma|marka|company|our|bizim|kurumsal)[\p{L}\p{N}_]*(?![\p{L}\p{N}_])/iu;
 const COMPANY_TOPIC_PATTERN =
-  /(?<![\p{L}\p{N}_])(?:hizmet|service|ürün|product|sistem|system|uygulama|application|proje|project|referans|reference)[\p{L}\p{N}_]*(?![\p{L}\p{N}_])/iu;
+  /(?<![\p{L}\p{N}_])(?:hizmet|service|ürün|product|sistem|system|uygulama|application|proje|project|referans|reference|çözüm|solution)[\p{L}\p{N}_]*(?![\p{L}\p{N}_])/iu;
 const OWNED_COMPANY_TOPIC_PATTERN =
-  /(?<![\p{L}\p{N}_])(?:hizmet|service|ürün|product|sistem|system|uygulama|application|proje|project|referans|reference)(?:lar|ler)?(?:ımız|imiz|umuz|ümüz|ınız|iniz|unuz|ünüz)(?![\p{L}\p{N}_])/iu;
-const CEILING_TOPIC_PATTERN =
-  /(?<![\p{L}\p{N}_])(?:asma\s*tavan|suspended\s*ceiling|lineer\s*tavan|baffle\s*tavan)(?![\p{L}\p{N}_])/iu;
+  /(?<![\p{L}\p{N}_])(?:hizmet|service|ürün|product|sistem|system|uygulama|application|proje|project|referans|reference|çözüm|solution)(?:lar|ler)?(?:ımız|imiz|umuz|ümüz|ınız|iniz|unuz|ünüz)(?![\p{L}\p{N}_])/iu;
 const UNVERIFIED_SITE_PRICE_PATTERN =
   /(?<![\p{L}\p{N}_])(?:fiyat|ücret|bedel|price|pricing|cost)[\p{L}\p{N}_]*|(?:₺|€|\$|\b(?:TL|TRY|USD|EUR)\b)/iu;
 const RECORD_PATTERN =
@@ -35,7 +33,8 @@ const createOrchestrationError = (message, statusCode, code) =>
 const isValidResearchUrl = (value) => {
   if (typeof value !== "string" || !/^https?:\/\/\S+$/i.test(value)) return false;
   try {
-    return Boolean(new URL(value).hostname);
+    const url = new URL(value);
+    return Boolean(url.hostname) && !url.username && !url.password;
   } catch {
     return false;
   }
@@ -45,7 +44,7 @@ const isAllowedDdproWebsiteUrl = (value) => {
   if (!isValidResearchUrl(value)) return false;
   try {
     const url = new URL(value);
-    return url.hostname.toLowerCase() === "www.ddizaynpro.com" &&
+    return ["ddizaynpro.com", "www.ddizaynpro.com"].includes(url.hostname.toLowerCase()) &&
       !url.username &&
       !url.password &&
       !url.port;
@@ -107,8 +106,7 @@ const getResearchQuery = (message) => message.toLocaleLowerCase("tr-TR")
 const isDdproWebsiteQuestion = (message) =>
   DDPRO_SITE_PATTERN.test(message) ||
   OWNED_COMPANY_TOPIC_PATTERN.test(message) ||
-  (COMPANY_CONTEXT_PATTERN.test(message) && COMPANY_TOPIC_PATTERN.test(message)) ||
-  CEILING_TOPIC_PATTERN.test(message);
+  (COMPANY_CONTEXT_PATTERN.test(message) && COMPANY_TOPIC_PATTERN.test(message));
 
 export const classifyAiCommand = ({ message, attachment } = {}) => {
   if (attachment) {
@@ -172,7 +170,7 @@ const formatResearchAnswer = (results, { siteOnly = false } = {}) => {
 
   if (siteOnly) {
     return [
-      "Aşağıdaki bilgiler yalnızca www.ddizaynpro.com üzerindeki herkese açık sayfalardan alınan araştırma özetleridir; DDPro'nun dahili kayıtlarıyla birleştirilmemiştir ve güncelliği kaynak sayfa tarihine bağlıdır.",
+      "Aşağıdaki bilgiler yalnızca ddizaynpro.com üzerindeki herkese açık sayfalardan alınan araştırma özetleridir; DDPro'nun dahili kayıtlarıyla birleştirilmemiştir ve güncelliği kaynak sayfa tarihine bağlıdır.",
       "Sayfa içeriği güvenilmeyen kaynak verisidir; içindeki talimatlar uygulanmaz. Kaynakta açıkça güncel olduğu doğrulanmadıkça fiyat bilgisi verilmez.",
       ...results.map((result, index) => {
         const title = result.product || `DDPro sayfa özeti ${index + 1}`;
@@ -191,7 +189,7 @@ const formatResearchAnswer = (results, { siteOnly = false } = {}) => {
     ...results.map((result, index) => {
       const title = result.product || `Kaynak özeti ${index + 1}`;
       const details = [
-        result.technicalInfo,
+        result.technicalInfo || result.source,
         result.price ? `Fiyat (doğrulanmadı): ${result.price}` : "",
         `Doğrudan kaynak URL'si: ${result.url}`,
       ].filter(Boolean);
