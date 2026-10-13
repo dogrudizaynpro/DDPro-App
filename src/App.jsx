@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import ddproMasterLogo from "./assets/DDPRO_LOGO_MASTER_V1_EXACT.png";
+import { DDPRO_BRAND } from "./branding/brand-system.js";
 import dashboardDesignReference from "./assets/DDPro-Dashboard-Referans.png";
 import DDProIcon from "./components/DDProIcon.jsx";
 import {
@@ -3093,7 +3093,7 @@ function App() {
         <div className="brand-area">
           <img
             className="brand-logo"
-            src={ddproMasterLogo}
+            src={DDPRO_BRAND.logo.master}
             alt="DOĞRU DİZAYN PRO"
           />
           <div className="brand-content">
@@ -3118,7 +3118,7 @@ function App() {
             <div className="sidebar-master-card">
               <img
                 className="sidebar-master-logo"
-                src={ddproMasterLogo}
+                src={DDPRO_BRAND.logo.master}
                 alt=""
               />
             </div>

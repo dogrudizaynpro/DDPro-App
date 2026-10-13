@@ -1,7 +1,11 @@
 :root {
-  font-family: Inter, Arial, sans-serif;
-  color: #edf3ff;
-  background: #08111f;
+  --ddpro-ui-font-family: Inter, Arial, sans-serif;
+  --ddpro-ui-text-color: #edf3ff;
+  --ddpro-ui-background-color: #08111f;
+  --ddpro-ui-focus-color: #00d7a7;
+  font-family: var(--ddpro-ui-font-family);
+  color: var(--ddpro-ui-text-color);
+  background: var(--ddpro-ui-background-color);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -22,7 +26,7 @@ body,
 }
 
 html {
-  background: #08111f;
+  background: var(--ddpro-ui-background-color);
 }
 
 body {
@@ -34,8 +38,8 @@ body {
       rgba(38, 99, 180, 0.15),
       transparent 32%
     ),
-    #08111f;
-  color: #edf3ff;
+    var(--ddpro-ui-background-color);
+  color: var(--ddpro-ui-text-color);
 }
 
 button,
@@ -54,7 +58,7 @@ button:focus-visible,
 input:focus-visible,
 textarea:focus-visible,
 select:focus-visible {
-  outline: 2px solid #00d7a7;
+  outline: 2px solid var(--ddpro-ui-focus-color);
   outline-offset: 2px;
 }
 
