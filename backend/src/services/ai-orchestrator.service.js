@@ -1,6 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { requestAiCompletion } from "./ai.service.js";
 import { searchResearchProvider } from "./research-provider.service.js";
+import { executeOperationalTool } from "./ai-tools.service.js";
+import {
+  findUnavailableAiCapability,
+  planAiAgents,
+} from "./ai-agent-registry.service.js";
 
 const MAX_COMMAND_LENGTH = 8_000;
 const MUTATION_PATTERN =
@@ -106,12 +111,32 @@ const isDdproWebsiteQuestion = (message) =>
   CEILING_TOPIC_PATTERN.test(message);
 
 export const classifyAiCommand = ({ message, attachment } = {}) => {
-  if (attachment) return { intent: "attachment_analysis", toolPolicy: "all" };
+  if (attachment) {
+    const unavailableCapability = findUnavailableAiCapability(
+      typeof message === "string" ? message : ""
+    );
+    return unavailableCapability
+      ? {
+        intent: "unsupported",
+        error: "AI_ORCHESTRATOR_CAPABILITY_UNAVAILABLE",
+        capability: unavailableCapability,
+      }
+      : { intent: "attachment_analysis", toolPolicy: "all" };
+  }
   if (typeof message !== "string" || !message.trim()) {
     return { intent: "invalid", error: "AI_ORCHESTRATOR_COMMAND_REQUIRED" };
   }
   if (message.length > MAX_COMMAND_LENGTH) {
     return { intent: "invalid", error: "AI_ORCHESTRATOR_COMMAND_TOO_LONG" };
+  }
+
+  const unavailableCapability = findUnavailableAiCapability(message);
+  if (unavailableCapability) {
+    return {
+      intent: "unsupported",
+      error: "AI_ORCHESTRATOR_CAPABILITY_UNAVAILABLE",
+      capability: unavailableCapability,
+    };
   }
 
   const normalizedMessage = message.toLocaleLowerCase("tr-TR");
@@ -178,6 +203,8 @@ const formatResearchAnswer = (results, { siteOnly = false } = {}) => {
 export const createAiOrchestrator = ({
   complete = requestAiCompletion,
   search = searchResearchProvider,
+  executeAgentRead = (integrationAccount, resource) =>
+    executeOperationalTool(integrationAccount, "read_records", { resource }),
 } = {}) => async ({ message, context = {}, attachment, integrationAccount } = {}) => {
   if (typeof integrationAccount !== "string" || !integrationAccount.trim()) {
     throw createOrchestrationError(
@@ -202,21 +229,30 @@ export const createAiOrchestrator = ({
       classification.intent === "missing_parameters"
         ? "Araştırma için aranacak konuyu belirtin."
         : classification.intent === "unsupported"
-          ? "Bu birleşik veya harici işlem bu aşamada desteklenmiyor; herhangi bir işlem yapılmadı."
-          : classification.error === "AI_ORCHESTRATOR_COMMAND_TOO_LONG"
+        ? classification.capability
+          ? `Bu istekte ${classification.capability.label} yeteneği mevcut sistemde bulunmuyor; işlem yapılmadı.`
+          : "Bu birleşik veya harici işlem bu aşamada desteklenmiyor; herhangi bir işlem yapılmadı."
+        : classification.error === "AI_ORCHESTRATOR_COMMAND_TOO_LONG"
             ? `AI command must be at most ${MAX_COMMAND_LENGTH} characters.`
             : "AI command is required.",
       missing ? 400 : 422,
       classification.error
     );
   }
+  const agents = planAiAgents({
+    message: message || "",
+    intent: classification.intent,
+  });
   const taskContext = Object.freeze({
     id: randomUUID(),
     createdAt: new Date().toISOString(),
     intent: classification.intent,
+    agents,
   });
 
   let result;
+  let steps = [];
+  let agentData = [];
   if (["web_research", "site_research"].includes(classification.intent)) {
     const siteOnly = classification.intent === "site_research";
     if (typeof search !== "function") {
@@ -240,6 +276,12 @@ export const createAiOrchestrator = ({
         );
       }
       const results = getResearchResults(providerResults, { siteOnly });
+      steps = [{
+        agentId: "research",
+        operation: siteOnly ? "ddpro_site_search" : "web_search",
+        status: "completed",
+        resultCount: results.length,
+      }];
       result = {
         answer: formatResearchAnswer(results, { siteOnly }),
         researchResults: results,
@@ -262,6 +304,61 @@ export const createAiOrchestrator = ({
         "AI_ORCHESTRATOR_CAPABILITY_UNAVAILABLE"
       );
     }
+    if (
+      classification.intent === "company_data" &&
+      agents.length > 1 &&
+      typeof executeAgentRead === "function"
+    ) {
+      const plannedReads = agents.flatMap((agent) =>
+        agent.resources.map((resource) => ({ agent, resource }))
+      );
+      const readResults = await Promise.all(plannedReads.map(async ({ agent, resource }) => {
+        try {
+          const execution = await executeAgentRead(integrationAccount, resource, {
+            taskContext,
+            agent,
+          });
+          if (
+            execution?.type !== "records" ||
+            execution.resource !== resource ||
+            !Object.hasOwn(execution, "data") ||
+            (execution.data !== null && typeof execution.data !== "object")
+          ) {
+            throw new Error("Invalid shared tool response.");
+          }
+          const resultCount = Array.isArray(execution.data)
+            ? execution.data.length
+            : execution.data == null ? 0 : 1;
+          return {
+            data: { agentId: agent.id, resource, status: "completed", records: execution.data },
+            step: {
+              agentId: agent.id,
+              operation: "read_records",
+              resource,
+              status: "completed",
+              resultCount,
+            },
+          };
+        } catch {
+          return {
+            data: {
+              agentId: agent.id,
+              resource,
+              status: "failed",
+              error: "Authorized records could not be read.",
+            },
+            step: {
+              agentId: agent.id,
+              operation: "read_records",
+              resource,
+              status: "failed",
+            },
+          };
+        }
+      }));
+      agentData = readResults.map(({ data }) => data);
+      steps = readResults.map(({ step }) => step);
+    }
     try {
       result = await complete({
         message,
@@ -270,7 +367,10 @@ export const createAiOrchestrator = ({
         integrationAccount,
         toolPolicy: classification.toolPolicy,
         taskContext,
+        agents,
+        agentData,
       });
+      steps.push(...(Array.isArray(result?.toolExecutions) ? result.toolExecutions : []));
     } catch (error) {
       if (error.expose) throw error;
       throw createOrchestrationError(
@@ -289,12 +389,32 @@ export const createAiOrchestrator = ({
     );
   }
 
+  const agentStatuses = agents.map((agent) => {
+    const agentSteps = steps.filter(({ agentId }) => agentId === agent.id);
+    const status = result.pendingAction && agentSteps.some(
+      (step) => step.status === "awaiting_confirmation"
+    )
+      ? "awaiting_confirmation"
+      : agentSteps.some((step) => ["failed", "unavailable"].includes(step.status))
+        ? "failed"
+        : agent.resources.length && !agentSteps.length
+          ? "not_invoked"
+          : "completed";
+    return { ...agent, status };
+  });
+  const hasUninvokedAgent = agentStatuses.some(({ status }) => status === "not_invoked");
   return {
     ...result,
     orchestration: {
       taskId: taskContext.id,
       intent: taskContext.intent,
-      status: "completed",
+      status: result.pendingAction
+        ? "awaiting_confirmation"
+        : steps.some((step) => ["failed", "unavailable"].includes(step.status))
+          ? "completed_with_errors"
+          : hasUninvokedAgent ? "incomplete" : "completed",
+      agents: agentStatuses,
+      steps,
     },
   };
 };

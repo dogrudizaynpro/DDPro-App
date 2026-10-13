@@ -15,7 +15,16 @@ test("written AI commands route company data as read-only through the existing c
   const orchestrate = createAiOrchestrator({
     complete: async (command) => {
       received = command;
-      return { answer: "Projeler API'sinden alınan kayıtlar." };
+      return {
+        answer: "Projeler API'sinden alınan kayıtlar.",
+        toolExecutions: [{
+          agentId: "project",
+          operation: "read_records",
+          resource: "projects",
+          status: "completed",
+          resultCount: 2,
+        }],
+      };
     },
   });
 
@@ -31,6 +40,185 @@ test("written AI commands route company data as read-only through the existing c
   assert.equal(result.orchestration.intent, "company_data");
   assert.equal(result.orchestration.status, "completed");
   assert.equal(result.answer, "Projeler API'sinden alınan kayıtlar.");
+});
+
+test("one command can plan multiple specialists and reports executed and failed reads separately", async () => {
+  let received;
+  const orchestrate = createAiOrchestrator({
+    executeAgentRead: async (_account, resource) => {
+      if (resource === "customers") throw new Error("private database error");
+      return { type: "records", resource, data: [{ id: "project-record" }] };
+    },
+    complete: async (command) => {
+      received = command;
+      return { answer: "Projeler ve müşteriler özetlendi." };
+    },
+  });
+
+  const result = await orchestrate({
+    ...authenticatedCommand,
+    message: "Projelerimi ve müşterilerimi listele.",
+  });
+  assert.deepEqual(received.agents.map(({ id }) => id), ["project", "crm"]);
+  assert.equal(received.agentData[0].status, "completed");
+  assert.equal(received.agentData[1].status, "failed");
+  assert.equal(result.orchestration.status, "completed_with_errors");
+  assert.deepEqual(result.orchestration.agents.map(({ id, status }) => ({ id, status })), [
+    { id: "project", status: "completed" },
+    { id: "crm", status: "failed" },
+  ]);
+  assert.deepEqual(result.orchestration.steps.map(({ resource, status }) => ({ resource, status })), [
+    { resource: "projects", status: "completed" },
+    { resource: "customers", status: "failed" },
+  ]);
+});
+
+test("multi-specialist reads run in parallel through the shared tool contract and reach synthesis", async () => {
+  const receivedReads = [];
+  let activeReads = 0;
+  let maxConcurrentReads = 0;
+  let completionInput;
+  const orchestrate = createAiOrchestrator({
+    executeAgentRead: async (account, resource, { agent }) => {
+      receivedReads.push({ account, resource, agent: agent.id });
+      activeReads += 1;
+      maxConcurrentReads = Math.max(maxConcurrentReads, activeReads);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      activeReads -= 1;
+      return {
+        type: "records",
+        resource,
+        data: [{ id: `${resource}-record`, name: `${resource} result` }],
+      };
+    },
+    complete: async (input) => {
+      completionInput = input;
+      return { answer: "Proje ve müşteri kayıtları birlikte değerlendirildi." };
+    },
+  });
+
+  const result = await orchestrate({
+    ...authenticatedCommand,
+    message: "Projelerimi ve müşterilerimi özetle.",
+  });
+
+  assert.deepEqual(receivedReads.map(({ account, resource, agent }) => ({
+    account,
+    resource,
+    agent,
+  })), [
+    { account: authenticatedCommand.integrationAccount, resource: "projects", agent: "project" },
+    { account: authenticatedCommand.integrationAccount, resource: "customers", agent: "crm" },
+  ]);
+  assert.equal(maxConcurrentReads, 2);
+  assert.deepEqual(completionInput.agentData.map(({ agentId, resource, status, records }) => ({
+    agentId,
+    resource,
+    status,
+    records: records.map(({ name }) => name),
+  })), [
+    { agentId: "project", resource: "projects", status: "completed", records: ["projects result"] },
+    { agentId: "crm", resource: "customers", status: "completed", records: ["customers result"] },
+  ]);
+  assert.equal(result.orchestration.status, "completed");
+  assert.deepEqual(result.orchestration.steps.map(({ resource, status, resultCount }) => ({
+    resource,
+    status,
+    resultCount,
+  })), [
+    { resource: "projects", status: "completed", resultCount: 1 },
+    { resource: "customers", status: "completed", resultCount: 1 },
+  ]);
+});
+
+test("multi-specialist partial read failures are visible and never represented as empty results", async () => {
+  let completionInput;
+  const orchestrate = createAiOrchestrator({
+    executeAgentRead: async (_account, resource) => {
+      if (resource === "projects") throw new Error("private database details");
+      return { type: "records", resource, data: [] };
+    },
+    complete: async (input) => {
+      completionInput = input;
+      return { answer: "Kayıtlar kısmen değerlendirildi." };
+    },
+  });
+
+  const result = await orchestrate({
+    ...authenticatedCommand,
+    message: "Projelerimi ve müşterilerimi özetle.",
+  });
+
+  assert.equal(completionInput.agentData[0].status, "failed");
+  assert.equal(completionInput.agentData[0].error, "Authorized records could not be read.");
+  assert.equal(Object.hasOwn(completionInput.agentData[0], "records"), false);
+  assert.doesNotMatch(JSON.stringify(completionInput.agentData), /private database details/);
+  assert.equal(result.orchestration.status, "completed_with_errors");
+  assert.equal(result.orchestration.agents[0].status, "failed");
+  assert.equal(result.orchestration.agents[1].status, "completed");
+  assert.equal(result.orchestration.steps[0].status, "failed");
+  assert.equal(result.orchestration.steps[1].status, "completed");
+});
+
+test("write requests are never auto-executed by specialist read coordination", async () => {
+  let automaticReads = 0;
+  let received;
+  const orchestrate = createAiOrchestrator({
+    executeAgentRead: async () => {
+      automaticReads += 1;
+      return { type: "records", resource: "projects", data: [] };
+    },
+    complete: async (input) => {
+      received = input;
+      return {
+        answer: "İşlem onayınıza sunuldu.",
+        pendingAction: { id: "confirmation-id" },
+        toolExecutions: [{
+          agentId: "project",
+          operation: "create",
+          resource: "projects",
+          status: "awaiting_confirmation",
+        }],
+      };
+    },
+  });
+
+  const result = await orchestrate({
+    ...authenticatedCommand,
+    message: "Yeni proje ve müşteri oluştur.",
+  });
+
+  assert.equal(automaticReads, 0);
+  assert.deepEqual(received.agentData, []);
+  assert.equal(result.orchestration.status, "awaiting_confirmation");
+});
+
+test("unsupported real-world operations are disclosed before any AI or research capability runs", async () => {
+  let calls = 0;
+  const orchestrate = createAiOrchestrator({
+    complete: async () => { calls += 1; return { answer: "unexpected" }; },
+    search: async () => { calls += 1; return []; },
+  });
+
+  for (const message of [
+    "Bursa projesi için metrajı çıkar.",
+    "Bu proje için hakediş taslağı hazırla.",
+    "Müşteriyi telefonla ara.",
+    "Dijital kart oluştur.",
+    "Bir 3D render üret.",
+  ]) {
+    await assert.rejects(
+      orchestrate({ ...authenticatedCommand, message }),
+      (error) => {
+        assert.equal(error.code, "AI_ORCHESTRATOR_CAPABILITY_UNAVAILABLE");
+        assert.equal(error.statusCode, 422);
+        assert.match(error.message, /mevcut sistemde bulunmuyor/);
+        return true;
+      }
+    );
+  }
+
+  assert.equal(calls, 0);
 });
 
 test("direct answers do not advertise operational tools", async () => {
@@ -314,6 +502,12 @@ test("write commands retain the existing prepare_write and explicit confirmation
       return {
         answer: "İşlem henüz yapılmadı; onayınızı bekliyor.",
         pendingAction: { id: "confirmation-id" },
+        toolExecutions: [{
+          agentId: "project",
+          operation: "create",
+          resource: "projects",
+          status: "awaiting_confirmation",
+        }],
       };
     },
   });
@@ -326,6 +520,8 @@ test("write commands retain the existing prepare_write and explicit confirmation
   assert.equal(received.toolPolicy, "all");
   assert.equal(result.pendingAction.id, "confirmation-id");
   assert.equal(result.orchestration.intent, "operational_write");
+  assert.equal(result.orchestration.status, "awaiting_confirmation");
+  assert.equal(result.orchestration.steps[0].status, "awaiting_confirmation");
 });
 
 test("command classifier never routes arbitrary text to unregistered research", () => {

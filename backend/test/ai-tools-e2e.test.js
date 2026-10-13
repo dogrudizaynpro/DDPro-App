@@ -103,7 +103,16 @@ test("read_records reaches the Projects API controller and returns its actual da
     integrationAccount: "authorized@example.com",
   });
 
-  assert.deepEqual(result, { answer: "Found Live API project in the Projects API." });
+  assert.deepEqual(result, {
+    answer: "Found Live API project in the Projects API.",
+    toolExecutions: [{
+      agentId: "project",
+      operation: "read_records",
+      resource: "projects",
+      status: "completed",
+      resultCount: 1,
+    }],
+  });
   assert.equal(databaseRequests.length, 1);
   assert.equal(databaseRequests[0].url.pathname, "/rest/v1/projects");
   assert.equal(

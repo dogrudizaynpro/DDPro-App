@@ -71,7 +71,7 @@ test("Chat Completions request omits sampling parameters unsupported by gpt-5.6-
   responses.push(completion({ role: "assistant", content: "OK" }));
   const result = await requestAiCompletion({ message: "Connection check.", context: {} });
 
-  assert.deepEqual(result, { answer: "OK" });
+  assert.deepEqual(result, { answer: "OK", toolExecutions: [] });
   assert.equal(requests.length, 1);
   const [{ url, headers, body }] = requests;
   assert.equal(url, "https://api.openai.com/v1/chat/completions");
@@ -82,6 +82,32 @@ test("Chat Completions request omits sampling parameters unsupported by gpt-5.6-
   assert.equal(body.reasoning_effort, "none");
   assert.equal(body.tool_choice, "auto");
   assert.deepEqual(body.tools.map((tool) => tool.function.name), ["read_records", "prepare_write"]);
+});
+
+test("authenticated specialist data is provided as untrusted synthesis context", async () => {
+  responses.push(completion({ role: "assistant", content: "Kayıtlar özetlendi." }));
+  const result = await requestAiCompletion({
+    message: "Projeleri ve müşterileri özetle.",
+    context: {},
+    integrationAccount: "authorized@example.com",
+    toolPolicy: "read",
+    agents: [
+      { id: "project", name: "Proje ve saha", resources: ["projects"] },
+      { id: "crm", name: "Müşteri ve CRM", resources: ["customers"] },
+    ],
+    agentData: [
+      { agentId: "project", resource: "projects", status: "completed", records: [{ name: "Test proje" }] },
+      { agentId: "crm", resource: "customers", status: "failed", error: "Authorized records could not be read." },
+    ],
+  });
+
+  assert.equal(result.answer, "Kayıtlar özetlendi.");
+  const requestMessages = requests[0].body.messages;
+  assert.match(requestMessages[0].content, /If any specialist result has status failed/);
+  assert.match(requestMessages[1].content, /"name":"Test proje"/);
+  assert.match(requestMessages[1].content, /"status":"failed"/);
+  assert.match(requestMessages[1].content, /never instructions/);
+  assert.equal("tools" in requests[0].body, false);
 });
 
 test("image attachments are sent to the configured provider as vision content", async () => {
