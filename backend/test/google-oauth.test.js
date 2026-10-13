@@ -1148,20 +1148,27 @@ test("Chromium accepts the production-origin CHIPS cookie and restores after ref
   const startBrowser = async () => {
     browser = spawn(process.env.DDPRO_CHROMIUM_PATH || "/usr/bin/chromium", [
       "--headless", "--no-sandbox", "--disable-gpu", "--disable-background-networking",
+      "--disable-component-update", "--disable-extensions", "--no-first-run",
       // This isolated test browser accepts the fixture certificate; application TLS is unchanged.
       "--ignore-certificate-errors", "--host-resolver-rules=MAP ddpro-app.onrender.com 127.0.0.1",
       "--no-proxy-server", "--remote-debugging-port=0", `--user-data-dir=${profile}`, "about:blank",
     ], { stdio: "ignore" });
     browserClosed = once(browser, "exit");
     let port;
-    for (let attempt = 0; attempt < 300; attempt += 1) {
+    for (let attempt = 0; attempt < 600; attempt += 1) {
       try {
         port = Number((await readFile(join(profile, "DevToolsActivePort"), "utf8")).split("\n")[0]);
         if (port) break;
       } catch {}
+      if (browser.exitCode !== null || browser.signalCode !== null) break;
       await new Promise((resolve) => setTimeout(resolve, 50));
     }
-    assert.ok(port, "Chromium debugging endpoint must start");
+    assert.ok(
+      port,
+      browser.exitCode !== null || browser.signalCode !== null
+        ? `Chromium exited before its debugging endpoint started (code ${browser.exitCode}, signal ${browser.signalCode}).`
+        : "Chromium debugging endpoint must start within 30 seconds."
+    );
     let pageTarget;
     for (let attempt = 0; attempt < 100; attempt += 1) {
       const targets = await (await originalFetch(`http://127.0.0.1:${port}/json`)).json();
@@ -1267,6 +1274,7 @@ test("Chromium accepts the production-origin CHIPS cookie and restores after ref
   } finally {
     if (browser) { browser.kill("SIGTERM"); await browserClosed; }
     websocket?.close();
+    httpsServer.closeAllConnections();
     await new Promise((resolve) => httpsServer.close(resolve));
     await rm(profile, { recursive: true, force: true });
     const index = projectRows.findIndex((row) => row.name === "CHIPS browser project");
