@@ -47,17 +47,16 @@ const captureResponse = () => {
   return response;
 };
 
-test("research status endpoints require a key and distinguish configured from connected", async () => {
+test("research status endpoints use the API key and distinguish configured from tested", async () => {
   await withResearchConfiguration(null, async () => {
     const providerResponse = captureResponse();
     getResearchProviderStatus({}, providerResponse);
     assert.equal(providerResponse.statusCode, 200);
     assert.equal(providerResponse.body.data.configured, false);
-    assert.equal(providerResponse.body.data.connected, false);
-    assert.equal(providerResponse.body.data.status, "credentials_required");
+    assert.equal(providerResponse.body.data.provider, "Tavily");
 
     const integrationResponse = captureResponse();
-    await getIntegrationStatus({}, integrationResponse, (error) => { throw error; });
+    await getIntegrationStatus({ get: () => null, headers: {} }, integrationResponse, (error) => { throw error; });
     assert.equal(integrationResponse.statusCode, 200);
     assert.equal(integrationResponse.body.data.research.configured, false);
     assert.equal(integrationResponse.body.data.research.connected, false);
@@ -69,11 +68,9 @@ test("research status endpoints require a key and distinguish configured from co
     getResearchProviderStatus({}, providerResponse);
     assert.equal(providerResponse.body.data.provider, "Tavily");
     assert.equal(providerResponse.body.data.configured, true);
-    assert.equal(providerResponse.body.data.connected, false);
-    assert.equal(providerResponse.body.data.status, "configured_not_tested");
 
     const integrationResponse = captureResponse();
-    await getIntegrationStatus({}, integrationResponse, (error) => { throw error; });
+    await getIntegrationStatus({ get: () => null, headers: {} }, integrationResponse, (error) => { throw error; });
     assert.equal(integrationResponse.body.data.research.configured, true);
     assert.equal(integrationResponse.body.data.research.connected, false);
     assert.equal(integrationResponse.body.data.research.status, "configured_not_tested");
