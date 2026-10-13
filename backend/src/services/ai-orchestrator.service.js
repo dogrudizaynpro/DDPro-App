@@ -137,7 +137,7 @@ export const classifyAiCommand = ({ message, attachment } = {}) => {
 const formatResearchAnswer = (results, { siteOnly = false } = {}) => {
   if (!results.length) {
     if (siteOnly) {
-      return "İlgili bilgi DDPro web sitesinde bulunamadı veya site araştırması yapılamadı. Kaynak doğrulanamadığı için bilgi uydurulmadı.";
+      return "İlgili bilgi DDPro web sitesinde bulunamadı veya site araştırması yapılamadı. Araştırma yapılamadı; kaynak doğrulanamadığı için bilgi uydurulmadı.";
     }
     return "Bu sorgu için kaynak URL'si olan, konuyla ilgili araştırma sonucu bulunamadı. Araştırma yapılamadı; başka bir sorgu deneyin.";
   }

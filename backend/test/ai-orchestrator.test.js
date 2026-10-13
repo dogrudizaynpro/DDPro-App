@@ -84,7 +84,7 @@ test("DDPro company questions research only the public website and preserve date
   assert.equal(completionCalled, false);
   assert.equal(result.orchestration.intent, "site_research");
   assert.match(result.answer, /yalnızca www\.ddizaynpro\.com/);
-  assert.match(result.answer, /Asma tavan çözümleri/);
+  assert.match(result.answer, /Doğru Dizayn Pro asma tavan uygulamaları sunar/);
   assert.match(result.answer, /Sayfa tarihi: 2026-04-12T00:00:00\.000Z/);
   assert.match(result.answer, /https:\/\/www\.ddizaynpro\.com\/hizmetler/);
   assert.doesNotMatch(result.answer, /900 TL/);
