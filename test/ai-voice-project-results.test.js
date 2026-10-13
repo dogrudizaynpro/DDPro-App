@@ -35,7 +35,8 @@ test("actual Live operation data renders project names/statuses safely in the ex
   const markup = renderToStaticMarkup(element);
   assert.match(markup, /Backend proje kayıtları/);
   assert.match(markup, /Gerçek proje &lt;script&gt;/);
-  assert.doesNotMatch(markup, /<script>|Aktif/);
+  assert.doesNotMatch(markup, /<script\b/i);
+  assert.doesNotMatch(markup, /Aktif/);
   assert.match(markup, /Tamamlandı/);
   assert.match(markup, /Proje adı belirtilmemiş/);
   assert.match(markup, /Durum: Belirtilmemiş/);
