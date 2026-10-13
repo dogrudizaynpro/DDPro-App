@@ -8,7 +8,9 @@ import {
 } from "../src/services/system-images.service.js";
 
 const systemId = "4bc6f5a6-0b6c-4ddb-b29b-208c84c344d0";
+const otherSystemId = "a481bf84-c46f-4e49-ad72-2991a3e188fb";
 const imageId = "d8a1e2d1-6332-41a4-89a4-2c7fcf25c001";
+const secondImageId = "9f1c9c7b-5ea4-4da2-b22c-1e9bd9f7c9a2";
 const imageBuffer = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10, 1]);
 const imageRecord = {
   id: imageId,
@@ -19,6 +21,11 @@ const imageRecord = {
   file_size: imageBuffer.length,
   storage_key: `${systemId}/stored.png`,
   updated_at: "2026-10-10T12:00:00.000Z",
+};
+const secondImageRecord = {
+  ...imageRecord,
+  id: secondImageId,
+  storage_key: `${systemId}/second.png`,
 };
 
 const makeClient = ({ respond, storageOverrides = {} }) => {
@@ -164,6 +171,120 @@ test("system image deletion is restricted to the system and account owning the r
   assert.equal(calls.some(([action]) => action === "remove"), false);
 });
 
+test("system deletion removes all validated images belonging to the deleting account", async () => {
+  const { client, calls } = makeClient({
+    respond: (table, action) => {
+      if (table === "systems" && action === "select") return { data: { id: systemId }, error: null };
+      if (table === "system_images" && action === "select") {
+        return { data: [imageRecord, secondImageRecord], error: null };
+      }
+      if (table === "systems" && action === "delete") return { data: { id: systemId }, error: null };
+      throw new Error(`Unexpected query: ${table} ${action}`);
+    },
+  });
+
+  assert.equal(await deleteSystemRecordWithImages(systemId, "owner@example.com", client), true);
+  assert.deepEqual(calls.find(([action]) => action === "remove")[2], [
+    imageRecord.storage_key,
+    secondImageRecord.storage_key,
+  ]);
+  assert.equal(calls.filter(([action]) => action === "download").length, 2);
+  assert.equal(calls.some(([type, table, action]) =>
+    type === "query" && table === "systems" && action === "delete"
+  ), true);
+});
+
+test("system deletion stops before storage changes when an image belongs to another account", async () => {
+  const { client, calls } = makeClient({
+    respond: (table, action) => {
+      if (table === "systems" && action === "select") return { data: { id: systemId }, error: null };
+      if (table === "system_images" && action === "select") {
+        return { data: [{ ...imageRecord, owner_account: "other@example.com" }], error: null };
+      }
+      throw new Error(`Unexpected query: ${table} ${action}`);
+    },
+  });
+
+  await assert.rejects(
+    deleteSystemRecordWithImages(systemId, "owner@example.com", client),
+    { statusCode: 409, code: "SYSTEM_IMAGE_OWNERSHIP_CONFLICT" }
+  );
+  assert.equal(calls.some(([action]) => ["download", "remove", "upload"].includes(action)), false);
+  assert.equal(calls.some(([type, table, action]) =>
+    type === "query" && table === "systems" && action === "delete"
+  ), false);
+});
+
+test("system deletion stops before storage changes when an image key belongs to another system", async () => {
+  const { client, calls } = makeClient({
+    respond: (table, action) => {
+      if (table === "systems" && action === "select") return { data: { id: systemId }, error: null };
+      if (table === "system_images" && action === "select") {
+        return { data: [{ ...imageRecord, storage_key: `${otherSystemId}/other.png` }], error: null };
+      }
+      throw new Error(`Unexpected query: ${table} ${action}`);
+    },
+  });
+
+  await assert.rejects(
+    deleteSystemRecordWithImages(systemId, "owner@example.com", client),
+    { statusCode: 409, code: "SYSTEM_IMAGE_OWNERSHIP_CONFLICT" }
+  );
+  assert.equal(calls.some(([action]) => ["download", "remove", "upload"].includes(action)), false);
+});
+
+test("system deletion restores all images after a partial storage deletion failure", async () => {
+  const storageError = new Error("partial storage deletion");
+  const { client, calls } = makeClient({
+    respond: (table, action) => {
+      if (table === "systems" && action === "select") return { data: { id: systemId }, error: null };
+      if (table === "system_images" && action === "select") {
+        return { data: [imageRecord, secondImageRecord], error: null };
+      }
+      throw new Error(`Unexpected query: ${table} ${action}`);
+    },
+    storageOverrides: { remove: async () => ({ error: storageError }) },
+  });
+
+  await assert.rejects(
+    deleteSystemRecordWithImages(systemId, "owner@example.com", client),
+    storageError
+  );
+  assert.deepEqual(calls.filter(([action]) => action === "upload").map((call) => call[2]), [
+    imageRecord.storage_key,
+    secondImageRecord.storage_key,
+  ]);
+  assert.equal(calls.some(([type, table, action]) =>
+    type === "query" && table === "systems" && action === "delete"
+  ), false);
+});
+
+test("system deletion fails closed when storage rollback cannot restore every image", async () => {
+  const storageError = new Error("partial storage deletion");
+  const restoreError = new Error("image restore failed");
+  const { client, calls } = makeClient({
+    respond: (table, action) => {
+      if (table === "systems" && action === "select") return { data: { id: systemId }, error: null };
+      if (table === "system_images" && action === "select") {
+        return { data: [imageRecord, secondImageRecord], error: null };
+      }
+      throw new Error(`Unexpected query: ${table} ${action}`);
+    },
+    storageOverrides: {
+      remove: async () => ({ error: storageError }),
+      upload: async (key) => ({ error: key === imageRecord.storage_key ? restoreError : null }),
+    },
+  });
+
+  await assert.rejects(
+    deleteSystemRecordWithImages(systemId, "owner@example.com", client),
+    { statusCode: 503, code: "SYSTEM_IMAGE_RECOVERY_FAILED" }
+  );
+  assert.equal(calls.some(([type, table, action]) =>
+    type === "query" && table === "systems" && action === "delete"
+  ), false);
+});
+
 test("system deletion restores private image files when the system database delete fails", async () => {
   const databaseError = new Error("database unavailable");
   const { client, calls } = makeClient({
@@ -175,7 +296,10 @@ test("system deletion restores private image files when the system database dele
     },
   });
 
-  await assert.rejects(deleteSystemRecordWithImages(systemId, client), databaseError);
+  await assert.rejects(
+    deleteSystemRecordWithImages(systemId, "owner@example.com", client),
+    databaseError
+  );
   assert.deepEqual(calls.filter(([action]) => ["download", "remove", "upload"].includes(action))
     .map(([action]) => action), ["download", "remove", "upload"]);
   assert.deepEqual(calls.find(([action]) => action === "upload").slice(2), [
