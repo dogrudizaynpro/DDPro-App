@@ -389,6 +389,37 @@ const isUuid = (value) =>
 
 const formatDate = () => formatDateTime(new Date());
 
+const resolveOrchestrationConfirmation = (orchestration, outcome) => {
+  if (!orchestration) return orchestration;
+  const nextStatus = outcome === "success"
+    ? "completed"
+    : outcome === "unverified" ? "unverified" : "failed";
+  const steps = (orchestration.steps || []).map((step) =>
+    step.status === "awaiting_confirmation"
+      ? { ...step, status: nextStatus }
+      : step
+  );
+  const confirmedAgentIds = new Set(
+    steps
+      .filter((step) => step.status === nextStatus)
+      .map((step) => step.agentId)
+      .filter(Boolean)
+  );
+  const agents = (orchestration.agents || []).map((agent) =>
+    confirmedAgentIds.has(agent.id) && agent.status === "awaiting_confirmation"
+      ? { ...agent, status: nextStatus }
+      : agent
+  );
+  return {
+    ...orchestration,
+    status: outcome === "success"
+      ? agents.some((agent) => agent.status === "not_invoked") ? "incomplete" : "completed"
+      : "completed_with_errors",
+    agents,
+    steps,
+  };
+};
+
 function DashboardCalendar({
   now,
   title = "YAKLAŞAN TAKVİM",
@@ -2169,6 +2200,7 @@ function App() {
         status: "success",
         moduleSuggestion: suggestedModuleId,
         pendingAction: completion.pendingAction,
+        orchestration: completion.orchestration,
         projectImport,
       };
       setAiMessages((currentMessages) => [
@@ -2215,7 +2247,11 @@ function App() {
       setAiMessages((currentMessages) => [
         ...currentMessages.map((message) =>
           message.id === messageId
-            ? { ...message, pendingAction: null }
+            ? {
+              ...message,
+              pendingAction: null,
+              orchestration: resolveOrchestrationConfirmation(message.orchestration, "success"),
+            }
             : message
         ),
         {
@@ -2230,7 +2266,14 @@ function App() {
       setAiMessages((currentMessages) => [
         ...currentMessages.map((message) =>
           message.id === messageId
-            ? { ...message, pendingAction: null }
+            ? {
+              ...message,
+              pendingAction: null,
+              orchestration: resolveOrchestrationConfirmation(
+                message.orchestration,
+                error.code === "AI_OPERATION_AUDIT_UNAVAILABLE" ? "unverified" : "failed"
+              ),
+            }
             : message
         ),
         {

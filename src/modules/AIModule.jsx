@@ -19,6 +19,46 @@ const MODULE_TITLES = {
   "price-analysis": "Fiyat Analizi",
 };
 
+const ORCHESTRATION_LABELS = {
+  awaiting_confirmation: "Kullanıcı onayı bekleniyor",
+  completed: "Tamamlandı",
+  completed_with_errors: "Bazı veri adımları tamamlanamadı",
+  incomplete: "Bazı uzman adımları çalıştırılmadı",
+  failed: "Tamamlanamadı",
+  not_invoked: "Çalıştırılmadı",
+  unverified: "Sonuç doğrulanamadı",
+};
+
+const ORCHESTRATION_RESOURCES = {
+  projects: "Projeler",
+  customers: "Müşteri kayıtları",
+  products: "Ürünler",
+  systems: "Sistemler",
+  "price-analysis": "Fiyat kayıtları",
+  "material-analysis": "Malzeme kayıtları",
+  offers: "Teklifler",
+  procurement: "Tedarik kayıtları",
+  reports: "Raporlar",
+  calendar: "Takvim",
+};
+
+const ORCHESTRATION_OPERATIONS = {
+  read_records: "kayıtlar sorgulandı",
+  create: "oluşturma taslağı hazırlandı",
+  update: "güncelleme taslağı hazırlandı",
+  delete: "silme taslağı hazırlandı",
+  web_search: "web araştırması yapıldı",
+  ddpro_site_search: "DDPro sitesi araştırıldı",
+};
+
+const getOrchestrationStepLabel = (step) => {
+  const resource = ORCHESTRATION_RESOURCES[step.resource] || "Araştırma";
+  const operation = ORCHESTRATION_OPERATIONS[step.operation] || "işlem";
+  const status = ORCHESTRATION_LABELS[step.status] || "durum bilinmiyor";
+  const count = Number.isInteger(step.resultCount) ? ` · ${step.resultCount} sonuç` : "";
+  return `${resource}: ${operation} · ${status}${count}`;
+};
+
 const capabilities = [
   {
     icon: "▣",
@@ -436,6 +476,31 @@ function AIModule({
                     : "Sen"}
                 </strong>
                 <p>{message.text}</p>
+                {message.orchestration ? (
+                  <section className="ai-orchestration-summary" aria-label="İşlem özeti">
+                    <strong>
+                      İşlem durumu: {ORCHESTRATION_LABELS[message.orchestration.status] || "Durum bilinmiyor"}
+                    </strong>
+                    {message.orchestration.agents?.length ? (
+                      <ul>
+                        {message.orchestration.agents.map((agent) => (
+                          <li key={agent.id}>
+                            {agent.name}: {ORCHESTRATION_LABELS[agent.status] || "Durum bilinmiyor"}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                    {message.orchestration.steps?.length ? (
+                      <ul aria-label="Gerçekleştirilen adımlar">
+                        {message.orchestration.steps.map((step, index) => (
+                          <li key={`${step.agentId || "operation"}-${step.operation}-${step.resource || index}`}>
+                            {getOrchestrationStepLabel(step)}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </section>
+                ) : null}
                 {message.attachments?.map((attachment) => (
                   <div className="ai-message-attachment" key={attachment.name}>
                     <span aria-hidden="true">▧</span>
