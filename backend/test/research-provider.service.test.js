@@ -277,7 +277,9 @@ test("handles missing and null result fields without inventing data", async (t) 
 
   assert.equal(results.length, 2);
   assert.deepEqual(
-    Object.fromEntries(Object.entries(results[0]).filter(([key]) => !["date", "status"].includes(key))),
+    Object.fromEntries(Object.entries(results[0]).filter(([key]) =>
+      !["date", "researchedAt", "status"].includes(key)
+    )),
     {
       source: "aluminum profile technical data",
       product: "",

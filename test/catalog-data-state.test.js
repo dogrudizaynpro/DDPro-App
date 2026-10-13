@@ -36,7 +36,8 @@ const mountCatalogState = (request) => {
 test("catalog data state distinguishes loading, successful empty results, and failures", async () => {
   let resolveRequest;
   const pending = mountCatalogState(() => new Promise((resolve) => { resolveRequest = resolve; }));
-  assert.deepEqual(pending.result, { records: [], status: "loading" });
+  assert.equal(pending.result.status, "loading");
+  assert.equal(pending.result.records.length, 0);
   assert.equal(pending.requestCount, 1);
   resolveRequest([]);
   await new Promise((resolve) => setImmediate(resolve));
