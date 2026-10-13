@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { requestAiCompletion } from "./ai.service.js";
 import { searchResearchProvider } from "./research-provider.service.js";
+import { executeOperationalTool } from "./ai-tools.service.js";
 import {
   findUnavailableAiCapability,
   planAiAgents,
@@ -202,6 +203,8 @@ const formatResearchAnswer = (results, { siteOnly = false } = {}) => {
 export const createAiOrchestrator = ({
   complete = requestAiCompletion,
   search = searchResearchProvider,
+  executeAgentRead = (integrationAccount, resource) =>
+    executeOperationalTool(integrationAccount, "read_records", { resource }),
 } = {}) => async ({ message, context = {}, attachment, integrationAccount } = {}) => {
   if (typeof integrationAccount !== "string" || !integrationAccount.trim()) {
     throw createOrchestrationError(
@@ -249,6 +252,7 @@ export const createAiOrchestrator = ({
 
   let result;
   let steps = [];
+  let agentData = [];
   if (["web_research", "site_research"].includes(classification.intent)) {
     const siteOnly = classification.intent === "site_research";
     if (typeof search !== "function") {
@@ -300,6 +304,61 @@ export const createAiOrchestrator = ({
         "AI_ORCHESTRATOR_CAPABILITY_UNAVAILABLE"
       );
     }
+    if (
+      classification.intent === "company_data" &&
+      agents.length > 1 &&
+      typeof executeAgentRead === "function"
+    ) {
+      const plannedReads = agents.flatMap((agent) =>
+        agent.resources.map((resource) => ({ agent, resource }))
+      );
+      const readResults = await Promise.all(plannedReads.map(async ({ agent, resource }) => {
+        try {
+          const execution = await executeAgentRead(integrationAccount, resource, {
+            taskContext,
+            agent,
+          });
+          if (
+            execution?.type !== "records" ||
+            execution.resource !== resource ||
+            !Object.hasOwn(execution, "data") ||
+            (execution.data !== null && typeof execution.data !== "object")
+          ) {
+            throw new Error("Invalid shared tool response.");
+          }
+          const resultCount = Array.isArray(execution.data)
+            ? execution.data.length
+            : execution.data == null ? 0 : 1;
+          return {
+            data: { agentId: agent.id, resource, status: "completed", records: execution.data },
+            step: {
+              agentId: agent.id,
+              operation: "read_records",
+              resource,
+              status: "completed",
+              resultCount,
+            },
+          };
+        } catch {
+          return {
+            data: {
+              agentId: agent.id,
+              resource,
+              status: "failed",
+              error: "Authorized records could not be read.",
+            },
+            step: {
+              agentId: agent.id,
+              operation: "read_records",
+              resource,
+              status: "failed",
+            },
+          };
+        }
+      }));
+      agentData = readResults.map(({ data }) => data);
+      steps = readResults.map(({ step }) => step);
+    }
     try {
       result = await complete({
         message,
@@ -309,8 +368,9 @@ export const createAiOrchestrator = ({
         toolPolicy: classification.toolPolicy,
         taskContext,
         agents,
+        agentData,
       });
-      steps = Array.isArray(result?.toolExecutions) ? result.toolExecutions : [];
+      steps.push(...(Array.isArray(result?.toolExecutions) ? result.toolExecutions : []));
     } catch (error) {
       if (error.expose) throw error;
       throw createOrchestrationError(
