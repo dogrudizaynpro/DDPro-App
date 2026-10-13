@@ -55,7 +55,9 @@ test(
         ALTER ROLE service_role BYPASSRLS;
         GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
         ALTER DEFAULT PRIVILEGES IN SCHEMA public
-          GRANT ALL ON TABLES TO anon, authenticated, service_role;
+          REVOKE ALL ON TABLES FROM anon, authenticated, service_role;
+        ALTER DEFAULT PRIVILEGES IN SCHEMA public
+          GRANT ALL ON TABLES TO anon, authenticated;
         CREATE SCHEMA IF NOT EXISTS storage;
         CREATE TABLE IF NOT EXISTS storage.buckets (
           id TEXT PRIMARY KEY, name TEXT NOT NULL, public BOOLEAN DEFAULT false
@@ -76,6 +78,7 @@ test(
       const { rows: tables } = await client.query(
         `SELECT c.relname, c.relrowsecurity,
            has_table_privilege('anon', c.oid, 'SELECT') AS anon_select,
+           has_table_privilege('authenticated', c.oid, 'SELECT') AS authenticated_select,
            has_table_privilege('service_role', c.oid, 'SELECT,INSERT,UPDATE,DELETE') AS service_access
          FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
          WHERE n.nspname = 'public' AND c.relkind = 'r'`
@@ -92,6 +95,7 @@ test(
         assert.ok(row, `${table} should exist`);
         assert.equal(row.relrowsecurity, true, `${table} should enable RLS`);
         assert.equal(row.anon_select, false, `${table} should deny anon`);
+        assert.equal(row.authenticated_select, false, `${table} should deny authenticated`);
         assert.equal(row.service_access, true, `${table} should allow service_role`);
       }
 
@@ -241,6 +245,46 @@ test(
           "SELECT public.claim_whatsapp_inbound($1, $2, $3)",
           ["invalid-sender-message", "not-a-phone", randomUUID()]
         ), (error) => error.code === "23514");
+      });
+
+      await t.test("integration_tokens table denies direct client roles and allows the backend service role", async () => {
+        for (const role of ["anon", "authenticated", "service_role"]) {
+          const { rows: [privileges] } = await client.query(
+            `SELECT
+               has_table_privilege($1, 'public.integration_tokens', 'SELECT') AS can_select,
+               has_table_privilege($1, 'public.integration_tokens', 'INSERT') AS can_insert,
+               has_table_privilege($1, 'public.integration_tokens', 'UPDATE') AS can_update,
+               has_table_privilege($1, 'public.integration_tokens', 'DELETE') AS can_delete,
+               has_table_privilege($1, 'public.integration_tokens', 'TRUNCATE') AS can_truncate`,
+            [role]
+          );
+          assert.equal(privileges.can_select, role === "service_role", `${role} select privilege on integration_tokens`);
+          assert.equal(privileges.can_insert, role === "service_role", `${role} insert privilege on integration_tokens`);
+          assert.equal(privileges.can_update, role === "service_role", `${role} update privilege on integration_tokens`);
+          assert.equal(privileges.can_delete, role === "service_role", `${role} delete privilege on integration_tokens`);
+          assert.equal(privileges.can_truncate, false, `${role} truncate privilege must be denied under least privilege`);
+        }
+        assert.equal(byName.get("integration_tokens").relrowsecurity, true);
+        for (const role of ["anon", "authenticated"]) {
+          await client.query(`SET ROLE ${role}`);
+          try {
+            await assert.rejects(
+              client.query("SELECT * FROM public.integration_tokens"),
+              (error) => error.code === "42501"
+            );
+          } finally {
+            await client.query("RESET ROLE");
+          }
+        }
+        await client.query("SET ROLE service_role");
+        try {
+          const { rows } = await client.query(
+            "SELECT count(*)::int AS count FROM public.integration_tokens"
+          );
+          assert.equal(rows[0].count, 0);
+        } finally {
+          await client.query("RESET ROLE");
+        }
       });
 
       // Legacy databases migrated by hand have no history: replaying must not
