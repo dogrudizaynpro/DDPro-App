@@ -104,6 +104,29 @@ const restoreObjects = async (storage, objects) => {
 const recoveryFailure = (message) =>
   fail(message, 503, "SYSTEM_IMAGE_RECOVERY_FAILED");
 
+const validateSystemImageDeletionScope = (systemId, ownerAccount, records) => {
+  if (typeof ownerAccount !== "string" || !ownerAccount.trim()) {
+    throw fail("Sistem görseli silme yetkisi doğrulanamadı.", 403);
+  }
+  const prefix = `${systemId}/`;
+  const valid = records.every((record) => {
+    const key = record.storage_key;
+    return record.system_id === systemId &&
+      record.owner_account === ownerAccount &&
+      typeof key === "string" &&
+      key.startsWith(prefix) &&
+      key.length > prefix.length &&
+      !/[\/\\\u0000-\u001f\u007f]/.test(key.slice(prefix.length));
+  });
+  if (!valid) {
+    throw fail(
+      "Sistem görseli silme kapsamı doğrulanamadı; hiçbir dosya silinmedi.",
+      409,
+      "SYSTEM_IMAGE_OWNERSHIP_CONFLICT"
+    );
+  }
+};
+
 const removeStoredObject = async (storage, key, rollbackObjects = []) => {
   const { error } = await storage.remove([key]);
   if (!error) return;
@@ -232,12 +255,13 @@ export const deleteSystemImage = async (ownerAccount, systemId, imageId, client 
   return true;
 };
 
-export const deleteSystemRecordWithImages = async (systemId, client = requireDatabase()) => {
+export const deleteSystemRecordWithImages = async (systemId, ownerAccount, client = requireDatabase()) => {
   validateUuid(systemId, "Sistem");
   await getSystem(client, systemId);
   const { data: records, error: lookupError } = await client.from("system_images").select("*")
     .eq("system_id", systemId);
   if (lookupError) throw lookupError;
+  validateSystemImageDeletionScope(systemId, ownerAccount, records || []);
   const storage = client.storage.from(BUCKET);
   const objects = await Promise.all((records || []).map(async (record) => ({
     key: record.storage_key,

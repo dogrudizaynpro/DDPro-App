@@ -288,7 +288,7 @@ export const createCatalogController = (resource) => {
       }
       try {
         if (resource === "systems") {
-          await deleteSystemRecordWithImages(req.params.id, client);
+          await deleteSystemRecordWithImages(req.params.id, req.integrationAccount, client);
           return res.status(200).json({ status: "success", data: { id: req.params.id } });
         }
         const { data, error } = await client.from(table).delete().eq("id", req.params.id).select("id").maybeSingle();
