@@ -125,7 +125,11 @@ test("provider failures are sanitized and unconfigured sessions fail closed", as
       assert.equal(error.code, "AI_VOICE_SESSION_FAILED");
       assert.equal(error.statusCode, 502);
       assert.equal(error.expose, true);
-      assert.equal(error.message, "Realtime voice session could not be created.");
+      assert.equal(
+        error.message,
+        "Realtime voice session could not be created: GEMINI_API_KEY was rejected by Google " +
+          "(invalid, expired or restricted key) (Gemini HTTP 401)."
+      );
       assert.doesNotMatch(error.message, /leaked detail|test-gemini-api-key/);
       return true;
     }
@@ -147,7 +151,8 @@ test("Google HTTP status and safe error fields are logged without other response
     headers: { Authorization: "private-header" },
   }), { status: 400 }));
   await assert.rejects(createGeminiLiveToken({}), {
-    message: "Realtime voice session could not be created.",
+    message: "Realtime voice session could not be created: Gemini rejected the Live session setup " +
+      "(Gemini HTTP 400 INVALID_ARGUMENT).",
     statusCode: 502,
     code: "AI_VOICE_SESSION_FAILED",
     expose: true,
@@ -216,7 +221,9 @@ test("rate limits and missing tokens preserve the existing client-facing failure
       error: { status: { secret: "private-status" }, message: ["private-message"] },
     }), { status }));
     await assert.rejects(createGeminiLiveToken({}), {
-      message: "Realtime voice session could not be created.",
+      message: status === 429
+        ? "Realtime voice session could not be created: Gemini Live quota or rate limit was exceeded (Gemini HTTP 429)."
+        : "Realtime voice session could not be created: Gemini did not return a session token (Gemini HTTP 200).",
       statusCode: status === 429 ? 429 : 502,
       code: "AI_VOICE_SESSION_FAILED",
       expose: true,
@@ -268,7 +275,7 @@ test("malformed Unicode in session data cannot replace the generic client error"
     error: { status: "INVALID_ARGUMENT", message: "Invalid instruction" },
   }), { status: 400 }));
   await assert.rejects(createGeminiLiveToken({ config: { text: "\ud800" } }), {
-    message: "Realtime voice session could not be created.",
+    message: "Realtime voice session could not be created: Gemini rejected the Live session setup (Gemini HTTP 400).",
     statusCode: 502,
     code: "AI_VOICE_SESSION_FAILED",
     expose: true,
@@ -278,4 +285,91 @@ test("malformed Unicode in session data cannot replace the generic client error"
     providerStatus: "",
     message: "Google token error details could not be safely logged.",
   });
+});
+
+test("Live function declarations only use Gemini Schema fields accepted by auth_tokens", () => {
+  const declarations = createGeminiLiveSessionConfig().tools[0].functionDeclarations;
+  const allowed = new Set([
+    "type", "format", "description", "nullable", "enum", "properties", "required",
+    "items", "minItems", "maxItems", "minimum", "maximum",
+  ]);
+  const visit = (schema, path) => {
+    for (const key of Object.keys(schema)) assert.ok(allowed.has(key), `${path}.${key} is not a Gemini Schema field`);
+    if (schema.type === "object") {
+      assert.ok(Object.keys(schema.properties || {}).length, `${path} OBJECT must declare properties`);
+    }
+    for (const [name, property] of Object.entries(schema.properties || {})) visit(property, `${path}.${name}`);
+    if (schema.items) visit(schema.items, `${path}.items`);
+  };
+  for (const declaration of declarations) {
+    assert.deepEqual(Object.keys(declaration).filter((key) => !["name", "description", "parameters"].includes(key)), []);
+    if (declaration.parameters) visit(declaration.parameters, declaration.name);
+  }
+  assert.doesNotMatch(JSON.stringify(declarations), /additionalProperties/);
+  const byName = Object.fromEntries(declarations.map((declaration) => [declaration.name, declaration]));
+  assert.equal(byName.read_integration_status.parameters, undefined);
+  assert.deepEqual(byName.read_records.parameters.required, ["resource"]);
+  assert.equal(byName.read_records.parameters.properties.filters.type, "object");
+  assert.equal(byName.prepare_write.parameters.properties.record.type, "string");
+  assert.match(byName.prepare_write.parameters.properties.record.description, /JSON object/);
+});
+
+test("Live token failures explain auth, model and setup causes while logging static field paths", async (t) => {
+  const log = t.mock.method(console, "error", () => {});
+  const config = createGeminiLiveSessionConfig({
+    context: { customer: "PrivateCustomer" },
+    history: [{ role: "user", text: "ConfidentialConversation" }],
+  });
+  const cases = [
+    [400, {
+      status: "INVALID_ARGUMENT",
+      message: "API key not valid. Please pass a valid API key.",
+      details: [{ "@type": "type.googleapis.com/google.rpc.ErrorInfo", reason: "API_KEY_INVALID" }],
+    }, /GEMINI_API_KEY was rejected by Google .*\(Gemini HTTP 400 INVALID_ARGUMENT\)/],
+    [403, { status: "PERMISSION_DENIED", message: "Method doesn't allow unregistered callers." },
+      /GEMINI_API_KEY is not permitted to create Gemini Live sessions/],
+    [404, { status: "NOT_FOUND", message: "models/test-live-audio is not found for API version v1alpha" },
+      /GEMINI_LIVE_MODEL is unknown or not available/],
+    [400, {
+      status: "INVALID_ARGUMENT",
+      message: "Invalid JSON payload received. Unknown name \"additionalProperties\" at " +
+        "'bidi_generate_content_setup.tools[0].function_declarations[0].parameters': Cannot find field. " +
+        "PrivateCustomer ConfidentialConversation",
+    }, /Gemini rejected the Live session setup \(Gemini HTTP 400 INVALID_ARGUMENT\)/],
+    [503, { status: "UNAVAILABLE", message: "The service is currently unavailable." },
+      /Gemini Live service is temporarily unavailable/],
+  ];
+  for (const [status, providerError, expected] of cases) {
+    t.mock.method(globalThis, "fetch", async () => new Response(JSON.stringify({ error: providerError }), { status }));
+    await assert.rejects(createGeminiLiveToken(config), (error) => {
+      assert.equal(error.code, "AI_VOICE_SESSION_FAILED");
+      assert.equal(error.statusCode, 502);
+      assert.match(error.message, expected);
+      assert.doesNotMatch(error.message, /test-gemini-api-key|PrivateCustomer|ConfidentialConversation/);
+      return true;
+    });
+  }
+  const logged = log.mock.calls.map((call) => call.arguments[1]);
+  assert.deepEqual(logged[0].reasons, ["API_KEY_INVALID"]);
+  assert.equal(logged[2].message, "models/test-live-audio is not found for API version v1alpha");
+  assert.match(logged[3].message, /Unknown name "additionalProperties" at 'bidi_generate_content_setup\.tools\[0\]/);
+  assert.doesNotMatch(JSON.stringify(logged), /test-gemini-api-key|PrivateCustomer|ConfidentialConversation/);
+});
+
+test("voice prepare_write rejects JSON-string records that are not objects", async () => {
+  const { executeAiVoiceTool } = await import("../src/controllers/ai.controller.js");
+  for (const record of ["{not json", "[]", "null", "\"text\""]) {
+    let statusCode;
+    let body;
+    const res = {
+      status(code) { statusCode = code; return this; },
+      json(payload) { body = payload; return this; },
+    };
+    await executeAiVoiceTool({
+      integrationAccount: "owner@example.com",
+      body: { name: "prepare_write", args: { resource: "projects", operation: "create", record } },
+    }, res, (error) => assert.fail(error));
+    assert.equal(statusCode, 400);
+    assert.equal(body.message, "Voice tool record must be a JSON object.");
+  }
 });

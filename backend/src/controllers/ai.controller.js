@@ -127,7 +127,7 @@ export const createAiVoiceSession = async (req, res, next) => {
 };
 
 export const executeAiVoiceTool = async (req, res, next) => {
-  const { name, args = {} } = req.body || {};
+  let { name, args = {} } = req.body || {};
   if (typeof req.integrationAccount !== "string" || !req.integrationAccount.trim()) {
     return res.status(401).json({ status: "error", message: "An authenticated DDPro account is required." });
   }
@@ -138,6 +138,22 @@ export const executeAiVoiceTool = async (req, res, next) => {
       status: "error",
       message: "Voice tool name or arguments are invalid.",
     });
+  }
+  if (name === "prepare_write" && typeof args.record === "string") {
+    // Gemini Live declares free-form records as JSON strings (see ai-voice.service.js).
+    let record;
+    try {
+      record = JSON.parse(args.record);
+    } catch {
+      record = null;
+    }
+    if (!record || typeof record !== "object" || Array.isArray(record)) {
+      return res.status(400).json({
+        status: "error",
+        message: "Voice tool record must be a JSON object.",
+      });
+    }
+    args = { ...args, record };
   }
   try {
     if (name === "read_integration_status" && Object.keys(args).length) {
