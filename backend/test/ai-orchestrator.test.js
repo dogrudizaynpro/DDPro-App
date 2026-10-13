@@ -33,6 +33,74 @@ test("written AI commands route company data as read-only through the existing c
   assert.equal(result.answer, "Projeler API'sinden alınan kayıtlar.");
 });
 
+test("one command can plan multiple specialists and marks uninvoked specialists incomplete", async () => {
+  let received;
+  const orchestrate = createAiOrchestrator({
+    complete: async (command) => {
+      received = command;
+      return {
+        answer: "Projeler ve müşteriler özetlendi.",
+        toolExecutions: [
+          {
+            agentId: "project",
+            operation: "read_records",
+            resource: "projects",
+            status: "completed",
+            resultCount: 2,
+          },
+        ],
+      };
+    },
+  });
+
+  const result = await orchestrate({
+    ...authenticatedCommand,
+    message: "Projelerimi ve müşterilerimi listele.",
+  });
+
+  assert.deepEqual(received.agents.map(({ id }) => id), ["project", "crm"]);
+  assert.equal(result.orchestration.status, "incomplete");
+  assert.deepEqual(result.orchestration.agents.map(({ id, status }) => ({ id, status })), [
+    { id: "project", status: "completed" },
+    { id: "crm", status: "not_invoked" },
+  ]);
+  assert.deepEqual(result.orchestration.steps, [{
+    agentId: "project",
+    operation: "read_records",
+    resource: "projects",
+    status: "completed",
+    resultCount: 2,
+  }]);
+});
+
+test("unsupported real-world operations are disclosed before any AI or research capability runs", async () => {
+  let calls = 0;
+  const orchestrate = createAiOrchestrator({
+    complete: async () => { calls += 1; return { answer: "unexpected" }; },
+    search: async () => { calls += 1; return []; },
+  });
+
+  for (const message of [
+    "Bursa projesi için metrajı çıkar.",
+    "Bu proje için hakediş taslağı hazırla.",
+    "Müşteriyi telefonla ara.",
+    "Dijital kart oluştur.",
+    "Bir 3D render üret.",
+  ]) {
+    await assert.rejects(
+      orchestrate({ ...authenticatedCommand, message }),
+      (error) => {
+        assert.equal(error.code, "AI_ORCHESTRATOR_CAPABILITY_UNAVAILABLE");
+        assert.equal(error.statusCode, 422);
+        assert.match(error.message, /mevcut sistemde bulunmuyor/);
+        return true;
+      }
+    );
+  }
+
+  assert.equal(calls, 0);
+});
+
 test("direct answers do not advertise operational tools", async () => {
   let received;
   let researchCalled = false;
@@ -314,6 +382,12 @@ test("write commands retain the existing prepare_write and explicit confirmation
       return {
         answer: "İşlem henüz yapılmadı; onayınızı bekliyor.",
         pendingAction: { id: "confirmation-id" },
+        toolExecutions: [{
+          agentId: "project",
+          operation: "create",
+          resource: "projects",
+          status: "awaiting_confirmation",
+        }],
       };
     },
   });
@@ -326,6 +400,8 @@ test("write commands retain the existing prepare_write and explicit confirmation
   assert.equal(received.toolPolicy, "all");
   assert.equal(result.pendingAction.id, "confirmation-id");
   assert.equal(result.orchestration.intent, "operational_write");
+  assert.equal(result.orchestration.status, "awaiting_confirmation");
+  assert.equal(result.orchestration.steps[0].status, "awaiting_confirmation");
 });
 
 test("command classifier never routes arbitrary text to unregistered research", () => {
