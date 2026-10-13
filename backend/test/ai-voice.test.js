@@ -47,6 +47,10 @@ test("Gemini Live config requests Turkish audio, operational tools, VAD, and saf
   assert.equal(config.generationConfig.speechConfig.voiceConfig.prebuiltVoiceConfig.voiceName, "Kore");
   assert.equal(config.realtimeInputConfig.automaticActivityDetection.disabled, false);
   assert.match(config.systemInstruction.parts[0].text, /sunucunun sağladığı operasyon araçlarıyla oku/);
+  assert.match(config.systemInstruction.parts[0].text, /mutlaka read_records aracını resource: projects ile çağır ve sonucunu bekle/);
+  assert.match(config.systemInstruction.parts[0].text, /Boş data sonucu için kayıt bulunamadığını/);
+  assert.match(config.systemInstruction.parts[0].text, /error varsa sorgunun başarısız olduğunu/);
+  assert.match(config.systemInstruction.parts[0].text, /Eksik proje adı\/durumu alanlarını tamamlama/);
   const liveTools = config.tools.flatMap(({ functionDeclarations }) => functionDeclarations);
   assert.deepEqual(liveTools.map(({ name }) => name), [
     "read_records", "prepare_write", "read_integration_status",
