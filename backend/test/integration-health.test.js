@@ -66,9 +66,23 @@ test("integration health requires configuration and a recent successful provider
   assert.equal(getIntegrationHealthStatus({ configured: true }), "configured_not_tested");
   assert.equal(getIntegrationHealthStatus({
     configured: true,
-    result: result({ connected: true }),
+    result: result({ connected: true, testSucceeded: true }),
     now,
   }), "connected");
+});
+
+test("integration health does not treat an unverified positive result as a successful test", () => {
+  const options = {
+    configured: true,
+    result: result({ connected: true }),
+    now,
+  };
+  const health = getIntegrationHealthState(options);
+  assert.equal(health.status, "test_failed");
+  assert.equal(health.connected, false);
+  assert.equal(health.working, false);
+  assert.equal(health.authorized, null);
+  assert.equal(health.reachable, null);
 });
 
 test("integration health distinguishes missing authorization and failed token refresh", () => {

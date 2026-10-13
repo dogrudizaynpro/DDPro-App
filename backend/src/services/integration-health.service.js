@@ -30,7 +30,7 @@ export const getIntegrationHealthStatus = ({
 }) => {
   if (!configured) return "credentials_required";
   const fresh = isFreshResult(result, now);
-  if (fresh && result.connected && result.testSucceeded !== false) {
+  if (fresh && result.connected === true && result.testSucceeded === true) {
     return requiresSession && !sessionReady ? "authorization_required" : "connected";
   }
   if (fresh) {
@@ -67,7 +67,7 @@ export const getIntegrationHealthState = (options) => {
   const status = getIntegrationHealthStatus(options);
   const fresh = isFreshResult(options.result, options.now ?? Date.now());
   const result = fresh ? options.result : null;
-  const authorized = result?.connected && result?.testSucceeded !== false ? true
+  const authorized = result?.connected === true && result?.testSucceeded === true ? true
     : ["authorization", "scope_required", "permission_denied", "connection_invalid"]
       .includes(result?.googleApiError?.category) || result?.statusCode === 401 ? false
       : !options.requiresSession && result?.statusCode === 403 ? false : null;
@@ -79,7 +79,7 @@ export const getIntegrationHealthState = (options) => {
     authorized,
     reachable: result?.reachable ?? (
       result?.googleApiError?.requestSent === false ? null
-        : result?.googleApiError || result?.connected ? true : null
+        : result?.googleApiError || (result?.connected === true && result?.testSucceeded === true) ? true : null
     ),
     working: fresh ? status === "connected" : null,
     connected: status === "connected",
