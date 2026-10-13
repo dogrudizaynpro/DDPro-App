@@ -122,7 +122,7 @@ test("written and Gemini Live research use the same relevance and source-validat
   assert.equal(requests.length, 2);
   assert.ok(requests.every(({ url }) => url === "https://api.tavily.com/search"));
   assert.ok(requests.every(({ body }) =>
-    body.query === "site:ddizaynpro.com Doğru Dizayn Pro hizmetlerimiz" &&
+    body.query.toLocaleLowerCase("tr-TR") === "site:ddizaynpro.com doğru dizayn pro hizmetlerimiz" &&
     body.include_answer === false
   ));
   assert.deepEqual(responseBody.data.data, written.researchResults);

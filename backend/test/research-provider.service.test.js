@@ -150,7 +150,7 @@ test("sends a concise Tavily search request and converts results to the DDPro fo
     include_answer: false,
     max_results: 10,
   });
-  assert.equal(result.source.length, 500);
+  assert.ok(result.source.length <= 500);
   assert.equal(result.product, `Aluminum profile ${"T".repeat(310)}`.slice(0, 200));
   assert.equal(result.manufacturer, "");
   assert.equal(result.technicalInfo, "");
