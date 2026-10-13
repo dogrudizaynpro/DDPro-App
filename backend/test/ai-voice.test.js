@@ -53,8 +53,9 @@ test("Gemini Live config requests Turkish audio, operational tools, VAD, and saf
   assert.match(config.systemInstruction.parts[0].text, /Eksik proje adı\/durumu alanlarını tamamlama/);
   const liveTools = config.tools.flatMap(({ functionDeclarations }) => functionDeclarations);
   assert.deepEqual(liveTools.map(({ name }) => name), [
-    "read_records", "prepare_write", "read_integration_status",
+    "read_records", "prepare_write", "web_search", "read_integration_status",
   ]);
+  assert.match(config.systemInstruction.parts[0].text, /web_search aracını çağır ve sonucunu bekle/);
   assert.match(config.systemInstruction.parts[0].text, /kullanıcı onayı gelmeden hiçbir değişiklik gerçekleşmiş sayılmaz/);
   assert.match(config.systemInstruction.parts[0].text, /Test project/);
   assert.deepEqual(config.inputAudioTranscription, {});
@@ -312,6 +313,7 @@ test("Live function declarations only use Gemini Schema fields accepted by auth_
   assert.doesNotMatch(JSON.stringify(declarations), /additionalProperties/);
   const byName = Object.fromEntries(declarations.map((declaration) => [declaration.name, declaration]));
   assert.equal(byName.read_integration_status.parameters, undefined);
+  assert.deepEqual(byName.web_search.parameters.required, ["query"]);
   assert.deepEqual(byName.read_records.parameters.required, ["resource"]);
   assert.equal(byName.read_records.parameters.properties.filters.type, "object");
   assert.equal(byName.prepare_write.parameters.properties.record.type, "string");
@@ -376,4 +378,90 @@ test("voice prepare_write rejects JSON-string records that are not objects", asy
     assert.equal(statusCode, 400);
     assert.equal(body.message, "Voice tool record must be a JSON object.");
   }
+});
+
+const invokeVoiceTool = async (args, integrationAccount = "owner@example.com") => {
+  const { executeAiVoiceTool } = await import("../src/controllers/ai.controller.js");
+  let status;
+  let body;
+  let error;
+  await executeAiVoiceTool({
+    integrationAccount,
+    body: { name: "web_search", args },
+  }, {
+    status(code) { status = code; return this; },
+    json(payload) { body = payload; return this; },
+  }, (cause) => { error = cause; });
+  return { status, body, error };
+};
+
+test("voice web_search uses the shared Tavily research route without the text AI provider", async (t) => {
+  const previousKey = process.env.RESEARCH_API_KEY;
+  process.env.RESEARCH_API_KEY = "test-research-key";
+  t.after(() => {
+    if (previousKey === undefined) delete process.env.RESEARCH_API_KEY;
+    else process.env.RESEARCH_API_KEY = previousKey;
+  });
+  const requests = [];
+  t.mock.method(globalThis, "fetch", async (url, init) => {
+    assert.equal(String(url), "https://api.tavily.com/search");
+    requests.push(JSON.parse(init.body));
+    return Response.json({ results: [
+      { title: "Alüminyum panel", content: "Alüminyum panel teknik özellikleri.", url: "https://manufacturer.example/panel" },
+      { title: "DDPro hizmetleri", content: "Hizmet açıklaması.", url: "https://www.ddizaynpro.com/hizmetler" },
+      { title: "DDPro kopyası", content: "İlgisiz site.", url: "https://unrelated.example/hizmetler" },
+    ] });
+  });
+  const web = await invokeVoiceTool({ query: "Alüminyum panel araştır" });
+  assert.equal(web.status, 200);
+  assert.equal(web.error, undefined);
+  assert.equal(web.body.data.type, "records");
+  assert.equal(web.body.data.resource, "research");
+  assert.equal(web.body.data.data.length, 1);
+  assert.equal(web.body.data.data[0].url, "https://manufacturer.example/panel");
+  assert.equal(web.body.data.data[0].price, "");
+  const site = await invokeVoiceTool({ query: "DDPro hizmetleri" });
+  assert.equal(site.status, 200);
+  assert.equal(site.body.data.data.length, 1);
+  assert.equal(site.body.data.data[0].url, "https://www.ddizaynpro.com/hizmetler");
+  assert.match(requests[1].query, /^site:www\.ddizaynpro\.com /);
+  assert.doesNotMatch(JSON.stringify(web.body), /test-research-key/);
+
+  t.mock.method(globalThis, "fetch", async () => Response.json({ results: [] }));
+  const empty = await invokeVoiceTool({ query: "Alüminyum panel" });
+  assert.equal(empty.status, 200);
+  assert.deepEqual(empty.body.data.data, []);
+});
+
+test("voice research rejects unauthenticated, invalid and mutation commands before contacting providers", async (t) => {
+  const fetch = t.mock.method(globalThis, "fetch", () => assert.fail("No provider call expected"));
+  assert.equal((await invokeVoiceTool({ query: "panel" }, "")).status, 401);
+  for (const args of [{}, { query: " " }, { query: 1 }, { query: "x".repeat(501) }, { query: "panel", siteOnly: false }]) {
+    assert.equal((await invokeVoiceTool(args)).status, 400);
+  }
+  for (const query of ["Proje oluştur", "Delete project", "Araştır ve proje sil"]) {
+    assert.equal((await invokeVoiceTool({ query })).status, 422);
+  }
+  assert.equal(fetch.mock.calls.length, 0);
+});
+
+test("voice research preserves provider failures without exposing secrets or returning empty success", async (t) => {
+  const previousKey = process.env.RESEARCH_API_KEY;
+  t.after(() => {
+    if (previousKey === undefined) delete process.env.RESEARCH_API_KEY;
+    else process.env.RESEARCH_API_KEY = previousKey;
+  });
+  delete process.env.RESEARCH_API_KEY;
+  const missing = await invokeVoiceTool({ query: "Alüminyum panel" });
+  assert.equal(missing.error.statusCode, 503);
+  assert.equal(missing.body, undefined);
+
+  process.env.RESEARCH_API_KEY = "test-research-key";
+  t.mock.method(globalThis, "fetch", async () =>
+    Response.json({ error: "test-research-key private-customer" }, { status: 401 }));
+  const failure = await invokeVoiceTool({ query: "Alüminyum panel" });
+  assert.equal(failure.error.statusCode, 502);
+  assert.equal(failure.error.message, "Research provider request failed (HTTP 401).");
+  assert.equal(failure.body, undefined);
+  assert.doesNotMatch(failure.error.message, /test-research-key|private-customer/);
 });

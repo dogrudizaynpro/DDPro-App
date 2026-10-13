@@ -190,6 +190,37 @@ test("Gemini Live tool calls use backend results and deduplicate repeated call I
   session.stop();
 });
 
+test("Live web_search forwards source results and provider errors through the existing tool response flow", async () => {
+  for (const failed of [false, true]) {
+    const records = [{ product: "Panel", url: "https://manufacturer.example/panel", price: "" }];
+    const { session, events } = createSession({
+      executeTool: async ({ name, args }) => {
+        assert.equal(name, "web_search");
+        assert.equal(args.query, "Alüminyum panel");
+        if (failed) throw new Error("Research provider request failed (HTTP 401).");
+        return { type: "records", resource: "research", data: records };
+      },
+    });
+    await session.start();
+    const socket = FakeWebSocket.latest;
+    await socket.emit({ toolCall: { functionCalls: [{
+      id: "research-call", name: "web_search", args: { query: "Alüminyum panel" },
+    }] } });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const response = socket.sent.find((message) => message.toolResponse)
+      .toolResponse.functionResponses[0].response;
+    assert.equal(events.operations.at(-1).resource, "research");
+    assert.match(events.operations.at(-1).request, /Web araştırması/);
+    assert.equal(events.operations.at(-1).status, failed ? "failed" : "completed");
+    if (failed) {
+      assert.deepEqual(response, { error: "Research provider request failed (HTTP 401)." });
+    } else {
+      assert.deepEqual(response, { data: records });
+    }
+    session.stop();
+  }
+});
+
 test("Live empty and malformed tool results are distinguished from successful records", async () => {
   for (const [result, status] of [
     [{ type: "records", data: [] }, "completed"],

@@ -18,6 +18,18 @@ const operationalResources = [
 
 export const AI_VOICE_TOOL_DEFINITIONS = [
   {
+    name: "web_search",
+    description: "Research public web sources through the DDPro research router. Read-only; never saves records or verifies prices.",
+    parameters: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Research topic, at most 500 characters. No record changes or external actions." },
+      },
+      required: ["query"],
+      additionalProperties: false,
+    },
+  },
+  {
     name: "read_integration_status",
     description: "Read current verified connection and health status for DDPro integrations.",
     parameters: {

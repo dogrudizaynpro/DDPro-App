@@ -61,6 +61,19 @@ test("realtime AI voice tool execution requires an authenticated Google browser 
     },
     body: JSON.stringify({ name: "read_records", args: { resource: "projects" } }),
   });
+
+  test("voice web research requires the same authenticated Google browser session", async () => {
+    const response = await fetch(`${baseUrl}/api/ai/voice/tool`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Origin: "https://dogrudizaynpro.github.io",
+      },
+      body: JSON.stringify({ name: "web_search", args: { query: "Alüminyum panel" } }),
+    });
+    assert.equal(response.status, 401);
+    assert.equal((await response.json()).code, "BROWSER_SESSION_REQUIRED");
+  });
   assert.equal(response.status, 401);
   assert.equal((await response.json()).code, "BROWSER_SESSION_REQUIRED");
 });

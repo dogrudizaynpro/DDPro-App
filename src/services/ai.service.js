@@ -1,5 +1,8 @@
 import { fetchAPI } from "./api.js";
 
+// Four tool turns can each make two 30-second provider attempts.
+const AI_CHAT_TIMEOUT_MS = 300_000;
+
 export const getAiProviderStatus = async () => {
   const response = await fetchAPI("/api/ai/status");
   return response.data;
@@ -21,12 +24,14 @@ export const requestAiCompletion = async ({ message, context, attachment }) => {
     const response = await fetchAPI("/api/ai/chat", {
       method: "POST",
       body,
+      timeoutMs: AI_CHAT_TIMEOUT_MS,
     });
     return response.data;
   }
   const response = await fetchAPI("/api/ai/chat", {
     method: "POST",
     body: JSON.stringify({ message, context }),
+    timeoutMs: AI_CHAT_TIMEOUT_MS,
   });
   return response.data;
 };
@@ -43,6 +48,7 @@ export const executeAiVoiceTool = async ({ name, args }) => {
   const response = await fetchAPI("/api/ai/voice/tool", {
     method: "POST",
     body: JSON.stringify({ name, args }),
+    ...(name === "web_search" ? { timeoutMs: 45_000 } : {}),
   });
   return response.data;
 };
