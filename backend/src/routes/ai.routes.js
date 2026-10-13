@@ -3,6 +3,7 @@ import rateLimit from "express-rate-limit";
 import {
   createAiCompletion,
   createAiVoiceSession,
+  executeAiVoiceTool,
   confirmAiOperationalAction,
   getAiUsage,
   getAiStatus,
@@ -25,6 +26,13 @@ const aiVoiceRateLimit = rateLimit({
   legacyHeaders: false,
   message: { status: "error", message: "Too many realtime voice sessions. Try again later." },
 });
+const aiVoiceToolRateLimit = rateLimit({
+  windowMs: 60_000,
+  limit: 30,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  message: { status: "error", message: "Too many voice tool requests. Try again later." },
+});
 
 router.get("/status", getAiStatus);
 router.get("/usage", requireGoogleSession, getAiUsage);
@@ -35,6 +43,13 @@ router.post(
   aiVoiceRateLimit,
   (req, res, next) => { res.set("Cache-Control", "no-store"); next(); },
   createAiVoiceSession
+);
+router.post(
+  "/voice/tool",
+  requireGoogleSession,
+  aiVoiceToolRateLimit,
+  (req, res, next) => { res.set("Cache-Control", "no-store"); next(); },
+  executeAiVoiceTool
 );
 router.post("/tools/confirm", requireGoogleSession, aiChatRateLimit, confirmAiOperationalAction);
 

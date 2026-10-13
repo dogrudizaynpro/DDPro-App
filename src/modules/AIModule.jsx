@@ -3,7 +3,12 @@ import { RealtimeVoiceSession } from "../utils/realtime-voice.js";
 import aiTradeDesignReference from "../assets/DDPro-AI-Trade-Referans.png";
 import aiCharacterFront from "../assets/ddpro-ai-character-front.png";
 import aiCharacterBack from "../assets/ddpro-ai-character-back.png";
-import { createAiVoiceSession, getAiProviderStatus } from "../services/ai.service.js";
+import { speakTurkishText } from "../utils/voice-assistant.js";
+import {
+  createAiVoiceSession,
+  executeAiVoiceTool,
+  getAiProviderStatus,
+} from "../services/ai.service.js";
 
 const MODULE_TITLES = {
   projects: "Projeler",
@@ -79,6 +84,7 @@ function AIModule({
   messagesOnly = false,
   aiSending = false,
   onConfirmAction,
+  onConfirmVoiceAction,
   onConfirmProjectImport,
   onRetryProjectImportPreview,
 }) {
@@ -95,7 +101,11 @@ function AIModule({
   const [voiceStatus, setVoiceStatus] = useState("Gerçek zamanlı Türkçe sesli sohbet için sunucu sağlayıcı yapılandırması gerekir.");
   const [voiceTranscript, setVoiceTranscript] = useState("");
   const [voiceError, setVoiceError] = useState("");
+  const [voiceOperations, setVoiceOperations] = useState([]);
   const voiceSessionRef = useRef(null);
+  const voiceConfirmationsRef = useRef(new Set());
+  const voiceAnnouncementRef = useRef(new Map());
+  const voiceOperationStatesRef = useRef(new Map());
   const allowedFileExtensions = new Set(["png", "jpg", "jpeg", "webp", "xlsx", "csv", "pdf", "docx", "txt"]);
   const maxFileSize = 10 * 1024 * 1024;
   const isImageAttachment = (file) =>
@@ -132,12 +142,109 @@ function AIModule({
   }, []);
 
   const stopRealtimeVoice = () => {
+    for (const announcement of voiceAnnouncementRef.current.values()) {
+      clearTimeout(announcement.timer);
+    }
+    voiceAnnouncementRef.current.clear();
+    window.speechSynthesis?.cancel();
     voiceSessionRef.current?.stop();
     voiceSessionRef.current = null;
     setVoiceListening(false);
     setVoiceSpeaking(false);
     setVoicePhase("idle");
     setVoiceStatus("Sesli sohbet durduruldu; mikrofon kapatıldı.");
+  };
+
+  const updateVoiceOperation = (operation) => {
+    voiceOperationStatesRef.current.set(operation.id, operation.status);
+    setVoiceOperations((current) => {
+      const existing = current.findIndex((item) => item.id === operation.id);
+      if (existing < 0) return [...current, operation].slice(-10);
+      return current.map((item, index) => index === existing ? operation : item);
+    });
+    const announcement = voiceAnnouncementRef.current.get(operation.id);
+    if (operation.status === "running" && !announcement) {
+      const timer = window.setTimeout(async () => {
+        const description = operation.tool === "prepare_write"
+          ? "Değişiklik önerisini hazırlıyorum; hiçbir kaydı onayın olmadan değiştirmeyeceğim."
+          : ({
+            projects: "Proje kayıtlarını kontrol ediyorum.",
+            customers: "CRM kayıtlarını kontrol ediyorum.",
+            products: "Ürün kataloğunu kontrol ediyorum.",
+            systems: "Sistem kataloğunu kontrol ediyorum.",
+            offers: "Teklif kayıtlarını kontrol ediyorum.",
+            procurement: "Tedarik kayıtlarını kontrol ediyorum.",
+            reports: "Rapor kayıtlarını kontrol ediyorum.",
+            calendar: "Takvim kayıtlarını kontrol ediyorum.",
+            integrations: "Entegrasyonların güncel durumunu kontrol ediyorum.",
+            "price-analysis": "Doğrulanmış fiyat kayıtlarını kontrol ediyorum.",
+            "material-analysis": "Doğrulanmış maliyet kayıtlarını kontrol ediyorum.",
+          })[operation.resource] || "İsteği kontrol ediyorum.";
+        try {
+          const utterance = await speakTurkishText(description, window, {
+            shouldSpeak: () => voiceSessionRef.current &&
+              voiceOperationStatesRef.current.get(operation.id) === "running",
+            onstart: () => setVoiceSpeaking(true),
+            onend: () => setVoiceSpeaking(false),
+            onerror: () => setVoiceSpeaking(false),
+          });
+          if (utterance) {
+            voiceAnnouncementRef.current.set(operation.id, { utterance });
+          }
+        } catch {
+          // Live status remains visible if browser Turkish speech is unavailable.
+        }
+      }, 1_200);
+      voiceAnnouncementRef.current.set(operation.id, { timer });
+    } else if (operation.status !== "running" && announcement) {
+      clearTimeout(announcement.timer);
+      if (announcement.utterance) window.speechSynthesis?.cancel();
+      voiceAnnouncementRef.current.delete(operation.id);
+      setVoiceSpeaking(false);
+    }
+  };
+
+  const confirmVoiceOperation = async (operation) => {
+    const confirmationId = operation.pendingAction?.id;
+    if (!confirmationId || voiceConfirmationsRef.current.has(confirmationId)) return;
+    voiceConfirmationsRef.current.add(confirmationId);
+    updateVoiceOperation({
+      ...operation,
+      status: "executing",
+      summary: "Onaylanan işlem backend'de yürütülüyor.",
+    });
+    try {
+      if (typeof onConfirmVoiceAction !== "function") {
+        throw new Error("İşlem onayı şu anda kullanılamıyor.");
+      }
+      const result = await onConfirmVoiceAction(confirmationId);
+      updateVoiceOperation({
+        ...operation,
+        status: "completed",
+        summary: "İşlem backend tarafından tamamlandı ve sonucu doğrulandı.",
+        pendingAction: null,
+      });
+      voiceSessionRef.current?.sendText(
+        `Kullanıcı onayını verdi. Backend işlem sonucu: ${JSON.stringify(result)}. ` +
+        "Yalnızca bu gerçek sonucu kısa ve doğal Türkçe ile sesli olarak bildir."
+      );
+    } catch (error) {
+      const summary = error?.code === "AI_OPERATION_AUDIT_UNAVAILABLE"
+        ? "İşlem sonucu doğrulanamadı. Hedef kayıt tekrar denenmeden önce kontrol edilmeli."
+        : `İşlem tamamlanamadı; değişiklik yapıldığı doğrulanmadı. ${error?.message || ""}`.trim();
+      updateVoiceOperation({
+        ...operation,
+        status: "failed",
+        summary,
+        pendingAction: null,
+      });
+      voiceSessionRef.current?.sendText(
+        `Onaylanan işlem başarısız oldu veya sonucu doğrulanamadı: ${summary}. ` +
+        "Başarılı olduğunu söyleme; bunu kullanıcıya kısa Türkçe ile bildir."
+      );
+    } finally {
+      voiceConfirmationsRef.current.delete(confirmationId);
+    }
   };
 
   const toggleRealtimeVoice = async () => {
@@ -169,17 +276,33 @@ function AIModule({
       history,
       onState: (phase) => {
         setVoicePhase(phase);
-        setVoiceListening(["starting", "listening", "transcribing", "speaking"].includes(phase));
+        setVoiceListening([
+          "starting", "listening", "transcribing", "speaking", "tool_running",
+          "reconnecting", "reconnected",
+        ].includes(phase));
         setVoiceSpeaking(phase === "speaking");
         if (phase === "starting") setVoiceStatus("Mikrofon izni ve güvenli ses bağlantısı bekleniyor…");
         if (phase === "listening") setVoiceStatus("Canlı bağlantı açık. Konuşabilirsiniz; asistan sözünüzü kesebilir.");
         if (phase === "transcribing") setVoiceStatus("Konuşmanız gerçek zamanlı işleniyor…");
         if (phase === "speaking") setVoiceStatus("DDPro AI sesli yanıt veriyor. Araya girmek için konuşun.");
+        if (phase === "tool_running") setVoiceStatus("İstek analiz edildi. Yetkili DDPro aracı backend'de çalışıyor…");
+        if (phase === "reconnecting") setVoiceStatus("Ses bağlantısı koptu; sınırlı sayıda yeniden bağlanma deneniyor…");
+        if (phase === "reconnected") setVoiceStatus("Ses bağlantısı yeniden kuruldu. Devam edebilirsiniz.");
         if (phase === "error") setVoiceListening(false);
       },
       onTranscript: (role, text) => {
         setVoiceTranscript(role === "user" ? text : "");
         onVoiceMessage?.(role, text);
+      },
+      executeTool: executeAiVoiceTool,
+      onOperation: updateVoiceOperation,
+      onInterrupted: () => {
+        for (const announcement of voiceAnnouncementRef.current.values()) {
+          clearTimeout(announcement.timer);
+        }
+        voiceAnnouncementRef.current.clear();
+        window.speechSynthesis?.cancel();
+        setVoiceSpeaking(false);
       },
       onError: (error) => {
         if (voiceSessionRef.current === session) voiceSessionRef.current = null;
@@ -195,7 +318,14 @@ function AIModule({
       setVoiceSpeaking(false);
       setVoicePhase("error");
       setVoiceStatus("Gerçek zamanlı sesli sohbet başlatılamadı.");
-      setVoiceError(error.message);
+      const microphoneErrors = {
+        NotAllowedError: "Mikrofon izni verilmedi. Tarayıcı izinlerinden mikrofon erişimine izin verin.",
+        NotFoundError: "Kullanılabilir mikrofon bulunamadı.",
+        NotReadableError: "Mikrofon başka bir uygulama tarafından kullanılıyor veya açılamıyor.",
+        SecurityError: "Mikrofon erişimi güvenli bir HTTPS bağlantısı gerektirir.",
+        TimeoutError: "Ses sağlayıcısına bağlanma zaman aşımına uğradı.",
+      };
+      setVoiceError(microphoneErrors[error.name] || error.message || "Ses oturumu başlatılamadı.");
     }
   };
 
@@ -574,6 +704,58 @@ function AIModule({
               <p className="ai-voice-status ai-voice-transcript" aria-live="polite">
                 <strong>Algılanan konuşma:</strong> {voiceTranscript}
               </p>
+            ) : null}
+            {voiceOperations.length ? (
+              <ol className="ai-voice-operations" aria-label="Sesli asistan işlem akışı" aria-live="polite">
+                {voiceOperations.map((operation) => {
+                  const resource = MODULE_TITLES[operation.resource] || ({
+                    customers: "CRM",
+                    products: "Ürün kataloğu",
+                    systems: "Sistem kataloğu",
+                    "material-analysis": "Malzeme analizi",
+                    integrations: "Entegrasyonlar",
+                  })[operation.resource] || operation.resource;
+                  const tool = operation.tool === "prepare_write"
+                    ? "Kayıt değişikliği"
+                    : operation.resource
+                      ? `${resource} sorgusu`
+                      : "DDPro işlemi";
+                  const status = {
+                    running: "İşlem yürütülüyor",
+                    awaiting_confirmation: "Onay bekleniyor",
+                    executing: "Onaylı işlem yürütülüyor",
+                    completed: "İşlem tamamlandı",
+                    failed: "İşlem başarısız",
+                    cancelled: "İşlem iptal edildi",
+                    unverified: "Sonuç doğrulanamadı",
+                  }[operation.status] || operation.status;
+                  return (
+                    <li key={operation.id} data-status={operation.status}>
+                      <strong>{tool}</strong>
+                      <small>Talep: {operation.request}</small>
+                      <span>{status}</span>
+                      <p>{operation.summary}</p>
+                      {operation.pendingAction ? (
+                        <div className="ai-action-confirmation">
+                          <details className="ai-action-preview">
+                            <summary>Önerilen değişikliği incele</summary>
+                            <pre>{JSON.stringify(operation.pendingAction.preview, null, 2)}</pre>
+                          </details>
+                          <button
+                            className="ai-module-suggestion"
+                            type="button"
+                            disabled={operation.status === "executing"}
+                            onClick={() => confirmVoiceOperation(operation)}
+                          >
+                            {operation.pendingAction.summary}
+                          </button>
+                          <small>İşlem, yalnızca bu açık onayla ve 5 dakika içinde bir kez yürütülür.</small>
+                        </div>
+                      ) : null}
+                    </li>
+                  );
+                })}
+              </ol>
             ) : null}
           </form>
         </section>

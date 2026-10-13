@@ -1512,6 +1512,47 @@ button > .ddpro-icon-medallion {
   overflow-wrap: anywhere;
 }
 
+.ai-form .ai-voice-operations {
+  flex: 1 0 100%;
+  display: grid;
+  max-height: 260px;
+  gap: 8px;
+  overflow: auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ai-form .ai-voice-operations > li {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+  padding: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.ai-form .ai-voice-operations > li[data-status="failed"] {
+  border-color: rgba(248, 113, 113, 0.5);
+}
+
+.ai-form .ai-voice-operations > li[data-status="awaiting_confirmation"] {
+  border-color: rgba(250, 204, 21, 0.5);
+}
+
+.ai-form .ai-voice-operations > li > span {
+  color: #bdc8d7;
+  font-size: 11px;
+}
+
+.ai-form .ai-voice-operations > li > p {
+  margin: 0;
+  color: #9fb1c8;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
 .ai-form .ai-attachment-preview {
   flex: 1 0 100%;
   min-width: 0;

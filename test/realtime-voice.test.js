@@ -91,7 +91,7 @@ const createBrowser = (getUserMedia = async () => {
 });
 
 const createSession = (options = {}) => {
-  const events = { states: [], transcripts: [], errors: [] };
+  const events = { states: [], transcripts: [], operations: [], errors: [] };
   const session = new RealtimeVoiceSession({
     createSession: async () => ({
       token: "single-use-token",
@@ -102,6 +102,7 @@ const createSession = (options = {}) => {
     history: [],
     onState: (state) => events.states.push(state),
     onTranscript: (...turn) => events.transcripts.push(turn),
+    onOperation: (operation) => events.operations.push(operation),
     onError: (error) => events.errors.push(error),
     browser: createBrowser(),
     ...options,
@@ -155,6 +156,85 @@ test("realtime session streams microphone audio, transcripts, and stops playback
   assert.equal(FakeAudioContext.latest.state, "closed");
 });
 
+test("Gemini Live tool calls use backend results and deduplicate repeated call IDs", async () => {
+  let executions = 0;
+  const { session, events } = createSession({
+    executeTool: async ({ name, args }) => {
+      executions += 1;
+      assert.equal(name, "read_records");
+      assert.equal(args.resource, "projects");
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      return { type: "records", data: [{ id: "project-1" }] };
+    },
+  });
+  await session.start();
+  const socket = FakeWebSocket.latest;
+  const call = { id: "call-1", name: "read_records", args: { resource: "projects" } };
+  await socket.emit({ toolCall: { functionCalls: [call] } });
+  await socket.emit({ toolCall: { functionCalls: [call] } });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(executions, 1);
+  assert.equal(socket.sent.filter((message) => message.toolResponse).length, 1);
+  assert.deepEqual(
+    socket.sent.find((message) => message.toolResponse).toolResponse.functionResponses,
+    [{
+      id: "call-1",
+      name: "read_records",
+      response: { data: [{ id: "project-1" }] },
+    }]
+  );
+  assert.equal(events.operations.at(-1).status, "completed");
+  assert.match(events.operations.at(-1).summary, /1 kayıt backend'den alındı/);
+  session.stop();
+});
+
+test("stopping during a backend call reports an unverified result without a false completion", async () => {
+  let resolveTool;
+  const { session, events } = createSession({
+    executeTool: () => new Promise((resolve) => { resolveTool = resolve; }),
+  });
+  await session.start();
+  await FakeWebSocket.latest.emit({ toolCall: { functionCalls: [
+    { id: "pending-call", name: "read_records", args: { resource: "projects" } },
+  ] } });
+  await Promise.resolve();
+  session.stop();
+  assert.equal(events.operations.at(-1).status, "unverified");
+  resolveTool({ type: "records", data: [{ id: "project-1" }] });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(events.operations.at(-1).status, "unverified");
+});
+
+test("Live operations require confirmation and return tool failures as failures", async () => {
+  const { session, events } = createSession({
+    executeTool: async ({ name }) => {
+      if (name === "prepare_write") {
+        return {
+          type: "confirmation_required",
+          pendingAction: { id: "confirmation-1", summary: "Proje oluşturulsun mu?", preview: {} },
+        };
+      }
+      throw Object.assign(new Error("Yetki yetersiz."), { status: 403 });
+    },
+  });
+  await session.start();
+  const socket = FakeWebSocket.latest;
+  await socket.emit({ toolCall: { functionCalls: [
+    { id: "write-1", name: "prepare_write", args: { resource: "projects" } },
+    { id: "read-1", name: "read_records", args: { resource: "projects" } },
+  ] } });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  const finalOperations = new Map(events.operations.map((operation) => [operation.id, operation]));
+  assert.deepEqual([...finalOperations.values()].map(({ status }) => status), [
+    "awaiting_confirmation",
+    "failed",
+  ]);
+  const responses = socket.sent.find((message) => message.toolResponse).toolResponse.functionResponses;
+  assert.equal(responses[0].response.status, "awaiting_confirmation");
+  assert.match(responses[1].response.error, /Yetki yetersiz/);
+  session.stop();
+});
+
 test("realtime session reports microphone denial and releases resources on connection loss", async () => {
   const denied = createSession({
     browser: createBrowser(async () => { throw new Error("Permission denied"); }),
@@ -167,9 +247,40 @@ test("realtime session reports microphone denial and releases resources on conne
   const socket = FakeWebSocket.latest;
   const track = disconnected.session.stream.getTracks()[0];
   socket.onclose();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  FakeWebSocket.latest.onclose({ code: 1006, wasClean: false });
   assert.equal(track.stopped, true);
   assert.match(disconnected.events.errors.at(-1).message, /bağlantısı koptu/);
   assert.ok(disconnected.events.states.includes("error"));
+});
+
+test("a transient Live disconnect reconnects once with a fresh session and retains the microphone", async () => {
+  let sessionsCreated = 0;
+  const { session, events } = createSession({
+    createSession: async () => {
+      sessionsCreated += 1;
+      return {
+        token: `single-use-token-${sessionsCreated}`,
+        websocketUrl: "wss://voice.example/live",
+        setup: { model: "models/live", generationConfig: { responseModalities: ["AUDIO"] } },
+      };
+    },
+  });
+  await session.start();
+  const originalSocket = FakeWebSocket.latest;
+  const track = session.stream.getTracks()[0];
+  originalSocket.onclose({ code: 1006, wasClean: false });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(sessionsCreated, 2);
+  assert.notEqual(FakeWebSocket.latest, originalSocket);
+  assert.equal(track.stopped, false);
+  assert.ok(events.states.includes("reconnecting"));
+  assert.ok(events.states.includes("reconnected"));
+  assert.equal(session.active, true);
+  session.stop();
+  assert.equal(track.stopped, true);
 });
 
 test("Live binary JSON setup and audio frames decode as Blob or ArrayBuffer in arrival order", async () => {

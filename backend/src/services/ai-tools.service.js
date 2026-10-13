@@ -36,6 +36,9 @@ import {
   deleteCalendarEvent,
 } from "../controllers/integration-workspace.controller.js";
 import { getReports, postReport, removeReport } from "../controllers/reports.controller.js";
+import { AI_TOOL_DEFINITIONS, AI_TOOL_NAMES } from "./ai-tool-definitions.js";
+
+export { AI_TOOL_DEFINITIONS, AI_TOOL_NAMES };
 
 const UUID_PATTERN =
   /^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i;
@@ -109,57 +112,6 @@ const CONTROLLERS = {
     delete: deleteCalendarEvent,
   },
 };
-
-export const AI_TOOL_NAMES = Object.freeze({
-  readRecords: "read_records",
-  prepareWrite: "prepare_write",
-});
-
-const operationalResources = Object.keys(CONTROLLERS);
-export const AI_TOOL_DEFINITIONS = [
-  {
-    type: "function",
-    function: {
-      name: AI_TOOL_NAMES.readRecords,
-      description: "Read up to 50 current authorized DDPro records. Price analysis returns verified records only.",
-      parameters: {
-        type: "object",
-        properties: {
-          resource: { type: "string", enum: operationalResources },
-          filters: {
-            type: "object",
-            properties: {
-              id: { type: "string" },
-              start: { type: "string" },
-              end: { type: "string" },
-            },
-            additionalProperties: false,
-          },
-        },
-        required: ["resource"],
-        additionalProperties: false,
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: AI_TOOL_NAMES.prepareWrite,
-      description: "Prepare a create, update, or delete. Explicit user confirmation is required before execution.",
-      parameters: {
-        type: "object",
-        properties: {
-          resource: { type: "string", enum: operationalResources },
-          operation: { type: "string", enum: ["create", "update", "delete"] },
-          id: { type: "string" },
-          record: { type: "object" },
-        },
-        required: ["resource", "operation"],
-        additionalProperties: false,
-      },
-    },
-  },
-];
 
 const getAdmin = () => {
   const admin = getIntegrationAdmin();
@@ -251,6 +203,44 @@ export const readOperationalRecords = async (integrationAccount, { resource, fil
     record.verified_at
   );
   return filters.id ? verified[0] || null : verified.slice(0, 50);
+};
+
+export const executeOperationalTool = async (
+  integrationAccount,
+  name,
+  args,
+  sourceFingerprint
+) => {
+  if (typeof integrationAccount !== "string" || !integrationAccount.trim()) {
+    throw Object.assign(new Error("An authenticated DDPro account is required for AI tools."), {
+      statusCode: 401,
+      expose: true,
+    });
+  }
+  if (!args || typeof args !== "object" || Array.isArray(args) ||
+      Buffer.byteLength(JSON.stringify(args)) > 12_000) {
+    throw Object.assign(new Error("AI tool arguments are invalid or too large."), {
+      statusCode: 400,
+      expose: true,
+    });
+  }
+  if (name === AI_TOOL_NAMES.readRecords) {
+    return {
+      type: "records",
+      resource: args.resource,
+      data: await readOperationalRecords(integrationAccount, args),
+    };
+  }
+  if (name === AI_TOOL_NAMES.prepareWrite) {
+    return {
+      type: "confirmation_required",
+      pendingAction: await prepareOperationalWrite(integrationAccount, args, sourceFingerprint),
+    };
+  }
+  throw Object.assign(new Error("This AI operational tool is not available."), {
+    statusCode: 400,
+    expose: true,
+  });
 };
 
 const readWriteTarget = async (integrationAccount, resource, id) => {

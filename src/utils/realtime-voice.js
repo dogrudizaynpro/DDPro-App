@@ -1,5 +1,18 @@
 const INPUT_SAMPLE_RATE = 16_000;
 const DEFAULT_OUTPUT_SAMPLE_RATE = 24_000;
+const VOICE_RESOURCE_NAMES = {
+  projects: "Proje kayıtları",
+  customers: "CRM kayıtları",
+  products: "Ürün kataloğu",
+  systems: "Sistem kataloğu",
+  "price-analysis": "Doğrulanmış fiyat kayıtları",
+  "material-analysis": "Doğrulanmış malzeme kayıtları",
+  procurement: "Tedarik kayıtları",
+  offers: "Teklif kayıtları",
+  reports: "Rapor kayıtları",
+  calendar: "Takvim kayıtları",
+  integrations: "Entegrasyon durumu",
+};
 
 export const resampleToPcm16 = (samples, inputSampleRate) => {
   const ratio = inputSampleRate / INPUT_SAMPLE_RATE;
@@ -41,7 +54,10 @@ export class RealtimeVoiceSession {
     history,
     onState = () => {},
     onTranscript = () => {},
+    onOperation = () => {},
+    onInterrupted = () => {},
     onError = () => {},
+    executeTool = async () => { throw new Error("Sesli işlem araçları kullanılamıyor."); },
     browser = globalThis.window,
   }) {
     this.createSession = createSession;
@@ -49,7 +65,10 @@ export class RealtimeVoiceSession {
     this.history = history;
     this.onState = onState;
     this.onTranscript = onTranscript;
+    this.onOperation = onOperation;
+    this.onInterrupted = onInterrupted;
     this.onError = onError;
+    this.executeTool = executeTool;
     this.browser = browser;
     this.socket = null;
     this.stream = null;
@@ -59,6 +78,13 @@ export class RealtimeVoiceSession {
     this.nextPlaybackTime = 0;
     this.inputTranscript = "";
     this.outputTranscript = "";
+    this.toolCalls = new Map();
+    this.scheduledToolCallIds = new Set();
+    this.pendingOperations = new Map();
+    this.reconnectAttempts = 0;
+    this.reconnecting = false;
+    this.connectionGeneration = 0;
+    this.pendingClientMessages = [];
     this.intentionalClose = false;
     this.active = false;
   }
@@ -96,6 +122,7 @@ export class RealtimeVoiceSession {
 
   connect(session) {
     return new Promise((resolve, reject) => {
+      this.connectionGeneration += 1;
       let settled = false;
       const timeout = this.browser.setTimeout(() => {
         if (settled) return;
@@ -142,9 +169,13 @@ export class RealtimeVoiceSession {
         if (this.intentionalClose) return;
         if (data.setupComplete) {
           try {
-            this.startAudioInput();
+            if (!this.processor) this.startAudioInput();
             this.active = true;
-            this.onState("listening");
+            this.reconnecting = false;
+            this.onState(this.reconnectAttempts ? "reconnected" : "listening");
+            for (const text of this.pendingClientMessages.splice(0)) {
+              this.sendText(text);
+            }
             finish();
           } catch (error) {
             finish(error);
@@ -162,6 +193,7 @@ export class RealtimeVoiceSession {
           this.fail(error);
           return;
         }
+        if (data.toolCall) this.handleToolCalls(data.toolCall);
         this.handleServerContent(data.serverContent);
       };
       // Blob decoding is asynchronous; preserve setup/audio/transcript frame order.
@@ -176,8 +208,11 @@ export class RealtimeVoiceSession {
       this.socket.onerror = () => {
         console.error("Gemini Live transport failed:", { stage: "websocket_transport" });
         const error = new Error("Sesli sohbet bağlantısı kurulamadı.");
-        finish(error);
-        this.fail(error);
+        if (this.active) this.reconnect(error);
+        else {
+          finish(error);
+          this.fail(error);
+        }
       };
       this.socket.onclose = (event) => {
         if (this.intentionalClose) return;
@@ -187,10 +222,168 @@ export class RealtimeVoiceSession {
           wasClean: event?.wasClean === true,
         });
         const error = new Error("Sesli sohbet bağlantısı koptu. Yeniden bağlanmayı deneyin.");
-        finish(error);
-        this.fail(error);
+        if (this.reconnecting) return;
+        if (this.active) this.reconnect(error);
+        else {
+          finish(error);
+          this.fail(error);
+        }
       };
     });
+  }
+
+  reconnect(error) {
+    if (this.intentionalClose || this.reconnecting) return;
+    if (this.reconnectAttempts >= 1) {
+      this.fail(error);
+      return;
+    }
+    this.reconnecting = true;
+    this.active = false;
+    this.reconnectAttempts += 1;
+    this.onState("reconnecting");
+    const previousSocket = this.socket;
+    this.socket = null;
+    if (previousSocket && previousSocket.readyState < this.browser.WebSocket.CLOSING) {
+      previousSocket.close();
+    }
+    Promise.resolve()
+      .then(() => this.createSession({ context: this.context, history: this.history }))
+      .then((session) => this.connect(session))
+      .catch((reconnectError) => this.fail(reconnectError || error));
+  }
+
+  handleToolCalls(toolCall) {
+    const receivedCalls = Array.isArray(toolCall?.functionCalls) ? toolCall.functionCalls : [];
+    if (receivedCalls.some((call) =>
+      typeof call?.id !== "string" || !call.id || typeof call?.name !== "string" || !call.name
+    )) {
+      this.fail(new Error("Sesli araç çağrısı geçersiz."));
+      return;
+    }
+    const calls = receivedCalls
+      .filter((call) => {
+        if (typeof call?.id !== "string" || !call.id || this.scheduledToolCallIds.has(call.id)) {
+          return false;
+        }
+        this.scheduledToolCallIds.add(call.id);
+        return true;
+      });
+    if (!calls.length) return;
+    const generation = this.connectionGeneration;
+    Promise.all(calls.map((call) => this.executeFunctionCall(call)))
+      .then((functionResponses) => {
+        if (this.intentionalClose) return;
+        if (this.reconnecting || generation !== this.connectionGeneration) {
+          this.sendText(
+            `Önceki ses bağlantısındaki DDPro araç sonucu: ${JSON.stringify(functionResponses)}. ` +
+            "Bu, backend'den alınmış gerçek işlem sonucudur; doğal Türkçe ile kullanıcıya özetle."
+          );
+          return;
+        }
+        if (this.socket?.readyState !== this.browser.WebSocket.OPEN) return;
+        this.socket.send(JSON.stringify({
+          toolResponse: { functionResponses },
+        }));
+      })
+      .catch(() => {
+        const error = new Error("Sesli işlem yanıtı sağlayıcıya iletilemedi.");
+        this.fail(error);
+      });
+  }
+
+  executeFunctionCall(call) {
+    const id = typeof call?.id === "string" ? call.id : "";
+    const name = typeof call?.name === "string" ? call.name : "";
+    if (!id || !name) {
+      const error = new Error("Sesli araç çağrısı geçersiz.");
+      this.fail(error);
+      return Promise.resolve(null);
+    }
+    if (this.toolCalls.has(id)) return this.toolCalls.get(id);
+    const args = call.args && typeof call.args === "object" && !Array.isArray(call.args)
+      ? call.args
+      : {};
+    const promise = Promise.resolve()
+      .then(async () => {
+        const resource = typeof args.resource === "string"
+          ? args.resource
+          : name === "read_integration_status"
+            ? "integrations"
+            : "";
+        const resourceName = VOICE_RESOURCE_NAMES[resource] || "DDPro kayıtları";
+        const request = name === "prepare_write"
+          ? `${resourceName} ${({
+            create: "oluşturma",
+            update: "güncelleme",
+            delete: "silme",
+          })[args.operation] || "değişiklik"} talebi`
+          : `${resourceName} sorgusu`;
+        const operation = {
+          id,
+          request,
+          tool: name,
+          resource,
+          status: "running",
+          summary: "İstek backend aracı tarafından yürütülüyor.",
+        };
+        this.pendingOperations.set(id, operation);
+        this.onOperation(operation);
+        this.onState("tool_running");
+        try {
+          const result = await this.executeTool({ name, args });
+          if (this.intentionalClose) {
+            this.pendingOperations.delete(id);
+            return { id, name, response: { status: "cancelled" } };
+          }
+          if (result?.type === "confirmation_required" && result.pendingAction) {
+            this.pendingOperations.delete(id);
+            const pendingAction = result.pendingAction;
+            this.onOperation({
+              ...operation,
+              status: "awaiting_confirmation",
+              summary: "İşlem hazırlanıp kullanıcı onayına sunuldu; henüz uygulanmadı.",
+              pendingAction,
+            });
+            return {
+              id,
+              name,
+              response: {
+                status: "awaiting_confirmation",
+                summary: pendingAction.summary,
+              },
+            };
+          }
+          const records = result?.data;
+          const count = Array.isArray(records) ? records.length : records ? 1 : 0;
+          this.pendingOperations.delete(id);
+          this.onOperation({
+            ...operation,
+            status: "completed",
+            summary: `${count} kayıt backend'den alındı.`,
+          });
+          return { id, name, response: { data: records } };
+        } catch (error) {
+          this.pendingOperations.delete(id);
+          if (this.intentionalClose) {
+            return { id, name, response: { status: "cancelled" } };
+          }
+          const message = typeof error?.message === "string"
+            ? error.message.slice(0, 300)
+            : "İşlem tamamlanamadı.";
+          this.onOperation({
+            ...operation,
+            status: "failed",
+            summary: message,
+          });
+          return { id, name, response: { error: message } };
+        }
+      });
+    if (this.toolCalls.size >= 100) {
+      this.toolCalls.delete(this.toolCalls.keys().next().value);
+    }
+    this.toolCalls.set(id, promise);
+    return promise;
   }
 
   startAudioInput() {
@@ -223,6 +416,7 @@ export class RealtimeVoiceSession {
     if (content.interrupted) {
       this.stopPlayback();
       this.nextPlaybackTime = 0;
+      this.onInterrupted();
       this.onState("listening");
     }
     if (content.inputTranscription?.text) {
@@ -257,6 +451,22 @@ export class RealtimeVoiceSession {
     }
   }
 
+  sendText(text) {
+    if (typeof text !== "string" || !text.trim() || this.intentionalClose) return false;
+    if (this.reconnecting) {
+      this.pendingClientMessages.push(text.trim());
+      return true;
+    }
+    if (this.socket?.readyState !== this.browser.WebSocket.OPEN) return false;
+    this.socket.send(JSON.stringify({
+      clientContent: {
+        turns: [{ role: "user", parts: [{ text: text.trim() }] }],
+        turnComplete: true,
+      },
+    }));
+    return true;
+  }
+
   playAudio(data, sampleRate) {
     const samples = pcm16ToFloat32(data);
     if (!samples.length || !this.audioContext) return;
@@ -288,6 +498,8 @@ export class RealtimeVoiceSession {
     if (this.intentionalClose) return;
     this.intentionalClose = true;
     this.active = false;
+    this.pendingClientMessages = [];
+    this.reportUnverifiedOperations();
     this.releaseResources();
     this.onState("error");
     if (error) this.onError(error);
@@ -296,8 +508,21 @@ export class RealtimeVoiceSession {
   stop() {
     this.intentionalClose = true;
     this.active = false;
+    this.pendingClientMessages = [];
+    this.reportUnverifiedOperations();
     this.releaseResources();
     this.onState("idle");
+  }
+
+  reportUnverifiedOperations() {
+    for (const operation of this.pendingOperations.values()) {
+      this.onOperation({
+        ...operation,
+        status: "unverified",
+        summary: "Sesli oturum kapandı; backend işlem sonucu doğrulanamadı.",
+      });
+    }
+    this.pendingOperations.clear();
   }
 
   releaseResources() {
@@ -318,5 +543,7 @@ export class RealtimeVoiceSession {
     this.stream = null;
     this.socket = null;
     this.audioContext = null;
+    this.toolCalls.clear();
+    this.scheduledToolCallIds.clear();
   }
 }

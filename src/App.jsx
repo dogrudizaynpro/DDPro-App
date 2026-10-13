@@ -2248,6 +2248,12 @@ function App() {
     }
   };
 
+  const confirmAiVoiceAction = async (confirmationId) => {
+    const result = await confirmAiActionRequest(confirmationId);
+    getAiUsageCount().then(setAiAnalysisCount).catch(() => {});
+    return result;
+  };
+
   const confirmAiProjectImport = async (messageId, projectImport) => {
     if (
       aiSending ||
@@ -2986,6 +2992,7 @@ function App() {
           onNavigate={handleModuleNavigation}
           aiSending={aiSending}
           onConfirmAction={confirmAiOperationalAction}
+          onConfirmVoiceAction={confirmAiVoiceAction}
           onConfirmProjectImport={confirmAiProjectImport}
           onRetryProjectImportPreview={retryAiProjectImportPreview}
         />

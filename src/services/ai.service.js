@@ -39,6 +39,14 @@ export const createAiVoiceSession = async ({ context, history }) => {
   return response.data;
 };
 
+export const executeAiVoiceTool = async ({ name, args }) => {
+  const response = await fetchAPI("/api/ai/voice/tool", {
+    method: "POST",
+    body: JSON.stringify({ name, args }),
+  });
+  return response.data;
+};
+
 export const confirmAiAction = async (confirmationId) => {
   const response = await fetchAPI("/api/ai/tools/confirm", {
     method: "POST",

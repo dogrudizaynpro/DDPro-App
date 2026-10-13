@@ -16,7 +16,7 @@ export const getIntegrationStatus = async (req, res, next) => {
   const aiConfigured = Boolean(
     process.env.AI_API_URL && process.env.AI_API_KEY && process.env.AI_MODEL
   );
-  const googleAccount = await getGoogleSessionAccount(req);
+  const googleAccount = req.integrationAccount || await getGoogleSessionAccount(req);
   const google = await getGoogleConfigurationStatus(googleAccount);
   const databaseConfigured = hasIntegrationAdmin();
   const whatsapp = getWhatsAppConfigurationStatus();
