@@ -75,7 +75,6 @@ test("health reports degraded when the system images table is unavailable", asyn
   for (const table of [
     "projects",
     "offers",
-    "crm_contacts",
     "report_records",
     "project_costs",
     "message_conversations",
