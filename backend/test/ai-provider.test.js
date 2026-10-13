@@ -71,7 +71,7 @@ test("Chat Completions request omits sampling parameters unsupported by gpt-5.6-
   responses.push(completion({ role: "assistant", content: "OK" }));
   const result = await requestAiCompletion({ message: "Connection check.", context: {} });
 
-  assert.deepEqual(result, { answer: "OK" });
+  assert.deepEqual(result, { answer: "OK", toolExecutions: [] });
   assert.equal(requests.length, 1);
   const [{ url, headers, body }] = requests;
   assert.equal(url, "https://api.openai.com/v1/chat/completions");

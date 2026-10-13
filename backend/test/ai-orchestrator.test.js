@@ -15,7 +15,16 @@ test("written AI commands route company data as read-only through the existing c
   const orchestrate = createAiOrchestrator({
     complete: async (command) => {
       received = command;
-      return { answer: "Projeler API'sinden alınan kayıtlar." };
+      return {
+        answer: "Projeler API'sinden alınan kayıtlar.",
+        toolExecutions: [{
+          agentId: "project",
+          operation: "read_records",
+          resource: "projects",
+          status: "completed",
+          resultCount: 2,
+        }],
+      };
     },
   });
 
