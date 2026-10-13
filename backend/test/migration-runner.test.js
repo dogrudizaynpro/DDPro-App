@@ -113,7 +113,7 @@ test("migrations loaded from disk are numbered, unique and include the core prod
   assert.deepEqual(versions, [...versions].sort((left, right) => left - right));
   assert.equal(new Set(versions).size, versions.length);
   const allSql = migrations.map((migration) => migration.sql).join("\n");
-  for (const table of ["crm_contacts", "offers", "research_items", "system_images", "ai_usage_events", "ai_file_imports", "ai_operation_audit_events", "whatsapp_inbound_messages"]) {
+  for (const table of ["crm_contacts", "offers", "research_items", "system_images", "ai_usage_events", "ai_file_imports", "ai_operation_audit_events", "whatsapp_inbound_messages", "integration_tokens"]) {
     assert.ok(serviceRoleTables.includes(table));
     assert.match(allSql, new RegExp(`CREATE TABLE IF NOT EXISTS (public\\.)?${table} \\(`));
   }
@@ -191,6 +191,26 @@ test("migration rolls back when core tables are missing or exposed", async () =>
       PoolClass: UnprotectedPool,
     }),
     /verification failed for: crm_contacts, offers/
+  );
+  assert.equal(pool.queries.at(-1), "ROLLBACK");
+  assert.equal(pool.released, true);
+  assert.equal(pool.ended, true);
+});
+
+test("migration checks service_role access on integration_tokens", async () => {
+  let pool;
+  class UnprotectedTokensPool extends FakePool {
+    constructor(options) {
+      super(options, { unprotected: ["integration_tokens"] });
+      pool = this;
+    }
+  }
+  await assert.rejects(
+    applyDatabaseMigrations({
+      connectionString: "postgresql://example.invalid/ddpro",
+      PoolClass: UnprotectedTokensPool,
+    }),
+    /verification failed for: integration_tokens/
   );
   assert.equal(pool.queries.at(-1), "ROLLBACK");
   assert.equal(pool.released, true);

@@ -46,9 +46,10 @@ export const serviceRoleTables = [
   "ai_operation_audit_events",
   "project_ai_analyses",
   "whatsapp_inbound_messages",
+  "integration_tokens",
 ];
 // Tables that must exist with RLS enabled and no direct client access.
-const privateTables = ["integration_tokens", "schema_migrations"];
+const privateTables = ["schema_migrations"];
 
 const protectedTablesQuery = `
   SELECT required.table_name
