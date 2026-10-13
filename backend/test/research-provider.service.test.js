@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { searchResearchProvider } from "../src/services/research-provider.service.js";
+import {
+  getResearchProviderConfiguration,
+  searchResearchProvider,
+} from "../src/services/research-provider.service.js";
 
 const mockProvider = (t, fetchMock, { apiKey = "test-key" } = {}) => {
   const previousApiKey = process.env.RESEARCH_API_KEY;
@@ -157,8 +160,37 @@ test("sends a concise Tavily search request and converts results to the DDPro fo
   assert.equal(result.price, "");
   assert.equal(result.priceVerification, "Doğrulanmadı");
   assert.equal(result.url, "https://supplier.example/product");
-  assert.equal(Number.isNaN(Date.parse(result.date)), false);
+  assert.equal(result.date, null);
+  assert.equal(Number.isNaN(Date.parse(result.researchedAt)), false);
   assert.equal(result.status, "Harici sonuç · kullanıcı doğrulaması bekliyor");
+});
+
+test("preserves provider publication dates and leaves unknown publication dates empty", async (t) => {
+  mockProvider(t, async () => jsonResponse({
+    results: [
+      {
+        title: "Aluminum profile with date",
+        content: "aluminum profile technical information",
+        url: "https://supplier.example/dated",
+        published_date: "2026-04-12",
+      },
+      {
+        title: "Aluminum profile without date",
+        content: "aluminum profile technical information",
+        url: "https://supplier.example/undated",
+      },
+    ],
+  }));
+
+  const results = await searchResearchProvider("aluminum profile");
+  const dated = results.find(({ url }) => url.endsWith("/dated"));
+  const undated = results.find(({ url }) => url.endsWith("/undated"));
+
+  assert.equal(dated.date, "2026-04-12T00:00:00.000Z");
+  assert.equal(undated.date, null);
+  for (const result of results) {
+    assert.equal(Number.isNaN(Date.parse(result.researchedAt)), false);
+  }
 });
 
 test("site-scoped searches use Tavily with an exact DDPro host filter and accept only safe page URLs", async (t) => {
@@ -245,7 +277,9 @@ test("handles missing and null result fields without inventing data", async (t) 
 
   assert.equal(results.length, 2);
   assert.deepEqual(
-    Object.fromEntries(Object.entries(results[0]).filter(([key]) => !["date", "status"].includes(key))),
+    Object.fromEntries(Object.entries(results[0]).filter(([key]) =>
+      !["date", "researchedAt", "status"].includes(key)
+    )),
     {
       source: "aluminum profile technical data",
       product: "",
@@ -315,6 +349,28 @@ test("uses a 30-second timeout and safely reports an aborted request", async (t)
     assert.equal(milliseconds, 30_000);
     timeoutController = new AbortController();
     return timeoutController.signal;
+  });
+
+  test("provider configuration requires a nonempty key, independently of provider readiness", (t) => {
+    const previousApiKey = process.env.RESEARCH_API_KEY;
+    const previousApiUrl = process.env.RESEARCH_API_URL;
+    t.after(() => {
+      if (previousApiKey === undefined) delete process.env.RESEARCH_API_KEY;
+      else process.env.RESEARCH_API_KEY = previousApiKey;
+      if (previousApiUrl === undefined) delete process.env.RESEARCH_API_URL;
+      else process.env.RESEARCH_API_URL = previousApiUrl;
+    });
+
+    delete process.env.RESEARCH_API_URL;
+    delete process.env.RESEARCH_API_KEY;
+    assert.deepEqual(getResearchProviderConfiguration(), {
+      configured: false,
+      provider: "Tavily",
+    });
+    process.env.RESEARCH_API_KEY = "regression-test-key";
+    const configuration = getResearchProviderConfiguration();
+    assert.equal(configuration.configured, true);
+    assert.equal(configuration.provider, "Tavily");
   });
   mockProvider(t, async (_url, options) => {
     assert.equal(options.signal, timeoutController.signal);

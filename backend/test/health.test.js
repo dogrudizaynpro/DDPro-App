@@ -75,7 +75,6 @@ test("health reports degraded when the system images table is unavailable", asyn
   for (const table of [
     "projects",
     "offers",
-    "crm_contacts",
     "report_records",
     "project_costs",
     "message_conversations",
@@ -94,4 +93,5 @@ test("health reports degraded when the system images table is unavailable", asyn
   ]) {
     assert.ok(probedTables.includes(table), `Expected health check to probe ${table}`);
   }
+  assert.equal(probedTables.filter((table) => table === "crm_contacts").length, 1);
 });

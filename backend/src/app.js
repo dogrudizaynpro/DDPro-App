@@ -159,7 +159,6 @@ app.get("/health", async (req, res) => {
       ["project_ai_analyses", "id"],
       ["ai_file_imports", "file_row_fingerprint"],
       ["research_items", "procurement_status"],
-      ["crm_contacts", "id"],
       ["integration_tokens", "provider"],
       ["products", "id"],
       ["systems", "id"],

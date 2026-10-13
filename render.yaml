@@ -61,7 +61,5 @@ services:
         sync: false
       - key: WHATSAPP_AI_ACCOUNTS
         value: "{}"
-      - key: RESEARCH_API_URL
-        sync: false
       - key: RESEARCH_API_KEY
         sync: false
