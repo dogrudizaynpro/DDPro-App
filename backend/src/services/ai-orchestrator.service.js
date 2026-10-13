@@ -13,6 +13,8 @@ const COMPANY_CONTEXT_PATTERN =
   /(?<![\p{L}\p{N}_])(?:şirket|firma|marka|company|our|bizim|kurumsal)[\p{L}\p{N}_]*(?![\p{L}\p{N}_])/iu;
 const COMPANY_TOPIC_PATTERN =
   /(?<![\p{L}\p{N}_])(?:hizmet|service|ürün|product|sistem|system|uygulama|application|proje|project|referans|reference)[\p{L}\p{N}_]*(?![\p{L}\p{N}_])/iu;
+const OWNED_COMPANY_TOPIC_PATTERN =
+  /(?<![\p{L}\p{N}_])(?:hizmet|service|ürün|product|sistem|system|uygulama|application|proje|project|referans|reference)(?:lar|ler)?(?:ımız|imiz|umuz|ümüz|ınız|iniz|unuz|ünüz)(?![\p{L}\p{N}_])/iu;
 const CEILING_TOPIC_PATTERN =
   /(?<![\p{L}\p{N}_])(?:asma\s*tavan|suspended\s*ceiling|lineer\s*tavan|baffle\s*tavan)(?![\p{L}\p{N}_])/iu;
 const UNVERIFIED_SITE_PRICE_PATTERN =
@@ -99,6 +101,7 @@ const getResearchQuery = (message) => message.toLocaleLowerCase("tr-TR")
 
 const isDdproWebsiteQuestion = (message) =>
   DDPRO_SITE_PATTERN.test(message) ||
+  OWNED_COMPANY_TOPIC_PATTERN.test(message) ||
   (COMPANY_CONTEXT_PATTERN.test(message) && COMPANY_TOPIC_PATTERN.test(message)) ||
   CEILING_TOPIC_PATTERN.test(message);
 

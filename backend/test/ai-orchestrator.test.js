@@ -329,6 +329,10 @@ test("write commands retain the existing prepare_write and explicit confirmation
 });
 
 test("command classifier never routes arbitrary text to unregistered research", () => {
+  assert.deepEqual(classifyAiCommand({ message: "Referanslarımız nelerdir?" }), {
+    intent: "site_research",
+    query: "Referanslarımız nelerdir?",
+  });
   assert.deepEqual(classifyAiCommand({ message: "Merhaba." }), {
     intent: "direct_answer",
     toolPolicy: "none",
