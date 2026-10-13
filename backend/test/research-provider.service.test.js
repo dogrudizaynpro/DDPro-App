@@ -96,6 +96,33 @@ test("ranks relevant results and returns only short query-related summaries", as
   assert.equal(results[0].technicalInfo, "");
 });
 
+test("returns no result when provider pages do not support the requested topic", async (t) => {
+  mockProvider(t, async () => jsonResponse({
+    results: [
+      {
+        title: "KVKK ve kişisel verilerin korunması",
+        content: "Kişisel veriler ve açık rıza hakkında.",
+        url: "https://www.ddizaynpro.com/kvkk",
+      },
+      {
+        title: "Gençlik kampları",
+        content: "Kamp alanları, konaklama ve gençlik faaliyetleri.",
+        url: "https://www.ddizaynpro.com/kamplar",
+      },
+      {
+        title: "Adobe Acrobat",
+        content: "PDF belgelerini oluşturma ve düzenleme.",
+        url: "https://www.ddizaynpro.com/acrob",
+      },
+    ],
+  }));
+
+  assert.deepEqual(
+    await searchResearchProvider("asma tavan hizmetleri", { siteOnly: true }),
+    [],
+  );
+});
+
 test("sends a concise Tavily search request and converts results to the DDPro format", async (t) => {
   let request;
   const content = `aluminum profile ${"x".repeat(4_100)}`;

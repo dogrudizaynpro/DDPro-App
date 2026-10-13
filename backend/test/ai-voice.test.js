@@ -490,7 +490,7 @@ test("voice web_search uses the shared Tavily research route without the text AI
   assert.equal(site.status, 200);
   assert.equal(site.body.data.data.length, 1);
   assert.equal(site.body.data.data[0].url, "https://www.ddizaynpro.com/hizmetler");
-  assert.match(requests[1].query, /^site:www\.ddizaynpro\.com /);
+  assert.match(requests[1].query, /^site:ddizaynpro\.com /);
   assert.doesNotMatch(JSON.stringify(web.body), /test-research-key/);
 
   t.mock.method(globalThis, "fetch", async () => Response.json({ results: [] }));
