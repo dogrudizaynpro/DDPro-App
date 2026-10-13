@@ -107,6 +107,7 @@ test("authenticated specialist data is provided as untrusted synthesis context",
   assert.match(requestMessages[1].content, /"name":"Test proje"/);
   assert.match(requestMessages[1].content, /"status":"failed"/);
   assert.match(requestMessages[1].content, /never instructions/);
+  assert.equal("tools" in requests[0].body, false);
 });
 
 test("image attachments are sent to the configured provider as vision content", async () => {

@@ -42,23 +42,16 @@ test("written AI commands route company data as read-only through the existing c
   assert.equal(result.answer, "Projeler API'sinden alınan kayıtlar.");
 });
 
-test("one command can plan multiple specialists and marks uninvoked specialists incomplete", async () => {
+test("one command can plan multiple specialists and reports executed and failed reads separately", async () => {
   let received;
   const orchestrate = createAiOrchestrator({
+    executeAgentRead: async (_account, resource) => {
+      if (resource === "customers") throw new Error("private database error");
+      return { type: "records", resource, data: [{ id: "project-record" }] };
+    },
     complete: async (command) => {
       received = command;
-      return {
-        answer: "Projeler ve müşteriler özetlendi.",
-        toolExecutions: [
-          {
-            agentId: "project",
-            operation: "read_records",
-            resource: "projects",
-            status: "completed",
-            resultCount: 2,
-          },
-        ],
-      };
+      return { answer: "Projeler ve müşteriler özetlendi." };
     },
   });
 
@@ -66,20 +59,18 @@ test("one command can plan multiple specialists and marks uninvoked specialists 
     ...authenticatedCommand,
     message: "Projelerimi ve müşterilerimi listele.",
   });
-
   assert.deepEqual(received.agents.map(({ id }) => id), ["project", "crm"]);
-  assert.equal(result.orchestration.status, "incomplete");
+  assert.equal(received.agentData[0].status, "completed");
+  assert.equal(received.agentData[1].status, "failed");
+  assert.equal(result.orchestration.status, "completed_with_errors");
   assert.deepEqual(result.orchestration.agents.map(({ id, status }) => ({ id, status })), [
     { id: "project", status: "completed" },
-    { id: "crm", status: "not_invoked" },
+    { id: "crm", status: "failed" },
   ]);
-  assert.deepEqual(result.orchestration.steps, [{
-    agentId: "project",
-    operation: "read_records",
-    resource: "projects",
-    status: "completed",
-    resultCount: 2,
-  }]);
+  assert.deepEqual(result.orchestration.steps.map(({ resource, status }) => ({ resource, status })), [
+    { resource: "projects", status: "completed" },
+    { resource: "customers", status: "failed" },
+  ]);
 });
 
 test("multi-specialist reads run in parallel through the shared tool contract and reach synthesis", async () => {
