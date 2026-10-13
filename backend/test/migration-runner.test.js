@@ -84,7 +84,7 @@ test("all migrations are applied in numeric order in one locked transaction", as
     skipped: [],
   });
   assert.equal(result.applied[0], "001_base_schema");
-  assert.equal(result.applied.at(-1), "022_project_ai_analyses");
+  assert.equal(result.applied.at(-1), "023_integration_token_service_role");
   assert.equal(pool.options.ssl.rejectUnauthorized, true);
   assert.equal(pool.queries[0], "BEGIN");
   assert.match(pool.queries[1], /pg_advisory_xact_lock/);
@@ -117,6 +117,23 @@ test("migrations loaded from disk are numbered, unique and include the core prod
     assert.ok(serviceRoleTables.includes(table));
     assert.match(allSql, new RegExp(`CREATE TABLE IF NOT EXISTS (public\\.)?${table} \\(`));
   }
+});
+
+test("applied operations migration stays immutable and its service-role grant uses a new migration", async () => {
+  const migrations = await loadMigrations();
+  const operationsMigration = migrations.find(({ version }) => version === "004");
+  const permissionMigration = migrations.find(({ version }) => version === "023");
+
+  assert.equal(
+    operationsMigration.checksum,
+    "e0ba2a09cb05985d9ae6cb5069b48d64cedd9039c88c2c5b10c867da7df3569e"
+  );
+  assert.doesNotMatch(operationsMigration.sql, /GRANT .* ON integration_tokens TO service_role/);
+  assert.equal(permissionMigration.name, "023_integration_token_service_role");
+  assert.match(
+    permissionMigration.sql,
+    /GRANT SELECT, INSERT, UPDATE, DELETE ON integration_tokens TO service_role/
+  );
 });
 
 test("migration files are ordered numerically and invalid names fail closed", async () => {
@@ -153,7 +170,7 @@ test("previously applied migrations are skipped and modified ones fail closed", 
     connectionString: "postgresql://example.invalid/ddpro",
     PoolClass: HistoryPool,
   });
-  assert.deepEqual(result.applied, ["022_project_ai_analyses"]);
+  assert.deepEqual(result.applied, ["023_integration_token_service_role"]);
   assert.equal(result.skipped.length, migrations.length - 1);
   for (const migration of migrations.slice(0, -1)) {
     assert.ok(!pool.queries.includes(migration.sql));
