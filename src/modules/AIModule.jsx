@@ -493,7 +493,7 @@ function AIModule({
                     {message.orchestration.steps?.length ? (
                       <ul aria-label="Gerçekleştirilen adımlar">
                         {message.orchestration.steps.map((step, index) => (
-                          <li key={`${step.agentId || "operation"}-${step.operation}-${step.resource || index}`}>
+                          <li key={`${step.agentId || "operation"}-${step.operation}-${step.resource || "research"}-${index}`}>
                             {getOrchestrationStepLabel(step)}
                           </li>
                         ))}
