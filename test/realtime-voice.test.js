@@ -185,7 +185,42 @@ test("Gemini Live tool calls use backend results and deduplicate repeated call I
   );
   assert.equal(events.operations.at(-1).status, "completed");
   assert.match(events.operations.at(-1).summary, /1 kayıt backend'den alındı/);
+  assert.deepEqual(events.operations.at(-1).records, [{ id: "project-1" }]);
+  assert.equal(events.states.at(-1), "tool_completed");
   session.stop();
+});
+
+test("Live empty and malformed tool results are distinguished from successful records", async () => {
+  for (const [result, status] of [
+    [{ type: "records", data: [] }, "completed"],
+    [{ type: "records", data: null }, "completed"],
+    [undefined, "failed"],
+    [{ type: "records" }, "failed"],
+    [{ type: "records", data: undefined }, "failed"],
+    [{ type: "records", data: "not records" }, "failed"],
+    [{ type: "records", data: [null] }, "failed"],
+  ]) {
+    const { session, events } = createSession({ executeTool: async () => result });
+    await session.start();
+    const socket = FakeWebSocket.latest;
+    await socket.emit({ toolCall: { functionCalls: [{
+      id: "empty-call", name: "read_records", args: { resource: "projects" },
+    }] } });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const response = socket.sent.find((message) => message.toolResponse)
+      .toolResponse.functionResponses[0].response;
+    assert.equal(events.operations.at(-1).status, status);
+    if (status === "completed") {
+      assert.deepEqual(response, { data: result.data });
+      assert.equal(events.operations.at(-1).records, result.data);
+      assert.match(events.operations.at(-1).summary, /0 kayıt/);
+    } else {
+      assert.deepEqual(response, { error: "Backend araç sonucu doğrulanamadı." });
+      assert.equal(events.operations.at(-1).records, undefined);
+      assert.equal(events.states.at(-1), "tool_failed");
+    }
+    session.stop();
+  }
 });
 
 test("stopping during a backend call reports an unverified result without a false completion", async () => {

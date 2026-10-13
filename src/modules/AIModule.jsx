@@ -3,7 +3,6 @@ import { RealtimeVoiceSession } from "../utils/realtime-voice.js";
 import aiTradeDesignReference from "../assets/DDPro-AI-Trade-Referans.png";
 import aiCharacterFront from "../assets/ddpro-ai-character-front.png";
 import aiCharacterBack from "../assets/ddpro-ai-character-back.png";
-import { speakTurkishText } from "../utils/voice-assistant.js";
 import {
   createAiVoiceSession,
   executeAiVoiceTool,
@@ -71,6 +70,50 @@ const aiTradeRoles = [
   },
 ];
 
+export const renderVoiceProjectRecords = (operation) => {
+  if (operation.tool !== "read_records" || operation.resource !== "projects" ||
+      operation.status !== "completed") return null;
+  const records = Array.isArray(operation.records)
+    ? operation.records
+    : operation.records ? [operation.records] : [];
+  const saveRecords = () => {
+    const url = URL.createObjectURL(new Blob([JSON.stringify(records, null, 2)], {
+      type: "application/json",
+    }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "ddpro-proje-kayitlari.json";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
+  };
+  return (
+    <div className="ai-action-confirmation">
+      <small>Kaynak: yetkili backend · read_records · projects · Çağrı: {operation.id}</small>
+      {records.length ? (
+        <ul aria-label="Backend proje kayıtları">
+          {records.map((record, index) => (
+            <li key={record.id || index}>
+              <strong>{record.name || "Proje adı belirtilmemiş"}</strong>
+              <span>Durum: {record.status || "Belirtilmemiş"}</span>
+              <small>Kayıt kimliği: {record.id || "Belirtilmemiş"}</small>
+            </li>
+          ))}
+        </ul>
+      ) : <p>Bu sorguda proje kaydı bulunamadı.</p>}
+      <small>Bu sorgunun sonucu gösteriliyor; araç en fazla 50 kayıt döndürür.</small>
+      <details className="ai-action-preview">
+        <summary>Gerçek araç sonucunu incele</summary>
+        <pre>{JSON.stringify({ filters: operation.filters, data: operation.records }, null, 2)}</pre>
+      </details>
+      <button className="ai-module-suggestion" type="button" onClick={saveRecords}>
+        Proje listesini kaydet (JSON)
+      </button>
+    </div>
+  );
+};
+
 function AIModule({
   aiMessages,
   sendAiMessage,
@@ -104,8 +147,6 @@ function AIModule({
   const [voiceOperations, setVoiceOperations] = useState([]);
   const voiceSessionRef = useRef(null);
   const voiceConfirmationsRef = useRef(new Set());
-  const voiceAnnouncementRef = useRef(new Map());
-  const voiceOperationStatesRef = useRef(new Map());
   const allowedFileExtensions = new Set(["png", "jpg", "jpeg", "webp", "xlsx", "csv", "pdf", "docx", "txt"]);
   const maxFileSize = 10 * 1024 * 1024;
   const isImageAttachment = (file) =>
@@ -142,11 +183,6 @@ function AIModule({
   }, []);
 
   const stopRealtimeVoice = () => {
-    for (const announcement of voiceAnnouncementRef.current.values()) {
-      clearTimeout(announcement.timer);
-    }
-    voiceAnnouncementRef.current.clear();
-    window.speechSynthesis?.cancel();
     voiceSessionRef.current?.stop();
     voiceSessionRef.current = null;
     setVoiceListening(false);
@@ -156,52 +192,11 @@ function AIModule({
   };
 
   const updateVoiceOperation = (operation) => {
-    voiceOperationStatesRef.current.set(operation.id, operation.status);
     setVoiceOperations((current) => {
       const existing = current.findIndex((item) => item.id === operation.id);
       if (existing < 0) return [...current, operation].slice(-10);
       return current.map((item, index) => index === existing ? operation : item);
     });
-    const announcement = voiceAnnouncementRef.current.get(operation.id);
-    if (operation.status === "running" && !announcement) {
-      const timer = window.setTimeout(async () => {
-        const description = operation.tool === "prepare_write"
-          ? "Değişiklik önerisini hazırlıyorum; hiçbir kaydı onayın olmadan değiştirmeyeceğim."
-          : ({
-            projects: "Proje kayıtlarını kontrol ediyorum.",
-            customers: "CRM kayıtlarını kontrol ediyorum.",
-            products: "Ürün kataloğunu kontrol ediyorum.",
-            systems: "Sistem kataloğunu kontrol ediyorum.",
-            offers: "Teklif kayıtlarını kontrol ediyorum.",
-            procurement: "Tedarik kayıtlarını kontrol ediyorum.",
-            reports: "Rapor kayıtlarını kontrol ediyorum.",
-            calendar: "Takvim kayıtlarını kontrol ediyorum.",
-            integrations: "Entegrasyonların güncel durumunu kontrol ediyorum.",
-            "price-analysis": "Doğrulanmış fiyat kayıtlarını kontrol ediyorum.",
-            "material-analysis": "Doğrulanmış maliyet kayıtlarını kontrol ediyorum.",
-          })[operation.resource] || "İsteği kontrol ediyorum.";
-        try {
-          const utterance = await speakTurkishText(description, window, {
-            shouldSpeak: () => voiceSessionRef.current &&
-              voiceOperationStatesRef.current.get(operation.id) === "running",
-            onstart: () => setVoiceSpeaking(true),
-            onend: () => setVoiceSpeaking(false),
-            onerror: () => setVoiceSpeaking(false),
-          });
-          if (utterance) {
-            voiceAnnouncementRef.current.set(operation.id, { utterance });
-          }
-        } catch {
-          // Live status remains visible if browser Turkish speech is unavailable.
-        }
-      }, 1_200);
-      voiceAnnouncementRef.current.set(operation.id, { timer });
-    } else if (operation.status !== "running" && announcement) {
-      clearTimeout(announcement.timer);
-      if (announcement.utterance) window.speechSynthesis?.cancel();
-      voiceAnnouncementRef.current.delete(operation.id);
-      setVoiceSpeaking(false);
-    }
   };
 
   const confirmVoiceOperation = async (operation) => {
@@ -279,6 +274,7 @@ function AIModule({
         setVoiceListening([
           "starting", "listening", "transcribing", "speaking", "tool_running",
           "reconnecting", "reconnected",
+          "tool_completed", "tool_failed", "tool_confirmation",
         ].includes(phase));
         setVoiceSpeaking(phase === "speaking");
         if (phase === "starting") setVoiceStatus("Mikrofon izni ve güvenli ses bağlantısı bekleniyor…");
@@ -286,6 +282,9 @@ function AIModule({
         if (phase === "transcribing") setVoiceStatus("Konuşmanız gerçek zamanlı işleniyor…");
         if (phase === "speaking") setVoiceStatus("DDPro AI sesli yanıt veriyor. Araya girmek için konuşun.");
         if (phase === "tool_running") setVoiceStatus("İstek analiz edildi. Yetkili DDPro aracı backend'de çalışıyor…");
+        if (phase === "tool_completed") setVoiceStatus("Gerçek backend sonucu alındı ve ekranda gösteriliyor.");
+        if (phase === "tool_failed") setVoiceStatus("Backend sorgusu başarısız; kayıtlar doğrulanamadı.");
+        if (phase === "tool_confirmation") setVoiceStatus("Değişiklik önerisi hazır; açık onayınız bekleniyor.");
         if (phase === "reconnecting") setVoiceStatus("Ses bağlantısı koptu; sınırlı sayıda yeniden bağlanma deneniyor…");
         if (phase === "reconnected") setVoiceStatus("Ses bağlantısı yeniden kuruldu. Devam edebilirsiniz.");
         if (phase === "error") setVoiceListening(false);
@@ -297,11 +296,6 @@ function AIModule({
       executeTool: executeAiVoiceTool,
       onOperation: updateVoiceOperation,
       onInterrupted: () => {
-        for (const announcement of voiceAnnouncementRef.current.values()) {
-          clearTimeout(announcement.timer);
-        }
-        voiceAnnouncementRef.current.clear();
-        window.speechSynthesis?.cancel();
         setVoiceSpeaking(false);
       },
       onError: (error) => {
@@ -735,6 +729,7 @@ function AIModule({
                       <small>Talep: {operation.request}</small>
                       <span>{status}</span>
                       <p>{operation.summary}</p>
+                      {renderVoiceProjectRecords(operation)}
                       {operation.pendingAction ? (
                         <div className="ai-action-confirmation">
                           <details className="ai-action-preview">

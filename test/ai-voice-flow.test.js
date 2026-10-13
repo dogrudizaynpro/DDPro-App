@@ -239,7 +239,8 @@ test("AI voice module uses the realtime session and mirrors its turns into the e
   assert.match(moduleSource, /onConfirmVoiceAction/);
   assert.match(moduleSource, /ai-voice-operations/);
   assert.match(moduleSource, /awaiting_confirmation/);
-  assert.match(moduleSource, /speakTurkishText/);
+  assert.doesNotMatch(moduleSource, /speakTurkishText|voiceAnnouncementRef/);
+  assert.match(moduleSource, /renderVoiceProjectRecords\(operation\)/);
   assert.match(moduleSource, /onVoiceMessage\?\.\(role, text\)/);
   assert.doesNotMatch(moduleSource, /SpeechRecognition/);
 });

@@ -345,6 +345,7 @@ export class RealtimeVoiceSession {
               summary: "İşlem hazırlanıp kullanıcı onayına sunuldu; henüz uygulanmadı.",
               pendingAction,
             });
+            this.onState("tool_confirmation");
             return {
               id,
               name,
@@ -355,13 +356,23 @@ export class RealtimeVoiceSession {
             };
           }
           const records = result?.data;
+          if (result?.type !== "records" || !Object.hasOwn(result, "data") ||
+              (records !== null && typeof records !== "object") ||
+              (Array.isArray(records) && records.some((record) =>
+                !record || typeof record !== "object" || Array.isArray(record)
+              ))) {
+            throw new Error("Backend araç sonucu doğrulanamadı.");
+          }
           const count = Array.isArray(records) ? records.length : records ? 1 : 0;
           this.pendingOperations.delete(id);
           this.onOperation({
             ...operation,
             status: "completed",
             summary: `${count} kayıt backend'den alındı.`,
+            records,
+            filters: args.filters || {},
           });
+          this.onState("tool_completed");
           return { id, name, response: { data: records } };
         } catch (error) {
           this.pendingOperations.delete(id);
@@ -376,6 +387,7 @@ export class RealtimeVoiceSession {
             status: "failed",
             summary: message,
           });
+          this.onState("tool_failed");
           return { id, name, response: { error: message } };
         }
       });

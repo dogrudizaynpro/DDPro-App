@@ -11,11 +11,13 @@ const projectRecords = [{
   status: "Aktif",
 }];
 let databaseStatus = 200;
+let databaseRecords = projectRecords;
 let databaseRequests;
 let providerRequests;
 let requestAiCompletion;
 let toolDefinitions;
 let toolNames;
+let executeAiVoiceTool;
 
 before(async () => {
   process.env.AI_API_URL = "https://ai-provider.test/v1/chat/completions";
@@ -31,7 +33,7 @@ before(async () => {
       databaseRequests.push({ url, headers: new Headers(init.headers) });
       return new Response(
         JSON.stringify(databaseStatus === 200
-          ? projectRecords
+          ? databaseRecords
           : { code: "XX000", message: "database unavailable" }),
         {
           status: databaseStatus,
@@ -68,6 +70,7 @@ before(async () => {
   ({ requestAiCompletion } = await import("../src/services/ai.service.js"));
   ({ AI_TOOL_DEFINITIONS: toolDefinitions, AI_TOOL_NAMES: toolNames } =
     await import("../src/services/ai-tools.service.js"));
+  ({ executeAiVoiceTool } = await import("../src/controllers/ai.controller.js"));
 });
 
 after(() => {
@@ -141,10 +144,48 @@ test("Projects API errors fail the AI request instead of being hidden by a gener
         message: "The requested records are unavailable.",
         code: "AI_TOOL_EXECUTION_FAILED",
       });
+
       return true;
     }
   );
 
   assert.equal(databaseRequests.length, 1);
   assert.equal(providerRequests.length, 1);
+});
+
+const invokeVoiceTool = (integrationAccount) => new Promise((resolve, reject) => {
+  let status;
+  executeAiVoiceTool({
+    integrationAccount,
+    body: { name: "read_records", args: { resource: "projects" } },
+  }, {
+    status(value) { status = value; return this; },
+    json(body) { resolve({ status, body }); },
+  }, reject);
+});
+
+test("Live voice read_records uses the authenticated backend controller and actual Supabase data", async () => {
+  databaseStatus = 200;
+  databaseRequests.length = 0;
+  for (const records of [projectRecords, []]) {
+    databaseRecords = records;
+    const response = await invokeVoiceTool("authorized@example.com");
+    assert.equal(response.status, 200);
+    assert.deepEqual(response.body.data, { type: "records", resource: "projects", data: records });
+    assert.equal(databaseRequests.at(-1).url.pathname, "/rest/v1/projects");
+    assert.equal(databaseRequests.at(-1).headers.get("authorization"),
+      ["Bearer", process.env.SUPABASE_SERVICE_ROLE_KEY].join(" "));
+  }
+  assert.equal(databaseRequests.length, 2);
+  databaseRecords = projectRecords;
+});
+
+test("Live voice failures and missing authentication never return fabricated project data", async () => {
+  databaseRequests.length = 0;
+  const unauthenticated = await invokeVoiceTool(undefined);
+  assert.equal(unauthenticated.status, 401);
+  assert.equal(databaseRequests.length, 0);
+  databaseStatus = 400;
+  await assert.rejects(invokeVoiceTool("authorized@example.com"));
+  assert.equal(databaseRequests.length, 1);
 });
