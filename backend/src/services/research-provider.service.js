@@ -67,8 +67,8 @@ const getResearchRelevance = (query, item) => {
   const terms = [...new Set(getResearchTerms(query))];
   if (!terms.length) return { relevant: false, score: 0, terms };
 
-  const title = normalizeResearchText(item.title || "");
-  const content = normalizeResearchText(item.content || "");
+  const title = normalizeResearchText(typeof item.title === "string" ? item.title : "");
+  const content = normalizeResearchText(typeof item.content === "string" ? item.content : "");
   const matchingTerms = terms.filter((term) =>
     title.includes(term) || content.includes(term)
   );

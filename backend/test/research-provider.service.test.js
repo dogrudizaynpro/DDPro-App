@@ -233,12 +233,17 @@ test("handles missing and null result fields without inventing data", async (t) 
         manufacturer: "Unsupported",
         price: "100",
       },
+      {
+        title: { value: "Ignored object title" },
+        content: "aluminum profile technical data",
+        url: "https://supplier.example/object-title",
+      },
     ],
   }));
 
   const results = await searchResearchProvider("aluminum profile");
 
-  assert.equal(results.length, 1);
+  assert.equal(results.length, 2);
   assert.deepEqual(
     Object.fromEntries(Object.entries(results[0]).filter(([key]) => !["date", "status"].includes(key))),
     {
@@ -251,6 +256,8 @@ test("handles missing and null result fields without inventing data", async (t) 
       url: "https://supplier.example/item",
     }
   );
+  assert.equal(results[1].product, "");
+  assert.equal(results[1].source, "aluminum profile technical data");
 });
 
 test("leaves price empty when a source does not provide a price field", async (t) => {
