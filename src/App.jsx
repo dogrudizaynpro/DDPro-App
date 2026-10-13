@@ -81,15 +81,23 @@ const STORAGE_KEYS = {
 const AI_DRAFT_STORAGE_KEY = "ddpro_ai_draft_v1";
 
 const useCatalogDataState = (resource) => {
-  const [value, setValue] = useState(EMPTY_ITEMS);
+  const [records, setRecords] = useState(EMPTY_ITEMS);
+  const [status, setStatus] = useState("loading");
   useEffect(() => {
     let active = true;
+    setStatus("loading");
     getCatalogRecords(resource)
-      .then((records) => { if (active) setValue(records); })
-      .catch(() => { if (active) setValue(EMPTY_ITEMS); });
+      .then((nextRecords) => {
+        if (!active) return;
+        setRecords(nextRecords);
+        setStatus("success");
+      })
+      .catch(() => {
+        if (active) setStatus("error");
+      });
     return () => { active = false; };
   }, [resource]);
-  return value;
+  return { records, status };
 };
 
 const modules = [
@@ -652,10 +660,10 @@ function App() {
     getStoredData(STORAGE_KEYS.logs)
   );
 
-  const products = useCatalogDataState("products");
-  const systemInventory = useCatalogDataState("systems");
-  const priceAnalysisItems = useCatalogDataState("price-analysis");
-  const materialAnalysisItems = useCatalogDataState("material-analysis");
+  const { records: products, status: productsStatus } = useCatalogDataState("products");
+  const { records: systemInventory } = useCatalogDataState("systems");
+  const { records: priceAnalysisItems, status: priceAnalysisStatus } = useCatalogDataState("price-analysis");
+  const { records: materialAnalysisItems, status: materialAnalysisStatus } = useCatalogDataState("material-analysis");
   const [customerItems] = useStoredDataState(STORAGE_KEYS.customers);
   const [documentItems, setDocumentItems] = useState([]);
   const [financeItems, setFinanceItems] = useState([]);
@@ -2655,8 +2663,11 @@ function App() {
   const moduleCounts = useMemo(
     () => ({
       products: products.length,
+      productsStatus,
       priceAnalysis: priceAnalysisItems.length,
+      priceAnalysisStatus,
       materialAnalysis: materialAnalysisItems.length,
+      materialAnalysisStatus,
       customers: customerItems.length,
       documents: documentItems.length,
       finance: financeItems.length,
@@ -2664,8 +2675,11 @@ function App() {
     }),
     [
       products.length,
+      productsStatus,
       priceAnalysisItems.length,
+      priceAnalysisStatus,
       materialAnalysisItems.length,
+      materialAnalysisStatus,
       customerItems.length,
       documentItems.length,
       financeItems.length,
@@ -2685,6 +2699,7 @@ function App() {
             title: "Ürün Kataloğu",
             description: "Ürün kartları ve temel ürün detayları.",
             count: moduleCounts.products,
+            status: moduleCounts.productsStatus,
           },
           {
             id: "products-categories",
@@ -2714,6 +2729,7 @@ function App() {
             title: "Fiyat Analiz Kayıtları",
             description: "Ürün veya sistem bazlı fiyat analizi kayıtları.",
             count: moduleCounts.priceAnalysis,
+            status: moduleCounts.priceAnalysisStatus,
           },
           {
             id: "price-analysis-comparison",
@@ -2737,6 +2753,7 @@ function App() {
             title: "Malzeme Analiz Kayıtları",
             description: "Malzeme maliyet ve tüketim analiz kayıtları.",
             count: moduleCounts.materialAnalysis,
+            status: moduleCounts.materialAnalysisStatus,
           },
           {
             id: "material-analysis-breakdown",

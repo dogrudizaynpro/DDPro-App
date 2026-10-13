@@ -114,7 +114,7 @@ const integrationCatalog = [
     id: "research",
     title: "Web araştırma servisi",
     description: "Gerçek harici araştırma sağlayıcısı; kaynak/fiyat doğrulaması ayrıca gerekir.",
-    variables: ["RESEARCH_API_URL", "RESEARCH_API_KEY"],
+    variables: ["RESEARCH_API_KEY"],
     moduleId: "procurement",
   },
 ];

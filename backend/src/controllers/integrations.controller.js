@@ -10,6 +10,7 @@ import {
   testIntegrationConnection,
 } from "../services/integration-health.service.js";
 import { getWhatsAppConfigurationStatus } from "../services/whatsapp.service.js";
+import { getResearchProviderConfiguration } from "../services/research-provider.service.js";
 
 export const getIntegrationStatus = async (req, res, next) => {
  try {
@@ -20,6 +21,7 @@ export const getIntegrationStatus = async (req, res, next) => {
   const google = await getGoogleConfigurationStatus(googleAccount);
   const databaseConfigured = hasIntegrationAdmin();
   const whatsapp = getWhatsAppConfigurationStatus();
+  const research = getResearchProviderConfiguration();
   const websiteWebhookConfigured = Boolean(process.env.WEBSITE_WEBHOOK_SECRET);
   const cmsConfigured = websiteCmsConfigured();
   const websiteConfigured = cmsConfigured && websiteWebhookConfigured && databaseConfigured;
@@ -114,8 +116,8 @@ export const getIntegrationStatus = async (req, res, next) => {
         ...statusAfterTest("whatsapp", whatsapp.configured),
       },
       research: {
-        configured: Boolean(process.env.RESEARCH_API_URL && process.env.RESEARCH_API_KEY),
-        ...statusAfterTest("research", Boolean(process.env.RESEARCH_API_URL && process.env.RESEARCH_API_KEY)),
+        ...research,
+        ...statusAfterTest("research", research.configured),
       },
       google: {
         configured: googleConfigured,

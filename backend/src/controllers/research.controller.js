@@ -5,24 +5,22 @@
 // ============================================================
 
 import { getIntegrationAdmin } from "../config/integration-admin.js";
+import { getIntegrationHealthState, getIntegrationTestResult } from "../services/integration-health.service.js";
 import { searchResearchProvider } from "../services/research-provider.service.js";
+import { getResearchProviderConfiguration } from "../services/research-provider.service.js";
 
 const DEFAULT_RESEARCH_STATUS = "Aktif";
-const RESEARCH_API_URL = process.env.RESEARCH_API_URL;
-const RESEARCH_API_KEY = process.env.RESEARCH_API_KEY;
 
 export const getResearchProviderStatus = (_req, res) => {
+  const configuration = getResearchProviderConfiguration();
+  const lastTest = getIntegrationTestResult("research");
   res.status(200).json({
     status: "success",
     data: {
-      configured: Boolean(RESEARCH_API_URL && RESEARCH_API_KEY),
-      provider: (() => {
-        try {
-          return RESEARCH_API_URL ? new URL(RESEARCH_API_URL).hostname : null;
-        } catch {
-          return null;
-        }
-      })(),
+      ...configuration,
+      ...getIntegrationHealthState({ configured: configuration.configured, result: lastTest }),
+      lastTest,
+      checkedAt: new Date().toISOString(),
     },
   });
 };

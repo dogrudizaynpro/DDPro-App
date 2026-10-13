@@ -8,6 +8,11 @@ const createProviderError = (message, statusCode) => {
   return error;
 };
 
+export const getResearchProviderConfiguration = () => ({
+  configured: Boolean(process.env.RESEARCH_API_KEY?.trim()),
+  provider: "Tavily",
+});
+
 const isValidHttpUrl = (value) => {
   if (typeof value !== "string" || !/^https?:\/\/\S+$/i.test(value)) {
     return false;
@@ -115,7 +120,7 @@ const getCanonicalSourceUrl = (value) => {
 };
 
 export const searchResearchProvider = async (query, { siteOnly = false } = {}) => {
-  const apiKey = process.env.RESEARCH_API_KEY;
+  const apiKey = process.env.RESEARCH_API_KEY?.trim();
   if (!apiKey) {
     throw createProviderError("Web research provider is not configured.", 503);
   }
@@ -193,7 +198,8 @@ export const searchResearchProvider = async (query, { siteOnly = false } = {}) =
         price: "",
         priceVerification: "Doğrulanmadı",
         url: item.url,
-        date: getPageDate(item) || (siteOnly ? "" : new Date().toISOString()),
+        date: getPageDate(item) || null,
+        researchedAt: new Date().toISOString(),
         status: "Harici sonuç · kullanıcı doğrulaması bekliyor",
       };
     });

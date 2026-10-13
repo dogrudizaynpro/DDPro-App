@@ -67,7 +67,7 @@ function ProcurementModule({
             {result.technicalInfo ? <p>{result.technicalInfo}</p> : null}
             {result.price ? <p>Kaynakta görünen fiyat: {result.price} · Doğrulanmadı</p> : null}
             {/^https?:\/\//i.test(result.url || "") ? <p><a href={result.url} target="_blank" rel="noopener noreferrer">Kaynağı aç ↗</a></p> : null}
-            <small>{result.date} · {result.status}</small>
+            <small>{result.date ? `Yayın tarihi: ${result.date}` : "Yayın tarihi bilinmiyor"} · {result.status}</small>
           </div>
           <button type="button" onClick={() => saveResearchResult({ ...result, projectId: researchProjectId })}><DDProIcon name="add" />Araştırma kaydına ekle</button>
         </article>

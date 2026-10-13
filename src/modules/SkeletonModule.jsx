@@ -20,7 +20,11 @@ function SkeletonModule({ title, description, sections, statusNote }) {
           <article className="skeleton-card" key={section.id}>
             <h3>{section.title}</h3>
             <p>{section.description}</p>
-            {section.count > 0 ? (
+            {section.status === "loading" ? (
+              <p className="empty-state compact">Veriler yükleniyor…</p>
+            ) : section.status === "error" ? (
+              <p className="status-banner warning">Veriler yüklenemedi; kayıt sayısı doğrulanamadı.</p>
+            ) : section.count > 0 ? (
               <small>{section.count} kayıt bulundu.</small>
             ) : (
               <p className="empty-state compact">Henüz veri bulunmuyor.</p>
