@@ -24,6 +24,45 @@ const voiceInstructions = (context, history) => [
   `Son sohbet geçmişi:\n${history.map(({ role, text }) => `${role === "assistant" ? "DDPro AI" : "Kullanıcı"}: ${text}`).join("\n") || "Henüz mesaj yok."}`,
 ].join("\n\n");
 
+// Gemini function declarations use the OpenAPI-subset `Schema` message, which
+// rejects JSON Schema keywords such as `additionalProperties` and OBJECT types
+// without properties. Free-form objects are therefore sent as JSON strings.
+const GEMINI_SCHEMA_KEYS = new Set([
+  "type", "format", "description", "nullable", "enum", "properties", "required",
+  "items", "minItems", "maxItems", "minimum", "maximum",
+]);
+
+const toGeminiSchema = (schema = {}) => {
+  const result = {};
+  for (const [key, value] of Object.entries(schema)) {
+    if (!GEMINI_SCHEMA_KEYS.has(key)) continue;
+    if (key === "properties") {
+      result.properties = Object.fromEntries(
+        Object.entries(value || {}).map(([name, property]) => [name, toGeminiSchema(property)])
+      );
+    } else if (key === "items") {
+      result.items = toGeminiSchema(value);
+    } else {
+      result[key] = value;
+    }
+  }
+  if (result.type === "object" && !Object.keys(result.properties || {}).length) {
+    return {
+      type: "string",
+      description: [result.description, "JSON object encoded as a string."].filter(Boolean).join(" "),
+    };
+  }
+  return result;
+};
+
+export const toGeminiFunctionDeclaration = ({ name, description, parameters }) => ({
+  name,
+  description,
+  ...(Object.keys(parameters?.properties || {}).length && {
+    parameters: toGeminiSchema(parameters),
+  }),
+});
+
 export const createGeminiLiveSessionConfig = ({ context = {}, history = [] } = {}) => {
   const contextJson = JSON.stringify(context);
   const historyJson = JSON.stringify(history);
@@ -50,13 +89,9 @@ export const createGeminiLiveSessionConfig = ({ context = {}, history = [] } = {
     outputAudioTranscription: {},
     tools: [{
       functionDeclarations: [
-        ...AI_TOOL_DEFINITIONS.map(({ function: tool }) => ({
-          name: tool.name,
-          description: tool.description,
-          parameters: tool.parameters,
-        })),
+        ...AI_TOOL_DEFINITIONS.map(({ function: tool }) => tool),
         ...AI_VOICE_TOOL_DEFINITIONS,
-      ],
+      ].map(toGeminiFunctionDeclaration),
     }],
     realtimeInputConfig: {
       automaticActivityDetection: { disabled: false },
@@ -65,6 +100,38 @@ export const createGeminiLiveSessionConfig = ({ context = {}, history = [] } = {
       parts: [{ text: voiceInstructions(context, history) }],
     },
   };
+};
+
+const WORD_PATTERN = /[\p{L}\p{N}_-]+/gu;
+
+const collectStrings = (value) => {
+  const strings = [];
+  JSON.stringify(value, (_key, item) => {
+    if (typeof item === "string") strings.push(item);
+    return item;
+  });
+  return strings;
+};
+
+const describeTokenFailure = (status, providerStatus, reasons) => {
+  const has = (...values) => values.some((value) => reasons.includes(value) || providerStatus === value);
+  if (status === 401 || has("API_KEY_INVALID", "UNAUTHENTICATED")) {
+    return "GEMINI_API_KEY was rejected by Google (invalid, expired or restricted key)";
+  }
+  if (has("SERVICE_DISABLED", "API_KEY_SERVICE_BLOCKED", "ACCESS_TOKEN_SCOPE_INSUFFICIENT") || status === 403) {
+    return "GEMINI_API_KEY is not permitted to create Gemini Live sessions";
+  }
+  if (status === 404 || has("NOT_FOUND")) {
+    return "GEMINI_LIVE_MODEL is unknown or not available to this API key";
+  }
+  if (status === 429 || has("RESOURCE_EXHAUSTED", "RATE_LIMIT_EXCEEDED")) {
+    return "Gemini Live quota or rate limit was exceeded";
+  }
+  if (status === 400 || has("INVALID_ARGUMENT", "FAILED_PRECONDITION")) {
+    return "Gemini rejected the Live session setup";
+  }
+  if (status >= 500) return "Gemini Live service is temporarily unavailable";
+  return "Gemini returned an unexpected error";
 };
 
 export const isGeminiLiveConfigured = () =>
@@ -112,11 +179,17 @@ export const createGeminiLiveToken = async (sessionConfig) => {
     : data?.token;
   if (!response.ok || typeof token !== "string" || !token) {
     const credentials = [data?.token, data?.name].filter((value) => typeof value === "string");
-    JSON.stringify(sessionConfig, (_key, value) => {
-      if (typeof value === "string") {
-        credentials.push(value, ...(value.match(/[\p{L}\p{N}_-]+/gu) || []));
-      }
-      return value;
+    // Static configuration (tool schemas, fixed instructions, model) is public;
+    // only values derived from context/history are redacted from diagnostics.
+    const publicValues = new Set();
+    collectStrings(createGeminiLiveSessionConfig()).forEach((value) => {
+      publicValues.add(value);
+      (value.match(WORD_PATTERN) || []).forEach((word) => publicValues.add(word));
+    });
+    collectStrings(sessionConfig).forEach((value) => {
+      credentials.push(
+        ...[value, ...(value.match(WORD_PATTERN) || [])].filter((item) => !publicValues.has(item))
+      );
     });
     let diagnostic;
     try {
@@ -124,6 +197,7 @@ export const createGeminiLiveToken = async (sessionConfig) => {
         error: {
           status: data?.error?.status,
           message: data?.error?.message,
+          details: data?.error?.details,
         },
       }, credentials);
     } catch {
@@ -136,14 +210,28 @@ export const createGeminiLiveToken = async (sessionConfig) => {
       .replace(/\bauth_tokens\/[^\s"'&,;]+/gi, "[REDACTED]")
       .replace(/(?:x-goog-api-key|authorization|content-type|cookie|set-cookie)\s*["']?\s*[:=].*/gi, "[REDACTED]")
       .slice(0, 500);
+    const providerStatus = safeDiagnosticText(diagnostic.googleApiError.providerStatus || "");
+    const reasons = (diagnostic.googleApiError.reasons || []).map(safeDiagnosticText);
     console.error("Gemini Live token request failed:", {
       upstreamStatus: response.status,
-      providerStatus: safeDiagnosticText(diagnostic.googleApiError.providerStatus || ""),
+      providerStatus,
+      ...(reasons.length && { reasons }),
       message: data === null
         ? "Google token response was not valid JSON."
         : safeDiagnosticText(diagnostic.message),
     });
-    const error = new Error("Realtime voice session could not be created.");
+    const cause = !response.ok && data !== null
+      ? describeTokenFailure(response.status, providerStatus, reasons)
+      : response.ok
+        ? "Gemini did not return a session token"
+        : "Gemini returned an unreadable response";
+    const providerLabel = [
+      `HTTP ${response.status}`,
+      /^[A-Z_]{1,64}$/.test(providerStatus) ? providerStatus : "",
+    ].filter(Boolean).join(" ");
+    const error = new Error(
+      `Realtime voice session could not be created: ${cause} (Gemini ${providerLabel}).`
+    );
     error.statusCode = response.status === 429 ? 429 : 502;
     error.code = "AI_VOICE_SESSION_FAILED";
     error.expose = true;
