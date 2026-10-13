@@ -5,6 +5,8 @@ import {
   confirmAiAction,
 } from "../services/ai.service.js";
 import { orchestrateAiCommand } from "../services/ai-orchestrator.service.js";
+import { executeOperationalTool } from "../services/ai-tools.service.js";
+import { getIntegrationStatus } from "./integrations.controller.js";
 import {
   createGeminiLiveSessionConfig,
   createGeminiLiveToken,
@@ -119,6 +121,49 @@ export const createAiVoiceSession = async (req, res, next) => {
         setup: sessionConfig,
       },
     });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const executeAiVoiceTool = async (req, res, next) => {
+  const { name, args = {} } = req.body || {};
+  if (typeof req.integrationAccount !== "string" || !req.integrationAccount.trim()) {
+    return res.status(401).json({ status: "error", message: "An authenticated DDPro account is required." });
+  }
+  if (typeof name !== "string" || name.length > 80 ||
+      !args || typeof args !== "object" || Array.isArray(args) ||
+      Buffer.byteLength(JSON.stringify(args)) > 12_000) {
+    return res.status(400).json({
+      status: "error",
+      message: "Voice tool name or arguments are invalid.",
+    });
+  }
+  try {
+    if (name === "read_integration_status" && Object.keys(args).length) {
+      return res.status(400).json({
+        status: "error",
+        message: "Integration status does not accept tool arguments.",
+      });
+    }
+    const result = name === "read_integration_status"
+      ? {
+        type: "records",
+        resource: "integrations",
+        data: await new Promise((resolve, reject) => {
+          const response = {
+            status() { return this; },
+            json(body) { resolve(body?.data); },
+          };
+          Promise.resolve(getIntegrationStatus(
+            { integrationAccount: req.integrationAccount },
+            response,
+            reject
+          )).catch(reject);
+        }),
+      }
+      : await executeOperationalTool(req.integrationAccount, name, args);
+    return res.status(200).json({ status: "success", data: result });
   } catch (error) {
     return next(error);
   }

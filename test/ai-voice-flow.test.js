@@ -235,6 +235,11 @@ for (const fail of [false, true]) {
 test("AI voice module uses the realtime session and mirrors its turns into the existing conversation", () => {
   assert.match(moduleSource, /RealtimeVoiceSession/);
   assert.match(moduleSource, /createAiVoiceSession/);
+  assert.match(moduleSource, /executeAiVoiceTool/);
+  assert.match(moduleSource, /onConfirmVoiceAction/);
+  assert.match(moduleSource, /ai-voice-operations/);
+  assert.match(moduleSource, /awaiting_confirmation/);
+  assert.match(moduleSource, /speakTurkishText/);
   assert.match(moduleSource, /onVoiceMessage\?\.\(role, text\)/);
-  assert.doesNotMatch(moduleSource, /SpeechRecognition|speechSynthesis/);
+  assert.doesNotMatch(moduleSource, /SpeechRecognition/);
 });

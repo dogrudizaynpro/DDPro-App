@@ -36,7 +36,7 @@ after(() => {
   else process.env.GEMINI_LIVE_MODEL = saved.model;
 });
 
-test("Gemini Live config requests Turkish audio, VAD, and safe context-only behavior", () => {
+test("Gemini Live config requests Turkish audio, operational tools, VAD, and safe behavior", () => {
   const config = createGeminiLiveSessionConfig({
     context: { projects: [{ name: "Test project" }] },
     history: [{ role: "user", text: "Önceki soru" }],
@@ -46,7 +46,12 @@ test("Gemini Live config requests Turkish audio, VAD, and safe context-only beha
   assert.equal(config.generationConfig.speechConfig.languageCode, "tr-TR");
   assert.equal(config.generationConfig.speechConfig.voiceConfig.prebuiltVoiceConfig.voiceName, "Kore");
   assert.equal(config.realtimeInputConfig.automaticActivityDetection.disabled, false);
-  assert.match(config.systemInstruction.parts[0].text, /değişiklik yapma yetkin yok/);
+  assert.match(config.systemInstruction.parts[0].text, /sunucunun sağladığı operasyon araçlarıyla oku/);
+  const liveTools = config.tools.flatMap(({ functionDeclarations }) => functionDeclarations);
+  assert.deepEqual(liveTools.map(({ name }) => name), [
+    "read_records", "prepare_write", "read_integration_status",
+  ]);
+  assert.match(config.systemInstruction.parts[0].text, /kullanıcı onayı gelmeden hiçbir değişiklik gerçekleşmiş sayılmaz/);
   assert.match(config.systemInstruction.parts[0].text, /Test project/);
   assert.deepEqual(config.inputAudioTranscription, {});
   assert.deepEqual(config.outputAudioTranscription, {});

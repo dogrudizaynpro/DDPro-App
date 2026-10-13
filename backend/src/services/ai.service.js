@@ -4,7 +4,7 @@ import {
   AI_TOOL_DEFINITIONS,
   AI_TOOL_NAMES,
   confirmOperationalWrite,
-  prepareOperationalWrite,
+  executeOperationalTool,
   readOperationalRecords,
 } from "./ai-tools.service.js";
 import { prepareAiAttachment } from "./ai-file.service.js";
@@ -360,10 +360,15 @@ export const requestAiCompletion = async ({
           });
           continue;
         }
-        const pendingAction = await prepareOperationalWrite(integrationAccount, args, fileFingerprint);
+        const execution = await executeOperationalTool(
+          integrationAccount,
+          name,
+          args,
+          fileFingerprint
+        );
         return {
           answer: "İşlem henüz yapılmadı. Devam etmeden önce aşağıdaki değişikliği inceleyip onaylayın.",
-          pendingAction,
+          pendingAction: execution.pendingAction,
         };
       }
       if (name !== AI_TOOL_NAMES.readRecords) {
@@ -373,8 +378,11 @@ export const requestAiCompletion = async ({
         );
       }
       try {
-        const records = await readOperationalRecords(integrationAccount, args);
-        toolResults.push({ tool_call_id: toolCall.id, content: JSON.stringify({ data: records }) });
+        const execution = await executeOperationalTool(integrationAccount, name, args);
+        toolResults.push({
+          tool_call_id: toolCall.id,
+          content: JSON.stringify({ data: execution.data }),
+        });
       } catch (error) {
         throw Object.assign(
           new Error(error.expose ? error.message : "The requested records are unavailable."),

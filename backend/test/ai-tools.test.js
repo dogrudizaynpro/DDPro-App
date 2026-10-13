@@ -3,6 +3,7 @@ import { test } from "node:test";
 import {
   consumeOperationalConfirmation,
   createFileImportFingerprint,
+  executeOperationalTool,
   finishOperationalAuditEvent,
   isRecordSnapshotCurrent,
   prepareOperationalWrite,
@@ -40,6 +41,21 @@ test("AI operational tools reject unsupported resources and write operations", a
       operation: "execute_sql",
       id: uuid,
     }),
+    (error) => error.statusCode === 400
+  );
+});
+
+test("voice tool execution accepts only authenticated accounts and shared tool names", async () => {
+  await assert.rejects(
+    executeOperationalTool("", "read_records", { resource: "projects" }),
+    (error) => error.statusCode === 401
+  );
+  await assert.rejects(
+    executeOperationalTool("owner@example.com", "delete_records", {}),
+    (error) => error.statusCode === 400
+  );
+  await assert.rejects(
+    executeOperationalTool("owner@example.com", "read_records", { filters: "invalid" }),
     (error) => error.statusCode === 400
   );
 });
