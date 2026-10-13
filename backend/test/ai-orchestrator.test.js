@@ -35,11 +35,13 @@ test("written AI commands route company data as read-only through the existing c
 
 test("direct answers do not advertise operational tools", async () => {
   let received;
+  let researchCalled = false;
   const orchestrate = createAiOrchestrator({
     complete: async (command) => {
       received = command;
       return { answer: "Açıklama." };
     },
+    search: async () => { researchCalled = true; return []; },
   });
 
   const result = await orchestrate({
@@ -49,6 +51,105 @@ test("direct answers do not advertise operational tools", async () => {
 
   assert.equal(received.toolPolicy, "none");
   assert.equal(result.orchestration.intent, "direct_answer");
+  assert.equal(researchCalled, false);
+});
+
+test("DDPro company questions research only the public website and preserve dated source links", async () => {
+  let receivedQuery;
+  let searchOptions;
+  let completionCalled = false;
+  const orchestrate = createAiOrchestrator({
+    complete: async () => { completionCalled = true; return { answer: "unexpected" }; },
+    search: async (query, options) => {
+      receivedQuery = query;
+      searchOptions = options;
+      return [{
+        product: "Hizmetlerimiz",
+        source: "Asma tavan çözümleri.",
+        technicalInfo: "Doğru Dizayn Pro asma tavan uygulamaları sunar.",
+        price: "900 TL",
+        date: "2026-04-12T00:00:00.000Z",
+        url: "https://www.ddizaynpro.com/hizmetler",
+      }];
+    },
+  });
+
+  const result = await orchestrate({
+    ...authenticatedCommand,
+    message: "Doğru Dizayn Pro hangi hizmetleri sunuyor?",
+  });
+
+  assert.equal(receivedQuery, "Doğru Dizayn Pro hangi hizmetleri sunuyor?");
+  assert.equal(searchOptions.siteOnly, true);
+  assert.equal(completionCalled, false);
+  assert.equal(result.orchestration.intent, "site_research");
+  assert.match(result.answer, /yalnızca www\.ddizaynpro\.com/);
+  assert.match(result.answer, /Asma tavan çözümleri/);
+  assert.match(result.answer, /Sayfa tarihi: 2026-04-12T00:00:00\.000Z/);
+  assert.match(result.answer, /https:\/\/www\.ddizaynpro\.com\/hizmetler/);
+  assert.doesNotMatch(result.answer, /900 TL/);
+  assert.equal(result.researchResults[0].url, "https://www.ddizaynpro.com/hizmetler");
+  assert.equal(result.researchResults[0].price, "");
+});
+
+test("site research rejects non-DDPro URLs even if a provider returns them", async () => {
+  const orchestrate = createAiOrchestrator({
+    search: async () => [
+      {
+        product: "Valid page",
+        technicalInfo: "DDPro page summary.",
+        url: "https://www.ddizaynpro.com/hizmetler",
+      },
+      {
+        product: "Lookalike host",
+        technicalInfo: "Must not be used.",
+        url: "https://www.ddizaynpro.com.attacker.example/page",
+      },
+      {
+        product: "Private address",
+        technicalInfo: "Must not be used.",
+        url: "http://127.0.0.1/internal",
+      },
+    ],
+  });
+
+  const result = await orchestrate({
+    ...authenticatedCommand,
+    message: "Doğru Dizayn Pro hizmetleri",
+  });
+
+  assert.deepEqual(result.researchResults.map(({ url }) => url), [
+    "https://www.ddizaynpro.com/hizmetler",
+  ]);
+  assert.match(result.answer, /Valid page/);
+  assert.doesNotMatch(result.answer, /Lookalike host|Private address|Must not be used/);
+});
+
+test("DDPro website research reports empty and unavailable sources without inventing answers", async () => {
+  const empty = createAiOrchestrator({ search: async () => [] });
+  const emptyResult = await empty({
+    ...authenticatedCommand,
+    message: "Doğru Dizayn Pro referansları",
+  });
+  assert.match(emptyResult.answer, /bulunamadı veya site araştırması yapılamadı/);
+  assert.match(emptyResult.answer, /bilgi uydurulmadı/);
+  assert.deepEqual(emptyResult.researchResults, []);
+
+  const unavailable = createAiOrchestrator({
+    search: async () => { throw new Error("private provider response"); },
+  });
+  await assert.rejects(
+    unavailable({
+      ...authenticatedCommand,
+      message: "Doğru Dizayn Pro projeleri",
+    }),
+    (error) => {
+      assert.equal(error.code, "AI_ORCHESTRATOR_RESEARCH_FAILED");
+      assert.match(error.message, /web sitesi şu anda araştırılamıyor/);
+      assert.doesNotMatch(error.message, /private provider response/);
+      return true;
+    }
+  );
 });
 
 test("web research routes only to the configured research adapter and marks sources unverified", async () => {

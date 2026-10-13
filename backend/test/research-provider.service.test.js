@@ -93,6 +93,60 @@ test("sends a Tavily search request and converts results to the DDPro format", a
   assert.equal(result.status, "Harici sonuç · kullanıcı doğrulaması bekliyor");
 });
 
+test("site-scoped searches use Tavily with an exact DDPro host filter and accept only safe page URLs", async (t) => {
+  let request;
+  mockProvider(t, async (url, options) => {
+    request = { url: String(url), body: JSON.parse(options.body) };
+    return jsonResponse({
+      results: [
+        {
+          title: "Hizmetlerimiz",
+          content: "Doğru Dizayn Pro asma tavan uygulamaları.",
+          url: "https://www.ddizaynpro.com/hizmetler/",
+          published_date: "2026-04-12",
+        },
+        {
+          title: "Other hostname",
+          content: "Not DDPro.",
+          url: "https://ddizaynpro.com/hizmetler",
+        },
+        {
+          title: "Lookalike hostname",
+          content: "Not DDPro.",
+          url: "https://www.ddizaynpro.com.attacker.example/hizmetler",
+        },
+        {
+          title: "Credentials",
+          content: "Not DDPro.",
+          url: "https://user@www.ddizaynpro.com/hizmetler",
+        },
+        {
+          title: "Nonstandard port",
+          content: "Not DDPro.",
+          url: "https://www.ddizaynpro.com:8443/hizmetler",
+        },
+        {
+          title: "Other website",
+          content: "Not DDPro.",
+          url: "https://supplier.example/hizmetler",
+        },
+      ],
+    });
+  });
+
+  const results = await searchResearchProvider(
+    "Doğru Dizayn Pro hangi hizmetleri sunuyor?",
+    { siteOnly: true },
+  );
+
+  assert.equal(request.url, "https://api.tavily.com/search");
+  assert.equal(request.body.query,
+    "site:www.ddizaynpro.com Doğru Dizayn Pro hangi hizmetleri sunuyor?");
+  assert.equal(results.length, 1);
+  assert.equal(results[0].url, "https://www.ddizaynpro.com/hizmetler/");
+  assert.equal(results[0].date, "2026-04-12T00:00:00.000Z");
+});
+
 test("handles missing and null result fields without inventing data", async (t) => {
   mockProvider(t, async () => jsonResponse({
     results: [

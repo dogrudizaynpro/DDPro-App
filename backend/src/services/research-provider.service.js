@@ -54,6 +54,7 @@ const getResearchTerms = (query) =>
     ?.filter((term) => !RESEARCH_STOP_WORDS.has(term) && !term.startsWith("uretic")) || [];
 
 const isRelevantResearchResult = (query, item, { siteOnly = false } = {}) => {
+  if (siteOnly) return true;
   const terms = [...new Set(getResearchTerms(query))];
   if (!terms.length) return true;
 
@@ -61,7 +62,7 @@ const isRelevantResearchResult = (query, item, { siteOnly = false } = {}) => {
     `${item.title || ""} ${item.content || ""} ${item.url || ""}`,
   );
   const matchingTerms = terms.filter((term) => content.includes(term));
-  return matchingTerms.length >= Math.min(siteOnly ? 1 : 2, terms.length);
+  return matchingTerms.length >= Math.min(2, terms.length);
 };
 
 const getPageDate = (item) => {
