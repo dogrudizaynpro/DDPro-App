@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
+import { executeAiVoiceTool } from "../src/controllers/ai.controller.js";
+import { orchestrateAiCommand } from "../src/services/ai-orchestrator.service.js";
 
 const saved = {
   apiKey: process.env.GEMINI_API_KEY,
@@ -64,6 +66,70 @@ test("Gemini Live config requests Turkish audio, operational tools, VAD, and saf
   assert.throws(() => createGeminiLiveSessionConfig({ context: { data: "x".repeat(24_001) } }), {
     statusCode: 413,
   });
+});
+
+test("written and Gemini Live research use the same relevance and source-validation router", async (t) => {
+  const previousResearchApiKey = process.env.RESEARCH_API_KEY;
+  process.env.RESEARCH_API_KEY = "test-tavily-api-key";
+  t.after(() => {
+    if (previousResearchApiKey === undefined) delete process.env.RESEARCH_API_KEY;
+    else process.env.RESEARCH_API_KEY = previousResearchApiKey;
+  });
+
+  const requests = [];
+  t.mock.method(globalThis, "fetch", async (url, options) => {
+    requests.push({ url: String(url), body: JSON.parse(options.body) });
+    return new Response(JSON.stringify({
+      results: [
+        {
+          title: "Hizmetlerimiz",
+          content: "Doğru Dizayn Pro hizmetleri arasında asma tavan çözümleri.",
+          url: "https://www.ddizaynpro.com/hizmetler",
+          score: 0.95,
+        },
+        {
+          title: "Gençlik kampları",
+          content: "Gençlik kampları ve yaz etkinlikleri.",
+          url: "https://www.ddizaynpro.com/kamp",
+          score: 0.99,
+        },
+      ],
+    }), { headers: { "Content-Type": "application/json" } });
+  });
+
+  const written = await orchestrateAiCommand({
+    message: "Doğru Dizayn Pro hizmetlerimiz",
+    integrationAccount: "authorized@example.com",
+  });
+  let responseBody;
+  let responseStatus = 200;
+  await executeAiVoiceTool({
+    integrationAccount: "authorized@example.com",
+    body: { name: "web_search", args: { query: "Doğru Dizayn Pro hizmetlerimiz" } },
+  }, {
+    status(code) {
+      responseStatus = code;
+      return this;
+    },
+    json(body) {
+      responseBody = body;
+      return this;
+    },
+  }, (error) => { throw error; });
+
+  assert.equal(responseStatus, 200);
+  assert.equal(written.orchestration.intent, "site_research");
+  assert.equal(requests.length, 2);
+  assert.ok(requests.every(({ url }) => url === "https://api.tavily.com/search"));
+  assert.ok(requests.every(({ body }) =>
+    body.query === "site:ddizaynpro.com Doğru Dizayn Pro hizmetlerimiz" &&
+    body.include_answer === false
+  ));
+  assert.deepEqual(responseBody.data.data, written.researchResults);
+  assert.equal(written.researchResults.length, 1);
+  assert.match(written.answer, /hizmetleri arasında asma tavan çözümleri/);
+  assert.match(written.answer, /https:\/\/www\.ddizaynpro\.com\/hizmetler/);
+  assert.doesNotMatch(written.answer, /Gençlik kampları/);
 });
 
 test("single-use Live token is created server-side and the permanent key is not returned", async (t) => {

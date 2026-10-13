@@ -537,4 +537,12 @@ test("command classifier never routes arbitrary text to unregistered research", 
     intent: "attachment_analysis",
     toolPolicy: "all",
   });
+  assert.deepEqual(classifyAiCommand({ message: "İnternette asma tavan üreticilerini araştır." }), {
+    intent: "web_research",
+    query: "asma tavan üreticilerini",
+  });
+  assert.equal(
+    classifyAiCommand({ message: "Asma tavan hizmetlerimiz" }).intent,
+    "site_research",
+  );
 });
