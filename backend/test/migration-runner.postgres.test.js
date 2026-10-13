@@ -254,12 +254,15 @@ test(
                has_table_privilege($1, 'public.integration_tokens', 'SELECT') AS can_select,
                has_table_privilege($1, 'public.integration_tokens', 'INSERT') AS can_insert,
                has_table_privilege($1, 'public.integration_tokens', 'UPDATE') AS can_update,
-               has_table_privilege($1, 'public.integration_tokens', 'DELETE') AS can_delete`,
+               has_table_privilege($1, 'public.integration_tokens', 'DELETE') AS can_delete,
+               has_table_privilege($1, 'public.integration_tokens', 'TRUNCATE') AS can_truncate`,
             [role]
           );
-          for (const permitted of Object.values(privileges)) {
-            assert.equal(permitted, role === "service_role", `${role} privilege isolation on integration_tokens`);
-          }
+          assert.equal(privileges.can_select, role === "service_role", `${role} select privilege on integration_tokens`);
+          assert.equal(privileges.can_insert, role === "service_role", `${role} insert privilege on integration_tokens`);
+          assert.equal(privileges.can_update, role === "service_role", `${role} update privilege on integration_tokens`);
+          assert.equal(privileges.can_delete, role === "service_role", `${role} delete privilege on integration_tokens`);
+          assert.equal(privileges.can_truncate, false, `${role} truncate privilege must be denied under least privilege`);
         }
         assert.equal(byName.get("integration_tokens").relrowsecurity, true);
         for (const role of ["anon", "authenticated"]) {

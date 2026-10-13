@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS integration_tokens (
 
 ALTER TABLE integration_tokens ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON integration_tokens FROM anon, authenticated;
-GRANT ALL ON integration_tokens TO service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON integration_tokens TO service_role;
 
 CREATE TABLE IF NOT EXISTS crm_contacts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
