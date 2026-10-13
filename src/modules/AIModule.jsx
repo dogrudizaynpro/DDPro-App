@@ -154,6 +154,59 @@ export const renderVoiceProjectRecords = (operation) => {
   );
 };
 
+function AudioWaveform({ sessionRef, active, microphoneActive }) {
+  const barsRef = useRef([]);
+  const barWeights = [0.42, 0.62, 0.82, 1, 0.7, 0.92, 0.58, 0.76, 0.48, 0.88, 0.56, 0.72, 0.4];
+
+  useEffect(() => {
+    if (!active) {
+      barsRef.current.forEach((bar) => {
+        if (bar) bar.style.transform = "scaleY(0.08)";
+      });
+      return undefined;
+    }
+
+    let frameId;
+    const updateWaveform = () => {
+      const level = Math.min(1, (sessionRef.current?.getOutputLevel() || 0) * 5);
+      barsRef.current.forEach((bar, index) => {
+        if (bar) bar.style.transform = `scaleY(${0.08 + level * barWeights[index]})`;
+      });
+      frameId = window.requestAnimationFrame(updateWaveform);
+    };
+
+    frameId = window.requestAnimationFrame(updateWaveform);
+    return () => {
+      window.cancelAnimationFrame(frameId);
+      barsRef.current.forEach((bar) => {
+        if (bar) bar.style.transform = "scaleY(0.08)";
+      });
+    };
+  }, [active, sessionRef]);
+
+  return (
+    <div
+      className={`ai-audio-visualizer${active ? " is-active" : ""}`}
+      role="group"
+      aria-label="Asistan ses seviyesi"
+    >
+      <span className="ai-audio-visualizer-label">DDPRO AI TRADE <span>·</span> SES AKIŞI</span>
+      <div className="ai-audio-waveform" aria-hidden="true">
+        {barWeights.map((_, index) => (
+          <span
+            className="ai-audio-waveform-bar"
+            key={index}
+            ref={(element) => { barsRef.current[index] = element; }}
+          />
+        ))}
+      </div>
+      <span className={`ai-audio-input-indicator${microphoneActive ? " is-active" : ""}`}>
+        {microphoneActive ? "Mikrofon algılıyor" : active ? "Dinleme açık" : "Beklemede"}
+      </span>
+    </div>
+  );
+}
+
 function AIModule({
   aiMessages,
   sendAiMessage,
@@ -424,6 +477,11 @@ function AIModule({
           </div>
         </section>
       ) : null}
+      <AudioWaveform
+        sessionRef={voiceSessionRef}
+        active={voiceListening}
+        microphoneActive={voicePhase === "transcribing"}
+      />
 
       <div className={`ai-workspace${messagesOnly ? " ai-messages-workspace" : ""}`}>
         {!messagesOnly ? (

@@ -1512,6 +1512,91 @@ button > .ddpro-icon-medallion {
   font-size: 11px;
 }
 
+.ai-audio-visualizer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
+  min-height: 66px;
+  padding: 12px 20px;
+  border: 1px solid rgba(52, 211, 153, 0.2);
+  border-radius: 12px;
+  background: linear-gradient(110deg, rgba(6, 31, 27, 0.82), rgba(10, 20, 19, 0.94));
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.035);
+}
+
+.ai-audio-visualizer-label,
+.ai-audio-input-indicator {
+  color: #99aca5;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+
+.ai-audio-visualizer-label span {
+  color: #34d399;
+}
+
+.ai-audio-waveform {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: min(38vw, 220px);
+  height: 38px;
+}
+
+.ai-audio-waveform-bar {
+  width: 4px;
+  height: 30px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #a7f3d0, #10b981 62%, #047857);
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.22);
+  transform: scaleY(0.08);
+  transform-origin: center;
+  transition: transform 70ms linear;
+}
+
+.ai-audio-visualizer.is-active .ai-audio-waveform-bar {
+  box-shadow: 0 0 13px rgba(16, 185, 129, 0.38);
+}
+
+.ai-audio-input-indicator {
+  justify-self: end;
+  letter-spacing: 0.04em;
+  text-align: right;
+}
+
+.ai-audio-input-indicator.is-active {
+  color: #6ee7b7;
+}
+
+@media (max-width: 640px) {
+  .ai-audio-visualizer {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px 10px;
+    min-height: 58px;
+    padding: 10px 12px;
+  }
+
+  .ai-audio-waveform {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    width: 100%;
+    height: 32px;
+    gap: 5px;
+  }
+
+  .ai-audio-waveform-bar {
+    width: 3px;
+    height: 26px;
+  }
+
+  .ai-audio-input-indicator {
+    font-size: 9px;
+  }
+}
+
 .ai-form .ai-voice-transcript {
   overflow-wrap: anywhere;
 }
