@@ -170,7 +170,7 @@ test("previously applied migrations are skipped and modified ones fail closed", 
     connectionString: "postgresql://example.invalid/ddpro",
     PoolClass: HistoryPool,
   });
-  assert.deepEqual(result.applied, ["022_project_ai_analyses"]);
+  assert.deepEqual(result.applied, ["023_integration_token_service_role"]);
   assert.equal(result.skipped.length, migrations.length - 1);
   for (const migration of migrations.slice(0, -1)) {
     assert.ok(!pool.queries.includes(migration.sql));
