@@ -1488,23 +1488,6 @@ button > .ddpro-icon-medallion {
   font-size: 24px;
 }
 
-.ai-form .ai-voice-button {
-  min-width: 45px;
-  border: 1px solid rgba(148, 163, 184, 0.22);
-  background: rgba(255, 255, 255, 0.06);
-  color: #cbd8e8;
-}
-
-.ai-form .ai-voice-button.is-listening {
-  border-color: rgba(74, 222, 128, 0.65);
-  background: rgba(34, 197, 94, 0.15);
-}
-
-.ai-form .ai-voice-button.is-speaking {
-  border-color: rgba(96, 165, 250, 0.7);
-  background: rgba(59, 130, 246, 0.16);
-}
-
 .ai-form .ai-voice-status {
   flex: 1 0 100%;
   margin: 0;
@@ -1514,11 +1497,11 @@ button > .ddpro-icon-medallion {
 
 .ai-audio-visualizer {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 16px;
-  min-height: 66px;
-  padding: 12px 20px;
+  gap: 10px 16px;
+  min-height: 124px;
+  padding: 13px 18px;
   border: 1px solid rgba(52, 211, 153, 0.2);
   border-radius: 12px;
   background: linear-gradient(110deg, rgba(6, 31, 27, 0.82), rgba(10, 20, 19, 0.94));
@@ -1541,17 +1524,21 @@ button > .ddpro-icon-medallion {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  width: min(38vw, 220px);
-  height: 38px;
+  grid-column: 1 / -1;
+  gap: clamp(3px, 0.7vw, 8px);
+  width: min(100%, 900px);
+  height: 88px;
+  justify-self: center;
 }
 
 .ai-audio-waveform-bar {
-  width: 4px;
-  height: 30px;
+  flex: 1 1 6px;
+  width: 6px;
+  max-width: 12px;
+  height: 82px;
   border-radius: 999px;
   background: linear-gradient(180deg, #a7f3d0, #10b981 62%, #047857);
-  box-shadow: 0 0 10px rgba(16, 185, 129, 0.22);
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.28);
   transform: scaleY(0.08);
   transform-origin: center;
   transition: transform 70ms linear;
@@ -1571,29 +1558,90 @@ button > .ddpro-icon-medallion {
   color: #6ee7b7;
 }
 
+.ai-live-controls {
+  display: grid;
+  grid-template-columns: minmax(190px, max-content) minmax(0, 1fr);
+  align-items: center;
+  gap: 10px 14px;
+}
+
+.ai-live-controls .ai-voice-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-width: 220px;
+  min-height: 49px;
+  padding: 0 18px;
+  border: 1px solid rgba(165, 214, 75, 0.38);
+  border-radius: 11px;
+  background: linear-gradient(145deg, #343a2b, #20231c);
+  color: #d4e7b0;
+  font-size: 12px;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.ai-live-controls .ai-voice-button.is-listening {
+  border-color: rgba(74, 222, 128, 0.65);
+  background: rgba(34, 197, 94, 0.15);
+}
+
+.ai-live-controls .ai-voice-button.is-speaking {
+  border-color: rgba(96, 165, 250, 0.7);
+  background: rgba(59, 130, 246, 0.16);
+}
+
+.ai-live-status,
+.ai-live-error {
+  grid-column: 2;
+  margin: 0;
+  color: #b8c1b0;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.ai-live-error {
+  color: #f0a49a;
+}
+
 @media (max-width: 640px) {
   .ai-audio-visualizer {
     grid-template-columns: minmax(0, 1fr) auto;
     gap: 8px 10px;
-    min-height: 58px;
+    min-height: 112px;
     padding: 10px 12px;
   }
 
   .ai-audio-waveform {
-    grid-column: 1 / -1;
-    grid-row: 2;
     width: 100%;
-    height: 32px;
-    gap: 5px;
+    height: 78px;
+    gap: clamp(2px, 0.8vw, 4px);
   }
 
   .ai-audio-waveform-bar {
-    width: 3px;
-    height: 26px;
+    flex-basis: 4px;
+    width: 4px;
+    height: 70px;
   }
 
   .ai-audio-input-indicator {
     font-size: 9px;
+  }
+
+  .ai-live-controls {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .ai-live-controls .ai-voice-button {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .ai-live-status,
+  .ai-live-error {
+    grid-column: 1;
   }
 }
 
@@ -3398,10 +3446,17 @@ textarea::placeholder {
   gap: 15px;
 }
 
+.ai-live-composition {
+  display: grid;
+  min-width: 0;
+  gap: 10px;
+}
+
 .ai-trade-master-reference {
   position: relative;
   width: 100%;
-  aspect-ratio: 1402 / 1122;
+  height: clamp(250px, 34vw, 420px);
+  aspect-ratio: auto;
   overflow: hidden;
   border: 1px solid rgba(198, 167, 111, 0.58);
   border-radius: 12px;
@@ -3415,15 +3470,16 @@ textarea::placeholder {
   display: block;
   width: 100%;
   height: 100%;
-  object-fit: fill;
+  object-fit: cover;
+  object-position: center top;
   pointer-events: none;
 }
 
 .ai-character-crop {
   position: absolute;
   top: 0;
-  height: 81.996%;
-  object-fit: fill;
+  height: auto;
+  object-fit: contain;
   pointer-events: none;
 }
 
@@ -3980,6 +4036,10 @@ textarea::placeholder {
 
   .ai-workspace {
     grid-template-columns: 1fr;
+  }
+
+  .ai-trade-master-reference {
+    height: clamp(220px, 56vw, 330px);
   }
 
   .ai-trade-hero {
@@ -4758,15 +4818,6 @@ textarea::placeholder {
     width: 45px;
     min-width: 45px;
     flex: none;
-  }
-
-  .ai-form .ai-voice-button {
-    grid-column: 1 / -1;
-    grid-row: 3;
-    width: 100%;
-    min-width: 0;
-    justify-content: center;
-    white-space: normal;
   }
 
   .ai-form button[type="submit"] {
