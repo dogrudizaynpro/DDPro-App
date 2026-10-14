@@ -177,13 +177,13 @@ function AudioWaveform({ sessionRef, active, microphoneActive, children }) {
     const updateWaveform = () => {
       let level = 0;
       try {
-        level = Math.min(1, Math.max(0, (sessionRef.current?.getOutputLevel() || 0) * 8));
+        level = Math.min(1, Math.max(0, (sessionRef.current?.getOutputLevel() || 0) * 14));
       } catch {
         // Keep the voice session independent from visualizer failures.
       }
       barsRef.current.forEach((bar, index) => {
         if (bar) {
-          const scale = 0.08 + level * barWeights[index];
+          const scale = 0.04 + level * barWeights[index];
           bar.style.transform = `scale${bar.dataset.axis.toUpperCase()}(${scale})`;
         }
       });

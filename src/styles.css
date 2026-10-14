@@ -1503,11 +1503,11 @@ button > .ddpro-icon-medallion {
 
 .ai-audio-frame {
   position: relative;
-  width: min(100%, 720px);
+  width: min(100%, 900px);
   box-sizing: border-box;
   margin: 0 auto;
   min-width: 0;
-  padding: 36px 17px;
+  padding: 34px 15px;
 }
 
 .ai-audio-frame-edge {
@@ -1684,7 +1684,7 @@ button > .ddpro-icon-medallion {
 
 @media (max-width: 640px) {
   .ai-audio-frame {
-    padding: 30px 14px;
+    padding: 30px 13px;
   }
 
   .ai-audio-frame-edge.is-top,

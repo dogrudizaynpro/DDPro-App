@@ -33,7 +33,8 @@ test("AI reference uses its native aspect ratio and is contained inside an exter
   assert.match(imageRule, /object-fit:\s*contain/);
   assert.match(imageRule, /width:\s*100%/);
   assert.match(imageRule, /height:\s*100%/);
-  assert.match(frameRule, /padding:\s*36px\s+17px/);
+  assert.match(frameRule, /width:\s*min\(100%,\s*900px\)/);
+  assert.match(frameRule, /padding:\s*34px\s+15px/);
   assert.match(horizontalRailRule, /height:\s*32px/);
 });
 
