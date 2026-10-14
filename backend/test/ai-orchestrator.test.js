@@ -202,6 +202,7 @@ test("unsupported real-world operations are disclosed before any AI or research 
 
   for (const message of [
     "Bursa projesi için metrajı çıkar.",
+    "Bursa projesi için metrajı doğrula.",
     "Bu proje için hakediş taslağı hazırla.",
     "Müşteriyi telefonla ara.",
     "Dijital kart oluştur.",
@@ -219,6 +220,63 @@ test("unsupported real-world operations are disclosed before any AI or research 
   }
 
   assert.equal(calls, 0);
+});
+
+test("PDF written quantities reach read-only attachment analysis without enabling unsupported takeoff", async () => {
+  let completionCalls = 0;
+  let databaseReads = 0;
+  const attachment = {
+    originalName: "offer.pdf",
+    mimeType: "application/pdf",
+    buffer: Buffer.from("%PDF-test"),
+  };
+  const orchestrate = createAiOrchestrator({
+    executeAgentRead: async () => { databaseReads += 1; throw new Error("Unexpected record read"); },
+    complete: async (command) => {
+      completionCalls += 1;
+      assert.equal(command.attachment, attachment);
+      return {
+        answer: "PDF analiz taslağı hazır.",
+        pdfDraft: {
+          candidates: [{ quantity: 160, unit: "m²", quote: "Alan: 160 m²", verified: true }],
+        },
+        toolExecutions: [],
+      };
+    },
+  });
+
+  const result = await orchestrate({
+    ...authenticatedCommand,
+    message: "Ekli PDF'de yazılı metraj ve m² miktarını çıkar.",
+    attachment,
+  });
+
+  assert.equal(result.orchestration.intent, "attachment_analysis");
+  assert.equal(result.pdfDraft.candidates[0].quantity, 160);
+  assert.deepEqual(result.orchestration.steps, []);
+  assert.equal(completionCalls, 1);
+  assert.equal(databaseReads, 0);
+
+  for (const message of [
+    "Ekli PDF'den metrajı hesapla.",
+    "Ekli PDF'deki metrajı doğrula.",
+    "Ekli PDF çiziminden metrajı çıkar.",
+  ]) {
+    await assert.rejects(
+      orchestrate({ ...authenticatedCommand, message, attachment }),
+      (error) => error.code === "AI_ORCHESTRATOR_CAPABILITY_UNAVAILABLE" &&
+        error.statusCode === 422
+    );
+  }
+  assert.equal(completionCalls, 1);
+
+  assert.equal(
+    classifyAiCommand({
+      message: "Ekli dosyadaki metrajı çıkar.",
+      attachment: { originalName: "offer.xlsx", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" },
+    }).intent,
+    "unsupported"
+  );
 });
 
 test("direct answers do not advertise operational tools", async () => {

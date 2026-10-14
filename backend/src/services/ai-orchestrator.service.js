@@ -26,6 +26,31 @@ const RECORD_PATTERN =
   /\b(?:proje|project|teklif|offer|tedarik|procurement|müşteri|crm|ürün|product|sistem|system|fiyat|price|maliyet|cost|rapor|report|takvim|calendar|belge|document)[\p{L}\p{N}_]*\b/iu;
 const UNSUPPORTED_ACTION_PATTERN =
   /\b(send|sending|gönder|gönderme|mail at|e-?posta gönder|email gönder|gmail gönder|email the|send an? email)\b/i;
+const QUANTITY_CALCULATION_PATTERN =
+  /\b(?:hesap\p{L}*|calculate\p{L}*|compute\p{L}*|ölç\p{L}*|measure\p{L}*|doğrula\p{L}*|verify\p{L}*|validate\p{L}*|kontrol\p{L}*|check\p{L}*|tahmin\p{L}*|estimate\p{L}*)\b/iu;
+const QUANTITY_TERMS_PATTERN =
+  /\b(?:metraj\p{L}*|quantity\s+(?:takeoff|calculation)|miktar\p{L}*|alan\p{L}*)\b|m²/iu;
+const DRAWING_BASED_QUANTITY_PATTERN =
+  /\b(?:çizim\p{L}*|plandan|planlardan)\b/iu;
+const QUANTITY_TAKEOFF_CAPABILITY = {
+  capability: "quantity_takeoff",
+  label: "kaynak ölçülü ve doğrulanmış metraj çıkarımı",
+};
+
+const findUnavailableCapabilityForRequest = (message) => {
+  if (
+    QUANTITY_TERMS_PATTERN.test(message) &&
+    (
+      QUANTITY_CALCULATION_PATTERN.test(message) ||
+      (DRAWING_BASED_QUANTITY_PATTERN.test(message) && REQUEST_ACTION_PATTERN.test(message))
+    )
+  ) return QUANTITY_TAKEOFF_CAPABILITY;
+  return findUnavailableAiCapability(message);
+};
+
+const isPdfAttachment = (attachment) =>
+  attachment?.mimeType === "application/pdf" ||
+  (typeof attachment?.originalName === "string" && /\.pdf$/i.test(attachment.originalName));
 
 const createOrchestrationError = (message, statusCode, code) =>
   Object.assign(new Error(message), { statusCode, code, expose: true });
@@ -110,9 +135,14 @@ const isDdproWebsiteQuestion = (message) =>
 
 export const classifyAiCommand = ({ message, attachment } = {}) => {
   if (attachment) {
-    const unavailableCapability = findUnavailableAiCapability(
-      typeof message === "string" ? message : ""
-    );
+    const request = typeof message === "string" ? message : "";
+    const detectedCapability = findUnavailableCapabilityForRequest(request);
+    const documentedQuantityExtraction =
+      detectedCapability?.capability === "quantity_takeoff" &&
+      isPdfAttachment(attachment) &&
+      !QUANTITY_CALCULATION_PATTERN.test(request) &&
+      !DRAWING_BASED_QUANTITY_PATTERN.test(request);
+    const unavailableCapability = documentedQuantityExtraction ? null : detectedCapability;
     return unavailableCapability
       ? {
         intent: "unsupported",
@@ -128,7 +158,7 @@ export const classifyAiCommand = ({ message, attachment } = {}) => {
     return { intent: "invalid", error: "AI_ORCHESTRATOR_COMMAND_TOO_LONG" };
   }
 
-  const unavailableCapability = findUnavailableAiCapability(message);
+  const unavailableCapability = findUnavailableCapabilityForRequest(message);
   if (unavailableCapability) {
     return {
       intent: "unsupported",
