@@ -42,7 +42,7 @@ const findUnavailableCapabilityForRequest = (message) => {
     QUANTITY_TERMS_PATTERN.test(message) &&
     (
       QUANTITY_CALCULATION_PATTERN.test(message) ||
-      (DRAWING_BASED_QUANTITY_PATTERN.test(message) && REQUEST_ACTION_PATTERN.test(message))
+      DRAWING_BASED_QUANTITY_PATTERN.test(message)
     )
   ) return QUANTITY_TAKEOFF_CAPABILITY;
   return findUnavailableAiCapability(message);
