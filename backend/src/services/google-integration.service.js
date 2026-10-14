@@ -3,6 +3,7 @@ import {
   readIntegrationTokenSnapshot, replaceIntegrationToken, removeIntegrationTokenSnapshot,
 } from "./integration-vault.service.js";
 import { GoogleApiError } from "./google-api-error.js";
+import { browserAuthRpc } from "./browser-session.service.js";
 export {
   beginGoogleOAuth, completeGoogleOAuth, exchangeGoogleSession, restoreGoogleSession,
   getGoogleSessionAccount, requireGoogleSession, revokeGoogleSession,
@@ -63,6 +64,7 @@ export const getGoogleConfigurationStatus = async (account = "") => {
   return {
     configured: oauthFlowAvailable, credentialsReady, secureStorageReady: storageReady,
     connected: oauthFlowAvailable ? await hasStoredIntegrationToken("google", account) : false,
+    pendingRevocation: account && tokenTableReady ? Boolean(await browserAuthRpc("pending", { account })) : false,
     oauthFlowAvailable, missingRequirements,
   };
 };

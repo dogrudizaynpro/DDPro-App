@@ -55,6 +55,7 @@ export const errorHandler = (err, req, res, next) => {
     status: "error",
     message: errorMessage,
     ...(err.code === "GOOGLE_CONNECTION_REQUIRED" && { code: err.code }),
+    ...(/^AUTHORIZATION_(?:CONFLICT|STORAGE_UNAVAILABLE)$/.test(err.code || "") && { code: err.code }),
     ...(err.googleApiError && {
       code: err.code,
       provider: err.provider,

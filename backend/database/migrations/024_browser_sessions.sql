@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS public.browser_oauth_attempts (
   account text,
   session_id uuid,
   epoch bigint,
-  action text NOT NULL DEFAULT 'login' CHECK (action IN ('login','revoke-all','disconnect')),
+  action text NOT NULL DEFAULT 'login' CHECK (action IN ('login','reconnect','revoke-all','disconnect')),
   created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
   expires_at timestamptz NOT NULL DEFAULT (clock_timestamp() + interval '10 minutes'),
   consumed_at timestamptz
@@ -94,6 +94,9 @@ BEGIN
         AND revoked_at IS NULL AND expires_at>clock_timestamp();
       SELECT * INTO a FROM browser_accounts WHERE account=account_name;
       IF s.id IS NULL OR s.epoch <> a.epoch THEN RAISE EXCEPTION 'Session inactive'; END IF;
+      IF args->>'action'='reconnect' AND EXISTS(
+        SELECT 1 FROM google_pending_revocations WHERE account=account_name)
+      THEN RAISE EXCEPTION 'Google revocation pending'; END IF;
     END IF;
     INSERT INTO browser_oauth_attempts(sequence,challenge,account,session_id,epoch,action)
     VALUES(nextval('browser_auth_sequence'),args->>'challenge',s.account,s.id,s.epoch,
@@ -112,10 +115,18 @@ BEGIN
       SELECT * INTO s FROM browser_sessions WHERE id=attempt.session_id AND revoked_at IS NULL
         AND expires_at>clock_timestamp() AND epoch=a.epoch;
       IF s.id IS NULL OR attempt.epoch<>a.epoch THEN RAISE EXCEPTION 'Session inactive'; END IF;
-    ELSE
+    END IF;
+    IF attempt.action IN ('login','reconnect') AND NOT COALESCE((args->>'identity_only')::boolean,false) THEN
+      IF attempt.action='reconnect' AND EXISTS(
+        SELECT 1 FROM google_pending_revocations WHERE account=account_name)
+      THEN RAISE EXCEPTION 'Google revocation pending'; END IF;
+      IF attempt.action='reconnect' AND EXISTS(
+        SELECT 1 FROM integration_tokens WHERE provider='google' AND account=account_name AND enabled
+          AND encrypted_token IS DISTINCT FROM args->'snapshot')
+      THEN RAISE EXCEPTION 'Google connection changed'; END IF;
       IF NOT EXISTS(SELECT 1 FROM google_pending_revocations WHERE account=account_name)
         AND (NOT EXISTS(SELECT 1 FROM integration_tokens WHERE provider='google' AND account=account_name AND enabled)
-          OR (NOT COALESCE((args->>'adequate')::boolean,false)
+          OR ((attempt.action='reconnect' OR NOT COALESCE((args->>'adequate')::boolean,false))
             AND EXISTS(SELECT 1 FROM integration_tokens WHERE provider='google' AND account=account_name AND enabled
               AND encrypted_token=args->'snapshot')))
       THEN
@@ -143,6 +154,10 @@ BEGIN
       SELECT * INTO s FROM browser_sessions WHERE id=attempt.session_id AND revoked_at IS NULL
         AND expires_at>clock_timestamp() AND epoch=a.epoch;
       IF s.id IS NULL THEN RETURN NULL; END IF;
+      IF attempt.action='reconnect' THEN
+        RETURN jsonb_build_object('account',s.account,'session',s.id,'epoch',s.epoch,
+          'expiresAt',s.expires_at,'reconnected',true);
+      END IF;
       INSERT INTO browser_action_proofs(proof_hash,account,session_id,epoch,action)
         VALUES(args->>'proof',a.account,s.id,a.epoch,attempt.action);
       RETURN jsonb_build_object('action',attempt.action);

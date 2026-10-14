@@ -45,16 +45,28 @@ const unauthorized = (res) => res.status(401).json({ status: "error", code: "BRO
   message: "Browser authorization is required. Authorize this browser with Google." });
 const jsonOrigin = (req, res) => {
   res.set("Cache-Control", "no-store");
-  if (!originAllowed(req)) { res.status(403).json({ status: "error", message: "Request origin is not allowed." }); return false; }
+  if (!originAllowed(req)) { res.status(403).json({ status: "error", code: "ORIGIN_NOT_ALLOWED", message: "Request origin is not allowed." }); return false; }
   if (!req.is("application/json")) { res.status(415).json({ status: "error", message: "application/json is required." }); return false; }
   return true;
 };
 export const browserAuthRpc = async (op, args = {}) => {
   const client = getIntegrationAdmin();
-  if (!client) throw Object.assign(new Error("Authorization storage is unavailable."), { statusCode: 503, expose: true });
-  const { data, error } = await client.rpc("ddpro_auth", { op, args });
-  if (error) throw Object.assign(new Error("Authorization transition could not be completed."), { statusCode: 409, expose: true });
-  return data;
+  const unavailable = () => Object.assign(new Error("Authorization storage is unavailable. Retry later."),
+    { statusCode: 503, code: "AUTHORIZATION_STORAGE_UNAVAILABLE", expose: true });
+  if (!client) throw unavailable();
+  let result;
+  try { result = await client.rpc("ddpro_auth", { op, args }); }
+  catch { throw unavailable(); }
+  if (result.error) {
+    const conflicts = new Set(["Session inactive", "OAuth attempt invalid", "OAuth attempt revoked",
+      "Google revocation pending", "Google connection changed"]);
+    if (result.error.code === "P0001" && conflicts.has(result.error.message)) {
+      throw Object.assign(new Error("Authorization changed. Start the action again."),
+        { statusCode: 409, code: "AUTHORIZATION_CONFLICT", expose: true });
+    }
+    throw unavailable();
+  }
+  return result.data;
 };
 export const assertBrowserSessionActive = async (session) => {
   if (!session || !await browserAuthRpc("validate", session)) {
@@ -76,7 +88,7 @@ export const getGoogleSessionAccount = async (req) => {
 };
 export const requireGoogleSession = async (req, res, next) => {
   res.set("Cache-Control", "no-store");
-  if (req.get("authorization") && !originAllowed(req)) return res.status(403).json({ status: "error", message: "Request origin is not allowed." });
+  if (req.get("authorization") && !originAllowed(req)) return res.status(403).json({ status: "error", code: "ORIGIN_NOT_ALLOWED", message: "Request origin is not allowed." });
   try {
     const payload = bearerPayload(req);
     if (!payload || !await browserAuthRpc("validate", payload)) return unauthorized(res);
@@ -97,27 +109,40 @@ const startOAuth = async (req, res, action = "login") => {
   }
   const attempt = await browserAuthRpc("begin", { challenge, action, ...(action === "login" ? {} : req.browserSession) });
   const nonce = random();
-  const details = { attempt: attempt.id, action, nonce, browserNonce: random(), expiresAt: Date.now() + 600_000 };
+  const identityOnly = action === "login" && req.query.identity_only === "1";
+  const details = { attempt: attempt.id, action, identityOnly, nonce, browserNonce: random(), expiresAt: Date.now() + 600_000 };
   setCookie(res, "ddpro_oauth_state", details.browserNonce, 600, "/api/integrations/google/callback");
   const url = new URL("https://accounts.google.com/o/oauth2/v2/auth");
+  const integrationFlow = ["login", "reconnect"].includes(action) && !identityOnly;
   url.search = new URLSearchParams({
     client_id: process.env.GOOGLE_CLIENT_ID, redirect_uri: process.env.GOOGLE_REDIRECT_URI,
-    response_type: "code", scope: action === "login" ? ["openid", "email", ...Object.values(GOOGLE_OPERATION_SCOPES)].join(" ") : "openid email",
+    response_type: "code", scope: integrationFlow ? ["openid", "email", ...Object.values(GOOGLE_OPERATION_SCOPES)].join(" ") : "openid email",
     state: pack(details, "oauth:v2:"), nonce,
-    access_type: "offline", prompt: action === "login" ? "consent" : "select_account",
-    ...(action === "login" ? { include_granted_scopes: "true" } : { max_age: "0" }),
+    prompt: action === "reconnect" ? "consent select_account" : action === "login" && !identityOnly ? "consent" : "select_account",
+    ...(integrationFlow ? { access_type: "offline", include_granted_scopes: "true" } : {}),
+    ...(["revoke-all", "disconnect"].includes(action) ? { max_age: "0" } : {}),
   }).toString();
   res.set("Cache-Control", "no-store");
   return action === "login" ? res.redirect(url.toString()) : res.json({ status: "success", data: { url: url.toString() } });
 };
 export const beginGoogleOAuth = async (req, res, next) => {
-  if (req.query.action || req.query.session) return res.status(400).json({ status: "error", message: "Use authenticated POST /api/sessions/reauth." });
+  if (req.query.action || req.query.session || req.query.reconnect || req.query.mode) return res.status(400).json({ status: "error", message: "Use an authenticated POST for Google actions." });
   try { return await startOAuth(req, res); } catch (error) { return next(error); }
 };
 export const beginSessionReauth = async (req, res, next) => {
   if (!jsonOrigin(req, res)) return;
   if (!["revoke-all", "disconnect"].includes(req.body?.action)) return res.status(400).json({ status: "error", message: "Invalid action." });
   try { return await startOAuth(req, res, req.body.action); } catch (error) { return next(error); }
+};
+export const beginGoogleReconnect = async (req, res, next) => {
+  if (!jsonOrigin(req, res)) return;
+  try {
+    if (await browserAuthRpc("pending", { account: req.integrationAccount })) {
+      return res.status(409).json({ status: "error", code: "GOOGLE_REVOCATION_PENDING",
+        message: "Complete the pending Google revocation before reconnecting." });
+    }
+    return await startOAuth(req, res, "reconnect");
+  } catch (error) { return next(error); }
 };
 export const completeGoogleOAuth = async (req, res) => {
   const details = unpack(typeof req.query.state === "string" ? req.query.state : "", "oauth:v2:");
@@ -130,7 +155,9 @@ export const completeGoogleOAuth = async (req, res) => {
     res.set("Cache-Control", "no-store"); res.set("Referrer-Policy", "no-referrer");
     return res.redirect(url.toString());
   };
-  if (!details || !equal(cookieNonce, details.browserNonce)) return redirect("state_invalid");
+  // Authenticated POST attempts are already bound to a live session and PKCE.
+  // Do not require a third-party state cookie that privacy browsers may block.
+  if (!details || (details.action === "login" && !equal(cookieNonce, details.browserNonce))) return redirect("state_invalid");
   if (req.query.error || typeof req.query.code !== "string") return redirect("access_denied");
   try {
     const response = await fetch("https://oauth2.googleapis.com/token", { method: "POST",
@@ -145,7 +172,7 @@ export const completeGoogleOAuth = async (req, res) => {
     const profile = await profileResponse.json();
     const email = typeof profile.email === "string" ? profile.email.toLowerCase() : "";
     if (!profileResponse.ok || profile.verified_email !== true || !allowedAccount(email)) return redirect("account_not_allowed");
-    if (details.action !== "login") {
+    if (["revoke-all", "disconnect"].includes(details.action)) {
       if (!token.id_token) return redirect("fresh_authentication_required");
       const verification = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(token.id_token)}`,
         { signal: AbortSignal.timeout(10_000) });
@@ -163,17 +190,18 @@ export const completeGoogleOAuth = async (req, res) => {
         return redirect("fresh_authentication_required");
       }
     }
-    const snapshot = details.action === "login" ? await readIntegrationTokenSnapshot({ provider: "google", account: email }) : null;
+    const integrationFlow = ["login", "reconnect"].includes(details.action);
+    const snapshot = integrationFlow ? await readIntegrationTokenSnapshot({ provider: "google", account: email }) : null;
     const existing = snapshot?.value;
     const scopes = typeof token.scope === "string" ? token.scope : existing?.scopes || "";
     const adequate = Boolean(existing && getMissingGoogleScopes(existing.scopes).length === 0 &&
       (existing.refreshToken || existing.expiresAt > Date.now() + 60_000));
-    const pending = details.action === "login" ? await browserAuthRpc("pending", { account: email }) : null;
-    if (details.action === "login" && !pending && !adequate && getMissingGoogleScopes(scopes).length) return redirect("scope_not_granted");
+    const pending = integrationFlow ? await browserAuthRpc("pending", { account: email }) : null;
+    if (integrationFlow && !details.identityOnly && !pending && (details.action === "reconnect" || !adequate) && getMissingGoogleScopes(scopes).length) return redirect("scope_not_granted");
     const code = random();
     await browserAuthRpc("callback", { attempt: details.attempt, account: email, code: hash(code), adequate,
-      snapshot: snapshot?.encryptedToken || null,
-      ...(details.action === "login" ? { token: encryptIntegrationToken({
+      snapshot: snapshot?.encryptedToken || null, identity_only: details.identityOnly === true,
+      ...(integrationFlow && !details.identityOnly ? { token: encryptIntegrationToken({
         accessToken: token.access_token, refreshToken: token.refresh_token || existing?.refreshToken || null,
         expiresAt: Date.now() + (Number(token.expires_in) || 3600) * 1000, scopes,
         sessionVersion: random(),
@@ -190,7 +218,7 @@ export const exchangeGoogleSession = async (req, res, next) => {
     const result = await browserAuthRpc("exchange", { code: hash(code), challenge: hash(verifier), session: randomUUID(), restore: hash(secret), proof: hash(proof) });
     if (!result) return unauthorized(res);
     if (result.action) return res.json({ status: "success", data: { action: result.action, proof } });
-    setCookie(res, restoreName, `${result.session}.${secret}`, Math.max(0, Math.floor((Date.parse(result.expiresAt) - Date.now()) / 1000)), restorePath);
+    if (!result.reconnected) setCookie(res, restoreName, `${result.session}.${secret}`, Math.max(0, Math.floor((Date.parse(result.expiresAt) - Date.now()) / 1000)), restorePath);
     return res.json({ status: "success", data: { session: sessionBearer(result) } });
   } catch (error) { return next(error); }
 };

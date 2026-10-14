@@ -21,6 +21,7 @@ test("browser HTTP sessions enforce fresh bound proofs, durable disconnect retri
     const originalFetch = globalThis.fetch;
     const scopes = ["https://www.googleapis.com/auth/gmail.readonly",
       "https://www.googleapis.com/auth/calendar.events", "https://www.googleapis.com/auth/spreadsheets.readonly"].join(" ");
+    let issuedScopes = scopes;
     let nonce, fresh = true, identityEmail = email, providerStatus = 500, refreshHook;
     let revocationCalls = 0;
     globalThis.fetch = async (input, options = {}) => {
@@ -53,7 +54,7 @@ test("browser HTTP sessions enforce fresh bound proofs, durable disconnect retri
         const body = new URLSearchParams(options.body);
         if (body.get("grant_type") === "refresh_token") return Response.json({ access_token: "refreshed-test", expires_in: 3600 });
         const claims = { nonce, auth_time: fresh ? Math.floor(Date.now() / 1000) : 1 };
-        return Response.json({ access_token: "test-access", refresh_token: "test-refresh", scope: scopes,
+        return Response.json({ access_token: "test-access", refresh_token: "test-refresh", scope: issuedScopes,
           expires_in: 3600, id_token: `header.${Buffer.from(JSON.stringify(claims)).toString("base64url")}.signature` });
       }
       if (url.pathname === "/oauth2/v2/userinfo") return Response.json({ email: identityEmail, verified_email: true, id: "test-sub" });
@@ -72,26 +73,27 @@ test("browser HTTP sessions enforce fresh bound proofs, durable disconnect retri
       "X-Forwarded-For": `192.0.2.${++requestId}`, ...(bearer ? { Authorization: ["Bearer", bearer].join(" ") } : {}) });
     const post = (path, bearer, body = {}, extra = {}) => originalFetch(`${base}${path}`, {
       method: "POST", headers: { ...headers(bearer), ...extra }, body: JSON.stringify(body) });
-    const begin = async (bearer, action) => {
+    const begin = async (bearer, action, identityOnly = false) => {
       const verifier = randomBytes(32).toString("base64url");
       const challenge = createHash("sha256").update(verifier).digest("base64url");
-      const response = action ? await post("/api/sessions/reauth", bearer, { action, challenge })
-        : await originalFetch(`${base}/api/integrations/google/start?challenge=${challenge}`, { redirect: "manual", headers: headers() });
+      const response = action ? await post(action === "reconnect" ? "/api/integrations/google/reconnect" : "/api/sessions/reauth", bearer, { action, challenge })
+        : await originalFetch(`${base}/api/integrations/google/start?challenge=${challenge}${identityOnly ? "&identity_only=1" : ""}`, { redirect: "manual", headers: headers() });
       assert.equal(response.status, action ? 200 : 302);
       const url = new URL(action ? (await response.json()).data.url : response.headers.get("location"));
       nonce = url.searchParams.get("nonce");
-      if (action) assert.equal(url.searchParams.get("max_age"), "0");
+      if (identityOnly) assert.equal(url.searchParams.get("scope"), "openid email");
+      if (action && action !== "reconnect") assert.equal(url.searchParams.get("max_age"), "0");
       return { verifier, state: url.searchParams.get("state"), cookie: response.headers.getSetCookie()[0].split(";")[0] };
     };
     const callback = async (attempt) => {
       nonce = JSON.parse(Buffer.from(attempt.state.split(".")[0], "base64url").toString()).nonce;
       const response = await originalFetch(`${base}/api/integrations/google/callback?state=${encodeURIComponent(attempt.state)}&code=test-code`,
-        { redirect: "manual", headers: { ...headers(), Cookie: attempt.cookie } });
+        { redirect: "manual", headers: { ...headers(), ...(attempt.cookie ? { Cookie: attempt.cookie } : {}) } });
       return { response, code: new URLSearchParams(response.headers.get("location").split("?")[1]).get("exchange_code") };
     };
     const exchange = async (attempt, code) => post("/api/integrations/google/exchange", undefined, { code, verifier: attempt.verifier });
-    const login = async () => {
-      const attempt = await begin();
+    const login = async (identityOnly = false) => {
+      const attempt = await begin(undefined, undefined, identityOnly);
       const { code } = await callback(attempt);
       assert.ok(code);
       const response = await exchange(attempt, code);
@@ -100,6 +102,7 @@ test("browser HTTP sessions enforce fresh bound proofs, durable disconnect retri
     };
     const proof = async (session, action) => {
       const attempt = await begin(session.bearer, action);
+      attempt.cookie = "";
       const { code } = await callback(attempt);
       assert.ok(code);
       const response = await exchange(attempt, code);
@@ -171,16 +174,38 @@ test("browser HTTP sessions enforce fresh bound proofs, durable disconnect retri
       assert.equal((await restore(d)).status, 401);
       const pending = (await client.query("SELECT * FROM google_pending_revocations WHERE account=$1", [email])).rows[0];
       assert.deepEqual(pending.encrypted_token, originalToken);
-      const e = await login();
+      issuedScopes = "openid email";
+      const e = await login(true);
+      issuedScopes = scopes;
+      const pendingStatus = await originalFetch(`${base}/api/integrations/status`, { headers: headers(e.bearer) });
+      assert.equal(pendingStatus.status, 200);
+      assert.equal((await pendingStatus.json()).data.google.pendingRevocation, true);
       assert.equal((await tokenSnapshot()).enabled, false);
       assert.deepEqual((await tokenSnapshot()).encrypted_token, originalToken);
+      const blockedReconnect = await post("/api/integrations/google/reconnect", e.bearer, { challenge: "x".repeat(43) });
+      assert.equal(blockedReconnect.status, 409);
+      assert.equal((await blockedReconnect.json()).code, "GOOGLE_REVOCATION_PENDING");
       providerStatus = 400;
       assert.equal((await (await post("/api/integrations/google/disconnect/retry", e.bearer)).json()).data.pendingRevocation, true);
       assert.equal((await client.query("SELECT * FROM google_pending_revocations WHERE account=$1", [email])).rows.length, 1);
       providerStatus = 200;
       assert.equal((await (await post("/api/integrations/google/disconnect/retry", e.bearer)).json()).data.providerRevoked, true);
       assert.equal((await client.query("SELECT * FROM google_pending_revocations WHERE account=$1", [email])).rows.length, 0);
-      await login();
+      const completedStatus = await originalFetch(`${base}/api/integrations/status`, { headers: headers(e.bearer) });
+      assert.equal((await completedStatus.json()).data.google.pendingRevocation, false);
+      const f = await login();
+      const beforeReconnect = JSON.parse(Buffer.from(f.bearer.split(".")[0], "base64url").toString());
+      const reconnectAttempt = await begin(f.bearer, "reconnect");
+      reconnectAttempt.cookie = "";
+      const reconnectCallback = await callback(reconnectAttempt);
+      const reconnectExchange = await exchange(reconnectAttempt, reconnectCallback.code);
+      assert.equal(reconnectExchange.status, 200);
+      assert.equal(reconnectExchange.headers.get("set-cookie"), null);
+      const reconnectSession = JSON.parse(Buffer.from((await reconnectExchange.json()).data.session.split(".")[0], "base64url").toString());
+      assert.equal(reconnectSession.session, beforeReconnect.session);
+      assert.equal(reconnectSession.epoch, beforeReconnect.epoch);
+      assert.equal((await restore(e)).status, 200);
+      assert.equal((await restore(f)).status, 200);
       const reconnected = await tokenSnapshot();
       assert.equal(reconnected.enabled, true);
       assert.notEqual(decryptIntegrationToken(reconnected.encrypted_token).sessionVersion, "whatsapp-connection-identity");

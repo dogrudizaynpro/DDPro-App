@@ -12,7 +12,7 @@ import {
   restoreGoogleSession,
   revokeGoogleSession,
 } from "../services/google-integration.service.js";
-import { disconnectGoogle, retryGoogleDisconnect } from "../services/browser-session.service.js";
+import { disconnectGoogle, retryGoogleDisconnect, beginGoogleReconnect } from "../services/browser-session.service.js";
 import {
   getCalendarEvents,
   getCalendarEventById,
@@ -73,6 +73,7 @@ router.post("/google/restore",
 router.post("/google/logout", integrationActionRateLimit, revokeGoogleSession);
 router.post("/google/disconnect", integrationActionRateLimit, requireGoogleSession, disconnectGoogle);
 router.post("/google/disconnect/retry", integrationActionRateLimit, requireGoogleSession, retryGoogleDisconnect);
+router.post("/google/reconnect", googleOAuthRateLimit, requireGoogleSession, beginGoogleReconnect);
 router.post("/gmail/import", integrationActionRateLimit, requireGoogleSession, postGmailImport);
 router.get("/calendar/events", integrationActionRateLimit, requireGoogleSession, getCalendarEvents);
 router.get("/calendar/events/:id", integrationActionRateLimit, requireGoogleSession, getCalendarEventById);

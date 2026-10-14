@@ -35,7 +35,16 @@ const createOAuthChallenge = async () => {
 export const beginGoogleConnection = async ({ reconnect = false } = {}) => {
   sessionStorage.removeItem("ddpro_oauth_action");
   const challenge = await createOAuthChallenge();
-  window.location.assign(`${API_BASE_URL}/api/integrations/google/start?challenge=${challenge}${reconnect ? "&reconnect=1" : ""}`);
+  if (reconnect) {
+    const response = await fetchAPI("/api/integrations/google/reconnect", {
+      method: "POST", body: JSON.stringify({ challenge }),
+    });
+    const url = new URL(response.data?.url);
+    if (url.origin !== "https://accounts.google.com") throw new Error("Geçersiz Google doğrulama adresi.");
+    window.location.assign(url.toString());
+  } else {
+    window.location.assign(`${API_BASE_URL}/api/integrations/google/start?challenge=${challenge}`);
+  }
 };
 
 export const beginSessionReauthentication = async (action) => {

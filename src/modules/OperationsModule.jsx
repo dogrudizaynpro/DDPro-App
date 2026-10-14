@@ -344,6 +344,9 @@ function IntegrationSettings({ onNavigate, hubMode = false }) {
         token_exchange_failed: "Google OAuth token değişimi başarısız.",
         account_not_allowed: "Bu Google hesabı DDPro izin listesinde değil.",
         provider_unavailable: "Google bağlantısı tamamlanamadı. Backend yapılandırmasını ve bağlantı durumunu kontrol edin.",
+        authorization_failed: "Yetkilendirme tamamlanamadı veya iptal sırasında geçersizleşti. Yeni bir giriş başlatın; eski oturumlar yeniden açılmadı.",
+        fresh_authentication_required: "Google yeni kimlik doğrulamasını kanıtlamadı. Hesap genelinde hiçbir iptal yapılmadı; yeniden doğrulayın.",
+        revocation_pending: "Önceki Google sağlayıcı iptali bekliyor. DDPro'ya giriş yaptıktan sonra bekleyen iptali tekrar deneyin.",
       };
       setError(reasons[oauthResult.get("reason")] || "Google OAuth bağlantısı tamamlanamadı.");
     }

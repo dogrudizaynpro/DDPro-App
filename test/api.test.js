@@ -691,11 +691,15 @@ test("security reauthentication binds its action and verifier without putting be
 test("ordinary login and explicit Google reconnection are different intents and pending revocation retries do not logout", async () => {
   await beginGoogleConnection();
   assert.doesNotMatch(redirectedTo, /reconnect=/);
+  assert.equal(requests.length, 0);
+  response = () => Response.json({ data: { url: "https://accounts.google.com/o/oauth2/v2/auth?state=reconnect" } });
   await beginGoogleConnection({ reconnect: true });
-  assert.match(redirectedTo, /reconnect=1/);
+  assert.match(requests[0].url, /google\/reconnect$/);
+  assert.match(JSON.parse(requests[0].options.body).challenge, /^[A-Za-z0-9_-]{43}$/);
+  assert.match(redirectedTo, /state=reconnect/);
   response = () => Response.json({ data: { providerRevoked: false, pendingRevocation: true } });
   assert.equal((await retryGoogleDisconnect()).data.pendingRevocation, true);
-  assert.match(requests[0].url, /google\/disconnect\/retry$/);
+  assert.match(requests[1].url, /google\/disconnect\/retry$/);
   assert.equal(storage.get("ddpro_browser_session"), "existing-browser-session");
 });
 

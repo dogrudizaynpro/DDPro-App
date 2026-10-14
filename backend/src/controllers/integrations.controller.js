@@ -75,8 +75,9 @@ export const getIntegrationStatus = async (req, res, next) => {
   );
   const supabaseConfigured = databaseConfigured;
   const googleSessionReady = Boolean(googleAccount);
-  const gmailHealth = statusAfterTest("gmail", googleConfigured, googleSessionReady);
-  const calendarHealth = statusAfterTest("googleCalendar", googleConfigured, googleSessionReady);
+  const googleProviderReady = googleSessionReady && google.connected;
+  const gmailHealth = statusAfterTest("gmail", googleConfigured, googleProviderReady);
+  const calendarHealth = statusAfterTest("googleCalendar", googleConfigured, googleProviderReady);
   const workspaceHealth = [gmailHealth, calendarHealth];
   const googleStatus = workspaceHealth.find(({ status }) =>
     !["connected", "configured_not_tested"].includes(status))?.status ||
@@ -121,6 +122,7 @@ export const getIntegrationStatus = async (req, res, next) => {
       },
       google: {
         configured: googleConfigured,
+        pendingRevocation: google.pendingRevocation,
         oauthFlowAvailable: googleOAuthAvailable,
         authenticated: googleSessionReady,
         authorized: workspaceHealth.every(({ authorized }) => authorized === true) ? true
