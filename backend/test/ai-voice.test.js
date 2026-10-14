@@ -125,7 +125,18 @@ test("written and Gemini Live research use the same relevance and source-validat
     body.query.toLocaleLowerCase("tr-TR") === "site:ddizaynpro.com doğru dizayn pro hizmetlerimiz" &&
     body.include_answer === false
   ));
-  assert.deepEqual(responseBody.data.data, written.researchResults);
+  const omitResearchTimestamp = (result) => {
+    const stableResult = { ...result };
+    delete stableResult.researchedAt;
+    return stableResult;
+  };
+  assert.deepEqual(
+    responseBody.data.data.map(omitResearchTimestamp),
+    written.researchResults.map(omitResearchTimestamp)
+  );
+  for (const result of [...responseBody.data.data, ...written.researchResults]) {
+    assert.ok(Number.isFinite(Date.parse(result.researchedAt)));
+  }
   assert.equal(written.researchResults.length, 1);
   assert.match(written.answer, /hizmetleri arasında asma tavan çözümleri/);
   assert.match(written.answer, /https:\/\/www\.ddizaynpro\.com\/hizmetler/);

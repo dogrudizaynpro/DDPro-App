@@ -624,6 +624,41 @@ function AIModule({
                     <small>{attachment.status}</small>
                   </div>
                 ))}
+                {message.pdfDraft ? (
+                  <section className="ai-pdf-draft" aria-label="PDF analiz taslağı">
+                    <h4>PDF analiz taslağı · {message.pdfDraft.sourceFileName}</h4>
+                    <p>
+                      Kaydedilmedi. {message.pdfDraft.totalPages} sayfa
+                      {message.pdfDraft.truncated ? " · Metin güvenli sınırda kesildi; son içerik eksik olabilir." : ""}
+                    </p>
+                    {message.pdfDraft.candidates.length ? message.pdfDraft.candidates.map((candidate, index) => (
+                      <article className="ai-pdf-candidate" key={`${candidate.type}-${candidate.sourcePage || "unknown"}-${index}`}>
+                        <strong>
+                          {({
+                            product: "Ürün adayı",
+                            technical_specification: "Teknik özellik adayı",
+                            price: "Fiyat adayı",
+                          })[candidate.type] || "Aday"} · {candidate.verified ? "Kaynak doğrulandı" : "İnceleme gerekli"}
+                        </strong>
+                        <dl>
+                          <div><dt>Ürün adı</dt><dd>{candidate.productName ?? "—"}</dd></div>
+                          <div><dt>Birim</dt><dd>{candidate.unit ?? "—"}</dd></div>
+                          <div><dt>Miktar</dt><dd>{candidate.quantity ?? "—"}</dd></div>
+                          <div><dt>Fiyat</dt><dd>{candidate.price ?? "—"}{candidate.currency ? ` ${candidate.currency}` : ""}</dd></div>
+                          <div><dt>Teknik özellik</dt><dd>{candidate.technicalSpecifications ?? "—"}</dd></div>
+                          <div>
+                            <dt>Kaynak sayfa</dt>
+                            <dd>{candidate.sourcePage ?? "Belirsiz"}{candidate.sourcePageTruncated ? " · sayfa kesilmiş" : ""}</dd>
+                          </div>
+                        </dl>
+                        <blockquote>{candidate.quote}</blockquote>
+                        {candidate.missingFields.length ? (
+                          <small>Eksik alanlar: {candidate.missingFields.join(", ")}</small>
+                        ) : null}
+                      </article>
+                    )) : <p>Belgede desteklenen bir aday bulunamadı.</p>}
+                  </section>
+                ) : null}
                 <small>{message.date}</small>
                 {message.pendingAction ? (
                   <div className="ai-action-confirmation">

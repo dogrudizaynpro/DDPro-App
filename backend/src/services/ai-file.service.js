@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { posix } from "node:path";
 import { Unzip, UnzipInflate, UnzipPassThrough } from "fflate";
 import { XMLParser, XMLValidator } from "fast-xml-parser";
@@ -397,6 +398,32 @@ const validateAttachment = ({ originalName, buffer }) => {
   return { name, extension, mimeType: MIME_TYPES[extension] };
 };
 
+export const splitPdfPages = (text, totalPages, markerToken) => {
+  if (
+    typeof text !== "string" || !Number.isInteger(totalPages) || totalPages < 1 ||
+    typeof markerToken !== "string" || !/^[a-f0-9]{32}$/.test(markerToken)
+  ) {
+    throw fail("PDF page references could not be verified.", 422);
+  }
+  const marker = new RegExp(`<<<DDPRO_PDF_PAGE_${markerToken}:\\{(\\d+)\\}/\\{(\\d+)\\}>>>`, "g");
+  const pages = [];
+  let cursor = 0;
+  let match;
+  while ((match = marker.exec(text))) {
+    const pageNumber = Number(match[1]);
+    const markerTotal = Number(match[2]);
+    if (pageNumber !== pages.length + 1 || markerTotal !== totalPages) {
+      throw fail("PDF page references could not be verified.", 422);
+    }
+    pages.push({ pageNumber, text: text.slice(cursor, match.index).trim() });
+    cursor = marker.lastIndex;
+  }
+  if (pages.length !== totalPages || text.slice(cursor).trim()) {
+    throw fail("PDF page references could not be verified.", 422);
+  }
+  return pages;
+};
+
 export const prepareAiAttachment = async (file) => {
   const { name, extension, mimeType } = validateAttachment(file);
   if (mimeType.startsWith("image/")) {
@@ -426,21 +453,54 @@ export const prepareAiAttachment = async (file) => {
     parsed = await parseDocx(file.buffer);
   } else {
     const parser = new PDFParse({ data: file.buffer });
+    const markerToken = randomBytes(16).toString("hex");
     let timeoutId;
     try {
       const result = await Promise.race([
-        parser.getText(),
+        parser.getText({
+          pageJoiner: `\n<<<DDPRO_PDF_PAGE_${markerToken}:{page_number}/{total_number}>>>\n`,
+        }),
         new Promise((_, reject) => {
           timeoutId = setTimeout(() => reject(fail("PDF processing timed out.", 422)), 15_000);
         }),
       ]);
-      const content = result.text?.trim() || "";
-      if (!content) throw fail("No text could be extracted from the PDF. Image-only PDFs need an OCR-capable provider.");
+      const fullText = result.text?.trim() || "";
+      if (!fullText) throw fail("No text could be extracted from the PDF. Image-only PDFs need an OCR-capable provider.");
+      const sourcePages = splitPdfPages(fullText, result.total, markerToken);
+      if (!sourcePages.some(({ text }) => text)) {
+        throw fail("No text could be extracted from the PDF. Image-only PDFs need an OCR-capable provider.");
+      }
+      const truncationNoteLength = "\n[İçerik güvenli işlem sınırında kısaltıldı.]".length;
+      let remaining = MAX_EXTRACTED_TEXT -
+        (fullText.length > MAX_EXTRACTED_TEXT ? truncationNoteLength : 0);
+      let truncated = fullText.length > MAX_EXTRACTED_TEXT;
+      const pages = [];
+      let content = "";
+      for (const page of sourcePages) {
+        const pageJoiner = `\n<<<DDPRO_PDF_PAGE_${markerToken}:{page_number}/{total_number}>>>\n`
+          .replace("{page_number}", String(page.pageNumber))
+          .replace("{total_number}", String(result.total));
+        if (remaining < pageJoiner.length) {
+          truncated = true;
+          break;
+        }
+        const pageText = page.text.slice(0, Math.max(0, remaining - pageJoiner.length));
+        const pageTruncated = pageText.length < page.text.length;
+        pages.push({ pageNumber: page.pageNumber, text: pageText, truncated: pageTruncated });
+        content += pageText + pageJoiner;
+        remaining -= pageText.length + pageJoiner.length;
+        if (pageTruncated) {
+          truncated = true;
+          break;
+        }
+      }
+      if (pages.length < sourcePages.length) truncated = true;
       parsed = {
         type: "document",
-        content: content.slice(0, MAX_EXTRACTED_TEXT),
+        content,
         pages: result.total,
-        truncated: content.length > MAX_EXTRACTED_TEXT,
+        pdfPages: pages,
+        truncated,
       };
     } catch (error) {
       if (error.expose) throw error;
@@ -457,6 +517,7 @@ export const prepareAiAttachment = async (file) => {
     extractedType: parsed.type,
     content: parsed.content + truncationNote,
     ...(parsed.tables ? { tables: parsed.tables } : {}),
+    ...(parsed.pdfPages ? { pdfPages: parsed.pdfPages } : {}),
     ...(parsed.truncated ? { truncated: true } : {}),
     ...(parsed.pages ? { pages: parsed.pages } : {}),
   };
