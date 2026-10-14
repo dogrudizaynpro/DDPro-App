@@ -151,7 +151,7 @@ test("image attachments are sent to the configured provider as vision content", 
   assert.match(userMessage.content[1].image_url.url, /^data:image\/png;base64,/);
 });
 
-test("PDF candidate schema resolves exact quotes to parser pages and leaves unsupported sources unverified", () => {
+test("PDF candidate schema leaves duplicate-page quotes ambiguous and unsupported sources unverified", () => {
   const candidate = {
     type: "product",
     productName: "Panel",
@@ -179,8 +179,8 @@ test("PDF candidate schema resolves exact quotes to parser pages and leaves unsu
     ],
   });
   assert.equal(draft.candidates[0].sourceFileName, "catalog.pdf");
-  assert.equal(draft.candidates[0].sourcePage, 1);
-  assert.equal(draft.candidates[0].verified, true);
+  assert.equal(draft.candidates[0].sourcePage, null);
+  assert.equal(draft.candidates[0].verified, false);
   assert.deepEqual(draft.candidates[0].missingFields, [
     "Birim", "Miktar", "Fiyat", "Para birimi", "Teknik özellik",
   ]);

@@ -310,7 +310,7 @@ test("PDF page joiners preserve deterministic page numbers, empty pages, and bou
 
 test("PDF page splitting rejects missing or out-of-order page markers", () => {
   const markerToken = "0123456789abcdef0123456789abcdef";
-  const marker = `\n<<<DDPRO_PDF_PAGE_${markerToken}:{page_number}/{total_number}>>>\n`;
+  const marker = `\n<<<DDPRO_PDF_PAGE_${markerToken}:{{page_number}}/{{total_number}}>>>\n`;
   const pageBoundary = (page) => marker
     .replace("{page_number}", String(page))
     .replace("{total_number}", "2");

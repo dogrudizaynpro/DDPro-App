@@ -405,7 +405,7 @@ export const splitPdfPages = (text, totalPages, markerToken) => {
   ) {
     throw fail("PDF page references could not be verified.", 422);
   }
-  const marker = new RegExp(`<<<DDPRO_PDF_PAGE_${markerToken}:(\\d+)/(\\d+)>>>`, "g");
+  const marker = new RegExp(`<<<DDPRO_PDF_PAGE_${markerToken}:\\{(\\d+)\\}/\\{(\\d+)\\}>>>`, "g");
   const pages = [];
   let cursor = 0;
   let match;
