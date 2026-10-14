@@ -27,6 +27,7 @@ before(async () => {
     }
 
     const table = url.pathname.split("/").at(-1);
+    if (table === "ddpro_auth") return Response.json({ ready: true });
     probedTables.push(table);
     if (table === unavailableTable) {
       return new Response(JSON.stringify({

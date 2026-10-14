@@ -24,19 +24,63 @@ const API_BASE_URL = resolveApiBaseUrl({
   hostname: getRuntimeHostname(),
 });
 const SESSION_KEY = "ddpro_browser_session";
+const LOGOUT_KEY = "ddpro_session_logout";
 let pendingSessionRestore;
 let sessionRestoreError;
 let sessionRestoreErrorExpiresAt = 0;
 let sessionRevision = 0;
+let explicitlyEnded = false;
+const logoutPending = () => {
+  if (explicitlyEnded || sessionStorage.getItem(LOGOUT_KEY)) return true;
+  try {
+    return Boolean(localStorage.getItem(LOGOUT_KEY));
+  } catch {
+    return false;
+  }
+};
+const sessionRequired = () => Object.assign(new Error("Bu tarayıcıdan çıkış yapıldı; yeniden giriş yapın."), {
+  status: 401, code: "BROWSER_SESSION_REQUIRED",
+});
+export const getBrowserSessionRevision = () => sessionRevision;
 export const clearBrowserSession = () => {
   sessionStorage.removeItem(SESSION_KEY);
   sessionRestoreError = undefined;
   sessionRestoreErrorExpiresAt = 0;
   sessionRevision += 1;
 };
-export const setBrowserSession = (session) => {
+export const endBrowserSession = ({ broadcast = true } = {}) => {
+  explicitlyEnded = true;
+  clearBrowserSession();
+  sessionStorage.setItem(LOGOUT_KEY, "ended");
+  sessionStorage.removeItem("ddpro_oauth_verifier");
+  sessionStorage.removeItem("ddpro_oauth_action");
+  if (broadcast) {
+    try {
+      localStorage.setItem(LOGOUT_KEY, `${Date.now()}:${Math.random()}`);
+    } catch {
+      // Server revocation remains authoritative when browser storage is unavailable.
+    }
+  }
+  window.dispatchEvent?.(new Event("ddpro:session-ended"));
+};
+globalThis.window?.addEventListener?.("storage", (event) => {
+  if (event.key !== LOGOUT_KEY) return;
+  if (event.newValue) endBrowserSession({ broadcast: false });
+  else {
+    explicitlyEnded = false;
+    sessionStorage.removeItem(LOGOUT_KEY);
+    clearBrowserSession();
+  }
+});
+export const setBrowserSession = (session, { restored = false } = {}) => {
   if (typeof session !== "string" || !session.trim()) {
     throw new Error("Google OAuth tarayıcı oturumu alınamadı; tekrar bağlanın.");
+  }
+  if (restored && logoutPending()) throw sessionRequired();
+  if (!restored) {
+    explicitlyEnded = false;
+    sessionStorage.removeItem(LOGOUT_KEY);
+    try { localStorage.removeItem(LOGOUT_KEY); } catch { /* Optional cross-tab signal. */ }
   }
   sessionStorage.setItem(SESSION_KEY, session);
   sessionRestoreError = undefined;
@@ -45,6 +89,7 @@ export const setBrowserSession = (session) => {
 };
 
 export const restoreBrowserSession = () => {
+  if (logoutPending()) return Promise.reject(sessionRequired());
   if (pendingSessionRestore) return pendingSessionRestore;
   if (sessionRestoreError && Date.now() < sessionRestoreErrorExpiresAt) {
     return Promise.reject(sessionRestoreError);
@@ -61,12 +106,13 @@ export const restoreBrowserSession = () => {
         status: 401, code: "BROWSER_SESSION_CHANGED",
       });
     }
-    setBrowserSession(response.data?.session);
+    setBrowserSession(response.data?.session, { restored: true });
   }).catch((error) => {
     if (revision !== sessionRevision && sessionStorage.getItem(SESSION_KEY)) return;
     if (error.status === 401 && revision === sessionRevision) {
       sessionRestoreError = error;
       sessionRestoreErrorExpiresAt = Date.now() + 5_000;
+      window.dispatchEvent?.(new Event("ddpro:session-invalid"));
     }
     throw error;
   });
@@ -90,6 +136,10 @@ const prepareBrowserSession = async (endpoint) => {
     if (![400, 401].includes(error.status)) throw error;
   }
   if (!requiresBrowserSession(endpoint) && endpoint.split("?")[0] !== "/api/integrations/status") return;
+  if (logoutPending()) {
+    if (endpoint.split("?")[0] === "/api/integrations/status") return sessionRequired();
+    throw sessionRequired();
+  }
   const session = sessionStorage.getItem(SESSION_KEY);
   if (session) {
     let expired = false;
@@ -156,7 +206,7 @@ export const fetchAPI = async (endpoint, options = {}) => {
   try {
     return withRestoreDiagnostics(await requestWithSafeRetry(normalizedEndpoint, options, sessionControl));
   } catch (error) {
-    if (!needsSession || (!requiresBrowserSession(normalizedEndpoint) && !isStatus) ||
+    if (logoutPending() || !needsSession || (!requiresBrowserSession(normalizedEndpoint) && !isStatus) ||
         error.status !== 401 || error.code === "GOOGLE_CONNECTION_REQUIRED") throw error;
     // Only DDPro authentication failures may restore/retry, never Google API failures.
     const currentSession = sessionStorage.getItem(SESSION_KEY);
@@ -195,6 +245,7 @@ const requestWithSafeRetry = async (endpoint, options, sessionControl = false) =
 };
 
 const requestAPI = async (endpoint, options, sessionControl = false) => {
+  const revision = sessionRevision;
   const {
     timeoutMs = DEFAULT_REQUEST_TIMEOUT_MS,
     signal: callerSignal,
@@ -265,6 +316,11 @@ const requestAPI = async (endpoint, options, sessionControl = false) => {
       throw error;
     }
 
+    if (!sessionControl && revision !== sessionRevision && !sessionStorage.getItem(SESSION_KEY)) {
+      throw Object.assign(new Error("Browser session changed during the request."), {
+        status: 401, code: "BROWSER_SESSION_CHANGED",
+      });
+    }
     return data;
   } catch (error) {
     if (requestTimedOut) {
@@ -286,6 +342,20 @@ const requestAPI = async (endpoint, options, sessionControl = false) => {
 };
 
 export const getApiHealth = async () => fetchAPI("/health");
+
+export const requestBrowserLogout = () => {
+  const session = sessionStorage.getItem(SESSION_KEY);
+  try {
+    if (API_CONFIGURATION_ERROR) return Promise.reject(new Error(API_CONFIGURATION_ERROR));
+    return requestAPI("/api/sessions/logout", {
+      method: "POST",
+      body: JSON.stringify({}),
+      headers: session ? { Authorization: ["Bearer", session].join(" ") } : {},
+    }, true);
+  } finally {
+    endBrowserSession();
+  }
+};
 
 // ============================================================
 // EXPORTS

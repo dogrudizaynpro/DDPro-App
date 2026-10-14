@@ -42,6 +42,10 @@ export const createIntegrationStatusStore = (
       return () => subscribers.delete(subscriber);
     },
     invalidate: () => { revision += 1; },
+    reset: () => {
+      revision += 1;
+      publish({ status: null, checkedAt: null, updatedAt: null, error: null });
+    },
     refresh: () => {
       if (pendingRequest) return pendingRequest;
 
@@ -84,6 +88,9 @@ const fetchIntegrationStatus = async () => {
 };
 
 const integrationStatusStore = createIntegrationStatusStore(fetchIntegrationStatus);
+if (typeof window !== "undefined") {
+  window.addEventListener?.("ddpro:session-ended", integrationStatusStore.reset);
+}
 
 export const getIntegrationStatus = () => integrationStatusStore.refresh();
 export const getIntegrationStatusSnapshot = integrationStatusStore.getSnapshot;

@@ -54,6 +54,7 @@ export const errorHandler = (err, req, res, next) => {
   res.status(statusCode).json({
     status: "error",
     message: errorMessage,
+    ...(err.code === "GOOGLE_CONNECTION_REQUIRED" && { code: err.code }),
     ...(err.googleApiError && {
       code: err.code,
       provider: err.provider,

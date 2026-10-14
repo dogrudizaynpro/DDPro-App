@@ -71,6 +71,7 @@ export const createAiCompletion = async (req, res, next) => {
       context,
       attachment: req.aiFile,
       integrationAccount: req.integrationAccount,
+      browserSession: req.browserSession,
     });
     await recordAiUsage(req.integrationAccount);
     return res.status(200).json({
@@ -206,7 +207,7 @@ export const executeAiVoiceTool = async (req, res, next) => {
           )).catch(reject);
         }),
       }
-      : await executeOperationalTool(req.integrationAccount, name, args);
+      : await executeOperationalTool(req.integrationAccount, name, args, undefined, req.browserSession);
     return res.status(200).json({ status: "success", data: result });
   } catch (error) {
     return next(error);
@@ -217,7 +218,8 @@ export const confirmAiOperationalAction = async (req, res, next) => {
   try {
     const data = await confirmAiAction(
       req.integrationAccount,
-      req.body?.confirmationId
+      req.body?.confirmationId,
+      req.browserSession
     );
     return res.status(200).json({ status: "success", data });
   } catch (error) {

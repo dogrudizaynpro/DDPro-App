@@ -106,8 +106,10 @@ export class RealtimeVoiceSession {
       this.stream = await this.browser.navigator.mediaDevices.getUserMedia({
         audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
       });
+      if (this.intentionalClose) { this.releaseResources(); return; }
       this.audioContext = new this.browser.AudioContext();
       await this.audioContext.resume();
+      if (this.intentionalClose) { this.releaseResources(); return; }
       if (typeof this.audioContext.createAnalyser === "function") {
         this.outputAnalyser = this.audioContext.createAnalyser();
         this.outputAnalyser.fftSize = 256;
@@ -118,6 +120,7 @@ export class RealtimeVoiceSession {
         context: this.context,
         history: this.history,
       });
+      if (this.intentionalClose) { this.releaseResources(); return; }
       if (!session?.token || !session?.websocketUrl || !session?.setup) {
         throw new Error("Sesli oturum yapılandırması alınamadı.");
       }
@@ -143,9 +146,11 @@ export class RealtimeVoiceSession {
         if (settled) return;
         settled = true;
         this.browser.clearTimeout(timeout);
+        this.cancelConnect = null;
         if (error) reject(error);
         else resolve();
       };
+      this.cancelConnect = () => finish();
       const url = `${session.websocketUrl}?access_token=${encodeURIComponent(session.token)}`;
       this.socket = new this.browser.WebSocket(url);
       this.socket.binaryType = "arraybuffer";
@@ -258,7 +263,7 @@ export class RealtimeVoiceSession {
     }
     Promise.resolve()
       .then(() => this.createSession({ context: this.context, history: this.history }))
-      .then((session) => this.connect(session))
+      .then((session) => this.intentionalClose ? undefined : this.connect(session))
       .catch((reconnectError) => this.fail(reconnectError || error));
   }
 
@@ -557,6 +562,7 @@ export class RealtimeVoiceSession {
   }
 
   releaseResources() {
+    this.cancelConnect?.();
     this.stopPlayback();
     this.processor?.disconnect();
     this.inputSource?.disconnect();

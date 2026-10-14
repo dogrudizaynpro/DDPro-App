@@ -18,10 +18,15 @@ export const isTokenTableAvailable = async () => {
   const client = getIntegrationAdmin();
   if (!client || !getEncryptionKey()) return false;
   try {
-    const { error } = await client
-      .from("integration_tokens")
-      .select("provider")
-      .limit(1);
+    const probes = await Promise.all([
+      client.from("integration_tokens").select("provider").limit(1),
+      ...["browser_accounts", "browser_sessions", "browser_oauth_attempts",
+        "browser_oauth_grants", "browser_action_proofs", "google_pending_revocations"]
+        .map((table) => client.from(table).select("*", { head: true }).limit(1)),
+      client.rpc("ddpro_auth", { op: "ready", args: {} }),
+    ]);
+    const error = probes.find((result) => result.error)?.error ||
+      (probes.at(-1).data?.ready !== true ? { code: "AUTH_STORAGE_NOT_READY" } : null);
     if (error) console.error("OAuth token table probe failed", { code: error.code, status: error.status });
     return !error;
   } catch (error) {
@@ -90,6 +95,7 @@ export const readIntegrationTokenSnapshot = async ({ provider, account }) => {
     .select("encrypted_token")
     .eq("provider", provider)
     .eq("account", account)
+    .eq("enabled", true)
     .maybeSingle();
   if (error) throw error;
   return data ? {
@@ -113,6 +119,7 @@ export const replaceIntegrationToken = async ({ provider, account, value, encryp
     })
     .eq("provider", provider)
     .eq("account", account)
+    .eq("enabled", true)
     .eq("encrypted_token", JSON.stringify(encryptedToken))
     .select("provider")
     .maybeSingle();
@@ -152,6 +159,7 @@ export const hasStoredIntegrationToken = async (provider, account = "") => {
     .from("integration_tokens")
     .select("provider")
     .eq("provider", provider);
+  query = query.eq("enabled", true);
   if (account) query = query.eq("account", account);
   const { data, error } = await query.limit(1).maybeSingle();
   if (error) return false;

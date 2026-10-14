@@ -326,6 +326,15 @@ function AIModule({
     setVoiceStatus("Sesli sohbet durduruldu; mikrofon kapatıldı.");
   };
 
+  useEffect(() => {
+    window.addEventListener("ddpro:session-ended", stopRealtimeVoice);
+    window.addEventListener("ddpro:session-invalid", stopRealtimeVoice);
+    return () => {
+      window.removeEventListener("ddpro:session-ended", stopRealtimeVoice);
+      window.removeEventListener("ddpro:session-invalid", stopRealtimeVoice);
+    };
+  }, []);
+
   const updateVoiceOperation = (operation) => {
     setVoiceOperations((current) => {
       const existing = current.findIndex((item) => item.id === operation.id);

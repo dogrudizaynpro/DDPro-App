@@ -176,6 +176,52 @@ test("realtime session streams microphone audio, transcripts, and stops playback
   assert.equal(analyser.connectedTo, null);
 });
 
+test("three independent device voice instances survive another device stop and tablet reconnect", async () => {
+  const devices = ["mobile", "tablet", "desktop"].map(() => createSession());
+  try {
+    await Promise.all(devices.map(({ session }) => session.start()));
+    const [mobile, tablet, desktop] = devices.map(({ session }) => session);
+    const tabletSocket = tablet.socket;
+    const desktopSocket = desktop.socket;
+    assert.equal(new Set(devices.map(({ session }) => session.socket)).size, 3);
+    mobile.stop();
+    assert.equal(mobile.socket, null);
+    assert.equal(tablet.socket, tabletSocket);
+    assert.equal(desktop.socket, desktopSocket);
+    assert.equal(tablet.active, true);
+    assert.equal(desktop.active, true);
+    tablet.reconnect(new Error("Tablet network interrupted"));
+    while (!tablet.active) await new Promise((resolve) => setImmediate(resolve));
+    assert.notEqual(tablet.socket, tabletSocket);
+    assert.equal(desktop.socket, desktopSocket);
+    assert.equal(desktopSocket.readyState, FakeWebSocket.OPEN);
+    await desktopSocket.emit({ serverContent: {
+      outputTranscription: { text: "Bilgisayarda bağımsız yanıt" }, turnComplete: true,
+    } });
+    assert.deepEqual(devices[2].events.transcripts.at(-1), ["assistant", "Bilgisayarda bağımsız yanıt"]);
+    assert.equal(devices[2].events.errors.length, 0);
+  } finally {
+    devices.forEach(({ session }) => session.stop());
+  }
+});
+
+test("logout while microphone permission is pending cannot reopen local audio", async () => {
+  let allowMicrophone;
+  const track = { stopped: false, stop() { this.stopped = true; } };
+  let sessionsCreated = 0;
+  const { session } = createSession({
+    browser: createBrowser(() => new Promise((resolve) => { allowMicrophone = resolve; })),
+    createSession: async () => { sessionsCreated += 1; },
+  });
+  const starting = session.start();
+  session.stop();
+  allowMicrophone({ getTracks: () => [track] });
+  await starting;
+  assert.equal(track.stopped, true);
+  assert.equal(sessionsCreated, 0);
+  assert.equal(session.socket, null);
+});
+
 test("Gemini Live tool calls use backend results and deduplicate repeated call IDs", async () => {
   let executions = 0;
   const { session, events } = createSession({

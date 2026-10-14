@@ -234,7 +234,7 @@ export const createAiOrchestrator = ({
   search = searchResearchProvider,
   executeAgentRead = (integrationAccount, resource) =>
     executeOperationalTool(integrationAccount, "read_records", { resource }),
-} = {}) => async ({ message, context = {}, attachment, integrationAccount } = {}) => {
+} = {}) => async ({ message, context = {}, attachment, integrationAccount, browserSession } = {}) => {
   if (typeof integrationAccount !== "string" || !integrationAccount.trim()) {
     throw createOrchestrationError(
       "An authenticated DDPro account is required for AI commands.",
@@ -394,6 +394,7 @@ export const createAiOrchestrator = ({
         context,
         attachment,
         integrationAccount,
+        browserSession,
         toolPolicy: classification.toolPolicy,
         taskContext,
         agents,

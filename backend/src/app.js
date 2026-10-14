@@ -9,6 +9,7 @@ import researchRouter from "./routes/research.routes.js";
 import offersRouter from "./routes/offers.routes.js";
 import aiRouter from "./routes/ai.routes.js";
 import integrationsRouter from "./routes/integrations.routes.js";
+import sessionsRouter from "./routes/sessions.routes.js";
 import crmRouter from "./routes/crm.routes.js";
 import catalogRouter from "./routes/catalog.routes.js";
 import reportsRouter from "./routes/reports.routes.js";
@@ -83,6 +84,7 @@ app.use("/api/research", researchRouter);
 app.use("/api/offers", offersRouter);
 app.use("/api/ai", aiRouter);
 app.use("/api/integrations", integrationsRouter);
+app.use("/api/sessions", sessionsRouter);
 app.use("/api/crm", crmRouter);
 app.use("/api/reports", reportsRouter);
 app.use("/api/finance", financeRouter);
@@ -160,6 +162,12 @@ app.get("/health", async (req, res) => {
       ["ai_file_imports", "file_row_fingerprint"],
       ["research_items", "procurement_status"],
       ["integration_tokens", "provider"],
+      ["browser_accounts", "account"],
+      ["browser_sessions", "id"],
+      ["browser_oauth_attempts", "id"],
+      ["browser_oauth_grants", "code_hash"],
+      ["browser_action_proofs", "proof_hash"],
+      ["google_pending_revocations", "id"],
       ["products", "id"],
       ["systems", "id"],
       ["system_images", "id"],
@@ -174,6 +182,8 @@ app.get("/health", async (req, res) => {
     const unavailableTables = results.flatMap(({ error }, index) =>
       error ? [coreTables[index][0]] : []
     );
+    const authProbe = await supabase.rpc("ddpro_auth", { op: "ready", args: {} });
+    if (authProbe.error || authProbe.data?.ready !== true) unavailableTables.push("ddpro_auth");
     if (unavailableTables.length > 0) {
       console.error("❌ Supabase health check failed:", unavailableTables);
       return res.status(503).json({

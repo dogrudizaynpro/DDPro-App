@@ -361,6 +361,7 @@ export const requestAiCompletion = async ({
   message,
   context = {},
   integrationAccount,
+  browserSession,
   attachment,
   readOnly = false,
   toolPolicy = null,
@@ -504,7 +505,8 @@ export const requestAiCompletion = async ({
           integrationAccount,
           name,
           args,
-          fileFingerprint
+          fileFingerprint,
+          browserSession
         );
         toolExecutions.push({
           agentId: getAiAgentIdForResource(args.resource),

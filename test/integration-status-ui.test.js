@@ -67,3 +67,19 @@ test("service failures do not disable Google retries or masquerade as configurat
   const refresh = source.match(/const refresh = async[\s\S]*?const startGoogleOAuth/)?.[0] || "";
   assert.doesNotMatch(refresh, /let aiTestResult;/);
 });
+
+test("device logout and account-wide actions have distinct labels and explicit confirmation", () => {
+  assert.match(source, /Bu cihazdan çıkış/);
+  assert.match(source, /Tüm DDPro oturumlarını iptal et/);
+  assert.match(source, /Google entegrasyonunu tüm hesapta kaldır/);
+  assert.match(source, /window\.confirm\("Yalnız bu tarayıcı profilinden/);
+  assert.match(source, /beginSessionReauthentication\(action\)/);
+  assert.match(source, /Henüz iptal yapılmadı/);
+  assert.match(source, /await finishSecurityAction\(\)/);
+  assert.doesNotMatch(source, /disconnectGoogleAccount/);
+  const voiceSource = readFile(new URL("../src/modules/AIModule.jsx", import.meta.url), "utf8");
+  return voiceSource.then((voice) => {
+    assert.match(voice, /addEventListener\("ddpro:session-ended", stopRealtimeVoice\)/);
+    assert.match(voice, /addEventListener\("ddpro:session-invalid", stopRealtimeVoice\)/);
+  });
+});

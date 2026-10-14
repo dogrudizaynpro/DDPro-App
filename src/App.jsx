@@ -708,6 +708,35 @@ function App() {
   ]);
 
   useEffect(() => {
+    const clearSessionView = () => {
+      projectsTouchedRef.current += 1;
+      procurementTouchedRef.current += 1;
+      offersTouchedRef.current += 1;
+      offerDetailsCacheRef.current.clear();
+      setProjects([]);
+      setProcurementItems([]);
+      setOffers([]);
+      setSelectedOfferDetail(null);
+      setSelectedOfferId(null);
+      setSelectedProjectId("");
+      setDashboardCoverUrls({});
+      setAiMessages([]);
+      setAiInput("");
+      setAiAttachment(null);
+      setShowProjectForm(false);
+      setShowProcurementForm(false);
+      setShowOfferForm(false);
+      setActiveModule((current) => ["settings", "integrations"].includes(current) ? current : "integrations");
+    };
+    window.addEventListener("ddpro:session-ended", clearSessionView);
+    window.addEventListener("ddpro:session-invalid", clearSessionView);
+    return () => {
+      window.removeEventListener("ddpro:session-ended", clearSessionView);
+      window.removeEventListener("ddpro:session-invalid", clearSessionView);
+    };
+  }, []);
+
+  useEffect(() => {
     try {
       localStorage.setItem(AI_DRAFT_STORAGE_KEY, JSON.stringify(aiInput));
     } catch {

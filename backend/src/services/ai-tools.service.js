@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { getIntegrationAdmin } from "../config/integration-admin.js";
+import { assertBrowserSessionActive, browserAuthRpc } from "./browser-session.service.js";
 import {
   createProject,
   deleteProject,
@@ -209,7 +210,8 @@ export const executeOperationalTool = async (
   integrationAccount,
   name,
   args,
-  sourceFingerprint
+  sourceFingerprint,
+  browserSession
 ) => {
   if (typeof integrationAccount !== "string" || !integrationAccount.trim()) {
     throw Object.assign(new Error("An authenticated DDPro account is required for AI tools."), {
@@ -234,7 +236,7 @@ export const executeOperationalTool = async (
   if (name === AI_TOOL_NAMES.prepareWrite) {
     return {
       type: "confirmation_required",
-      pendingAction: await prepareOperationalWrite(integrationAccount, args, sourceFingerprint),
+      pendingAction: await prepareOperationalWrite(integrationAccount, args, sourceFingerprint, browserSession),
     };
   }
   throw Object.assign(new Error("This AI operational tool is not available."), {
@@ -333,8 +335,10 @@ export const finishOperationalAuditEvent = async (
 export const prepareOperationalWrite = async (
   integrationAccount,
   { resource, operation, id, record = {} },
-  sourceFingerprint
+  sourceFingerprint,
+  browserSession
 ) => {
+  if (browserSession) await assertBrowserSessionActive(browserSession);
   assertResource(resource);
   if (!["create", "update", "delete"].includes(operation)) {
     throw Object.assign(new Error("The requested AI write operation is invalid."), {
@@ -412,6 +416,7 @@ export const prepareOperationalWrite = async (
   const { error } = await admin.from("ai_tool_confirmations").insert({
     id: confirmationId,
     owner_account: integrationAccount,
+    ...(browserSession ? { browser_session_id: browserSession.session, browser_epoch: browserSession.epoch } : {}),
     resource,
     operation,
     record_id: id || null,
@@ -464,7 +469,7 @@ export const prepareOperationalWrite = async (
   };
 };
 
-export const confirmOperationalWrite = async (integrationAccount, confirmationId) => {
+export const confirmOperationalWrite = async (integrationAccount, confirmationId, browserSession) => {
   if (typeof confirmationId !== "string" || !UUID_PATTERN.test(confirmationId)) {
     throw Object.assign(new Error("The AI action confirmation is invalid or expired."), {
       statusCode: 404,
@@ -473,7 +478,9 @@ export const confirmOperationalWrite = async (integrationAccount, confirmationId
   }
   const admin = getAdmin();
   const now = new Date().toISOString();
-  const action = await consumeOperationalConfirmation(
+  const action = browserSession ? await browserAuthRpc("confirm", {
+    ...browserSession, confirmation: confirmationId,
+  }) : await consumeOperationalConfirmation(
     admin,
     integrationAccount,
     confirmationId,
@@ -541,6 +548,7 @@ export const confirmOperationalWrite = async (integrationAccount, confirmationId
         });
       }
     }
+    if (browserSession) await assertBrowserSessionActive(browserSession);
     const result = await invokeController(controller[action.operation], integrationAccount, {
       id: action.record_id || undefined,
       record: recordPayload,
@@ -587,6 +595,7 @@ export const consumeOperationalConfirmation = async (
     .update({ confirmed_at: now })
     .eq("id", confirmationId)
     .eq("owner_account", integrationAccount)
+    .is("browser_session_id", null)
     .is("confirmed_at", null)
     .gt("expires_at", now)
     .select("id, resource, operation, record_id, record_payload, record_snapshot")

@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { Client } from "pg";
@@ -11,11 +10,12 @@ import {
 } from "../src/services/migration-runner.js";
 
 class FakePool {
-  constructor(options, { verified = true, history = [], unprotected = [] } = {}) {
+  constructor(options, { verified = true, history = [], unprotected = [], publicRpcDenied = true } = {}) {
     this.options = options;
     this.verified = verified;
     this.history = history;
     this.unprotected = unprotected;
+    this.publicRpcDenied = publicRpcDenied;
     this.queries = [];
     this.ended = false;
     this.released = false;
@@ -25,6 +25,7 @@ class FakePool {
     return {
       query: async (text) => {
         this.queries.push(text);
+        if (text.includes("AS public_denied")) return { rows: [{ service_access: true, anon_denied: true, authenticated_denied: true, public_denied: this.publicRpcDenied }] };
         if (text.startsWith("SELECT version, checksum FROM public.schema_migrations")) {
           return { rows: this.history };
         }
@@ -64,6 +65,15 @@ test("migration requires a direct database connection configuration", async () =
   );
 });
 
+test("migration fails closed when the browser authorization RPC is executable by PUBLIC", async () => {
+  class ExposedRpcPool extends FakePool {
+    constructor(options) { super(options, { publicRpcDenied: false }); }
+  }
+  await assert.rejects(applyDatabaseMigrations({
+    connectionString: "postgresql://example.invalid/ddpro", PoolClass: ExposedRpcPool,
+  }), /RPC execute grants verification failed/);
+});
+
 test("all migrations are applied in numeric order in one locked transaction", async () => {
   let pool;
   class SuccessfulPool extends FakePool {
@@ -84,7 +94,7 @@ test("all migrations are applied in numeric order in one locked transaction", as
     skipped: [],
   });
   assert.equal(result.applied[0], "001_base_schema");
-  assert.equal(result.applied.at(-1), "023_integration_token_service_role");
+  assert.equal(result.applied.at(-1), "024_browser_sessions");
   assert.equal(pool.options.ssl.rejectUnauthorized, true);
   assert.equal(pool.queries[0], "BEGIN");
   assert.match(pool.queries[1], /pg_advisory_xact_lock/);
@@ -100,8 +110,8 @@ test("all migrations are applied in numeric order in one locked transaction", as
     pool.queries.filter((text) => text.startsWith("INSERT INTO public.schema_migrations")).length,
     migrations.length
   );
-  assert.ok(pool.queries.at(-3).includes("table_info.relname = 'ai_tool_confirmations'"));
-  assert.ok(pool.queries.at(-2).includes("unnest($1::text[]"));
+  assert.ok(pool.queries.at(-4).includes("table_info.relname = 'ai_tool_confirmations'"));
+  assert.ok(pool.queries.at(-3).includes("unnest($1::text[]"));
   assert.equal(pool.queries.at(-1), "COMMIT");
   assert.equal(pool.released, true);
   assert.equal(pool.ended, true);
@@ -137,7 +147,7 @@ test("applied operations migration stays immutable and its service-role grant us
 });
 
 test("migration files are ordered numerically and invalid names fail closed", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "ddpro-migrations-"));
+  const directory = await mkdtemp(join(process.cwd(), "ddpro-migrations-"));
   try {
     await writeFile(join(directory, "010_later.sql"), "SELECT 10;");
     await writeFile(join(directory, "002_earlier.sql"), "SELECT 2;");
@@ -170,7 +180,7 @@ test("previously applied migrations are skipped and modified ones fail closed", 
     connectionString: "postgresql://example.invalid/ddpro",
     PoolClass: HistoryPool,
   });
-  assert.deepEqual(result.applied, ["023_integration_token_service_role"]);
+  assert.deepEqual(result.applied, ["024_browser_sessions"]);
   assert.equal(result.skipped.length, migrations.length - 1);
   for (const migration of migrations.slice(0, -1)) {
     assert.ok(!pool.queries.includes(migration.sql));
@@ -275,7 +285,7 @@ test("URL SSL options cannot replace CA trust or disable certificate/hostname ve
 });
 
 test("CA configuration supports escaped PEM newlines and mounted files", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "ddpro-ca-"));
+  const directory = await mkdtemp(join(process.cwd(), "ddpro-ca-"));
   const path = join(directory, "ca.pem");
   await writeFile(path, "test CA\nsecond line\n");
   try {

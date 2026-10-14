@@ -32,16 +32,21 @@ import {
 } from "../services/finance.service.js";
 import {
   beginGoogleConnection,
+  beginSessionReauthentication,
+  cancelSecurityAction,
   createGoogleCalendarEvent,
   deleteGoogleCalendarEvent,
   createCrmContact,
   deleteCrmContact,
-  disconnectGoogle,
+  finishSecurityAction,
   formatGoogleIntegrationError,
   getCrmContacts,
   getGoogleCalendarEvents,
+  getPendingSecurityAction,
   importGoogleCalendarToLocal,
   importGmailToCrm,
+  logoutBrowser,
+  retryGoogleDisconnect,
   sendWhatsAppText,
   updateCrmContact,
   updateGoogleCalendarEvent,
@@ -302,6 +307,8 @@ function IntegrationSettings({ onNavigate, hubMode = false }) {
   const [error, setError] = useState("");
   const [testing, setTesting] = useState("");
   const [notice, setNotice] = useState("");
+  const [securityAction, setSecurityAction] = useState(getPendingSecurityAction);
+  const [securityBusy, setSecurityBusy] = useState(false);
 
   useEffect(() => {
     const intervalId = window.setInterval(() => setNow(Date.now()), 30_000);
@@ -344,6 +351,7 @@ function IntegrationSettings({ onNavigate, hubMode = false }) {
       setStatusLoading(true);
       try {
         const initialStatus = await getIntegrationStatusOnce();
+        if (active) setSecurityAction(getPendingSecurityAction());
         const verification = await probeConfiguredIntegrations(initialStatus);
         const value = verification.value;
         if (active) {
@@ -395,23 +403,77 @@ function IntegrationSettings({ onNavigate, hubMode = false }) {
     return statusLabel({ connected: connection?.connected, configured, status: connection?.status });
   };
 
-  const startGoogleOAuth = async () => {
+  const startGoogleOAuth = async (reconnect = false) => {
     try {
-      await beginGoogleConnection();
+      await beginGoogleConnection({ reconnect });
     } catch (connectionError) {
       setError(connectionError.message);
     }
   };
 
-  const disconnectGoogleAccount = async () => {
+  const logoutThisBrowser = async () => {
+    if (!window.confirm("Yalnız bu tarayıcı profilinden (tüm sekmelerinden) çıkılsın mı? Diğer cihazlar ve Google entegrasyonu korunacak.")) return;
+    setSecurityBusy(true);
     try {
-      const response = await disconnectGoogle();
-      setNotice(response.data?.providerRevoked
-        ? "Google erişimi sağlayıcıda iptal edildi; Gmail ve Calendar oturumu kapatıldı."
-        : "DDPro token'ı kaldırıldı ve oturum kapatıldı. Google sağlayıcısı token iptalini doğrulamadı; Google hesap izinlerini kontrol edin.");
+      await logoutBrowser();
+      setNotice("Bu tarayıcıdan çıkış yapıldı. Diğer cihazlar ve Google entegrasyonu korunuyor.");
       await refresh();
-    } catch (disconnectError) {
-      setError(disconnectError.message || "Google bağlantısı kapatılamadı.");
+    } catch (logoutError) {
+      setError(logoutError.message);
+    } finally {
+      setSecurityBusy(false);
+    }
+  };
+
+  const beginSecurityAction = async (action) => {
+    const description = action === "disconnect"
+      ? "Google entegrasyonu tüm hesapta kaldırılacak; Gmail, Takvim, E-Tablolar ve Google hesabına bağlı WhatsApp AI erişimi duracak. Meta bağlantısı ve mevcut kayıtlar silinmeyecek. Tüm DDPro oturumları kapanacak."
+      : "Bu tarayıcı dahil tüm cihazlardaki DDPro oturumları ve bekleyen tarayıcı işlem onayları iptal edilecek. Google entegrasyonu korunacak.";
+    if (!window.confirm(`${description}\nDevam etmek için Google ile yeniden kimliğinizi doğrulayın.`)) return;
+    setSecurityBusy(true);
+    setError("");
+    try {
+      await beginSessionReauthentication(action);
+    } catch (reauthError) {
+      setError(reauthError.message);
+      setSecurityBusy(false);
+    }
+  };
+
+  const completeSecurityAction = async () => {
+    if (!securityAction || !window.confirm(securityAction.action === "disconnect"
+      ? "Google entegrasyonunu tüm hesapta kaldırıp tüm DDPro oturumlarını şimdi iptal etmeyi onaylıyor musunuz?"
+      : "Bu tarayıcı dahil tüm DDPro oturumlarını şimdi iptal etmeyi onaylıyor musunuz?")) return;
+    setSecurityBusy(true);
+    try {
+      const response = await finishSecurityAction();
+      setNotice(securityAction.action === "disconnect"
+        ? response.data?.providerRevoked
+          ? "Tüm DDPro oturumları kapatıldı ve Google sağlayıcı iptali doğrulandı. Mevcut kayıtlar korundu."
+          : "Yerel Google erişimi ve tüm DDPro oturumları kapatıldı. Sağlayıcı iptali bekliyor; tamamlanmadan yeniden bağlanmayın."
+        : "Tüm DDPro oturumları iptal edildi; Google entegrasyonu korundu.");
+      await refresh();
+    } catch (actionError) {
+      setError(`${actionError.message} İşlemi tekrar denemek için yeniden kimlik doğrulayın.`);
+    } finally {
+      setSecurityAction(null);
+      setSecurityBusy(false);
+    }
+  };
+
+  const retryPendingRevocation = async () => {
+    if (!window.confirm("Daha önce kaldırılmış Google bağlantısının sağlayıcı iptali yeniden denensin mi?")) return;
+    setSecurityBusy(true);
+    try {
+      const response = await retryGoogleDisconnect();
+      setNotice(response.data?.providerRevoked
+        ? "Google sağlayıcı iptali doğrulandı. İsterseniz Google entegrasyonunu yeniden bağlayabilirsiniz."
+        : "Google sağlayıcı iptali hâlâ doğrulanamadı. Yeni Google bağlantısı engellenmeye devam ediyor.");
+      await refresh();
+    } catch (retryError) {
+      setError(retryError.message);
+    } finally {
+      setSecurityBusy(false);
     }
   };
 
@@ -458,6 +520,25 @@ function IntegrationSettings({ onNavigate, hubMode = false }) {
       {error ? <p className="status-banner warning">{error}</p> : null}
       {status?.browserSession ? <p className="status-banner warning">{status.browserSession.message} ({status.browserSession.code})</p> : null}
       {notice ? <p className="status-banner success">{notice}</p> : null}
+      <section className="data-card">
+        <h3>DDPro oturum güvenliği</h3>
+        <p>Bu tarayıcı oturumu: {status?.google?.authenticated ? "DOĞRULANDI" : "GİRİŞ GEREKLİ"}. Google servis yetkisi ve bu sayfanın AI/ses bağlantısı ayrı yönetilir.</p>
+        <p>Sesli görüşmeyi durdurmak için AI Asistan'daki görüşmeyi durdur düğmesini kullanın; bu işlem oturum kapatmaz.</p>
+        {status?.google?.pendingRevocation ? <div role="alert">
+          <p>Önceki Google bağlantısının sağlayıcı iptali bekliyor. DDPro oturumu açık; Gmail, Takvim, E-Tablolar ve Google hesabına bağlı WhatsApp AI erişimi kapalıdır. Yeni Google entegrasyonu bu iptal tamamlanmadan kaydedilmez.</p>
+          <button type="button" disabled={securityBusy} onClick={retryPendingRevocation}>Bekleyen Google iptalini tekrar dene</button>
+        </div> : null}
+        <div className="module-toolbar">
+          <button type="button" disabled={securityBusy} onClick={logoutThisBrowser}>Bu cihazdan çıkış</button>
+          <button type="button" disabled={securityBusy || !status?.google?.authenticated} onClick={() => beginSecurityAction("revoke-all")}>Tüm DDPro oturumlarını iptal et</button>
+          <button type="button" disabled={securityBusy || !status?.google?.authenticated} onClick={() => beginSecurityAction("disconnect")}>Google entegrasyonunu tüm hesapta kaldır</button>
+        </div>
+        {securityAction ? <div role="alert">
+          <p>Google yeniden doğrulaması alındı. Henüz iptal yapılmadı. Kanıt kısa süreli ve tek kullanımlıdır.</p>
+          <button type="button" disabled={securityBusy} onClick={completeSecurityAction}>{securityAction.action === "disconnect" ? "Google entegrasyonunu kaldırmayı onayla" : "Tüm DDPro oturumlarını iptal etmeyi onayla"}</button>
+          <button type="button" disabled={securityBusy} onClick={() => { cancelSecurityAction(); setSecurityAction(null); }}>Vazgeç</button>
+        </div> : null}
+      </section>
       <div className="operations-grid">
         {integrationCatalog.map((integration) => {
           const connection = providerStatus(integration);
@@ -482,7 +563,7 @@ function IntegrationSettings({ onNavigate, hubMode = false }) {
                 <div className="integration-card-heading"><h3>{integration.title}</h3><span className={`integration-state${stateClass}`}>{integrationStatusLabel(integration, connection, configured)}</span></div>
                 <p>{integration.description}</p>
                 {testing === integration.id ? <p role="status">Bağlantı test ediliyor; son doğrulanmış sonuç korunuyor…</p> : null}
-                {integration.id === "crm" ? <p>CRM depolama sağlığı: {connection?.connected ? "ERİŞİLEBİLİR" : "DOĞRULANMADI"} · Kullanıcı oturum yetkisi: {isGoogleConnected ? "GOOGLE OTURUMU DOĞRULANDI" : "GOOGLE OTURUMU GEREKLİ"}</p> : null}
+                {integration.id === "crm" ? <p>CRM depolama sağlığı: {connection?.connected ? "ERİŞİLEBİLİR" : "DOĞRULANMADI"} · Kullanıcı oturum yetkisi: {isGoogleConnected ? "DDPRO OTURUMU DOĞRULANDI" : "DDPRO OTURUMU GEREKLİ"}</p> : null}
                 {connection ? <p>{statusIsStale || hasRefreshFailure ? "Son başarılı API yanıtındaki durum güncel bağlantı olarak doğrulanmadı. " : ""}Yapılandırma: {connection.configured ? "HAZIR" : "EKSİK"} · Servis yetkisi: {connection.authorized === true ? "DOĞRULANDI" : connection.authorized === false ? "GEREKLİ" : "DOĞRULANMADI"} · Erişim: {connection.reachable === true ? "ERİŞİLEBİLİR" : connection.reachable === false ? "ERİŞİLEMİYOR" : "DOĞRULANMADI"} · İşlev: {connection.working === true ? "DOĞRULANDI" : connection.working === false ? "BAŞARISIZ" : "TEST EDİLMEDİ"}</p> : null}
                 {integration.id === "whatsapp" && status ? (
                   <p>Outbound: {connection?.sendConfigured ? "HAZIR" : "YAPILANDIRMA GEREKLİ"} · Webhook: {connection?.webhookConfigured ? "HAZIR" : "YAPILANDIRMA GEREKLİ"}</p>
@@ -493,10 +574,9 @@ function IntegrationSettings({ onNavigate, hubMode = false }) {
                   {connection?.lastTest?.error ? <span className="integration-error">{formatGoogleIntegrationError({ message: connection.lastTest.error, googleApiError: connection.lastTest.googleApiError })}</span> : null}
                   {integration.id === "whatsapp" ? <span className="integration-secret-note">BAĞLI, başarılı Meta telefon kaydı testini gösterir; yapılandırma tek başına yeterli değildir. Webhook teslimatı ve mesaj gönderimi ayrıca canlı sistemde sınanmalıdır. API sürümü belirtilmezse v23.0 kullanılır.</span> : null}
                   <div className="module-toolbar integration-actions">
-                    {integration.requiresOAuth && !isGoogleConnected ? <button type="button" onClick={startGoogleOAuth}><DDProIcon name="settings" />Google hesabını bağla</button> : null}
-                    {integration.requiresOAuth && isGoogleConnected ? <button type="button" onClick={startGoogleOAuth}><DDProIcon name="settings" />Google izinlerini yenile (Gmail + Calendar + Sheets)</button> : null}
+                    {integration.requiresOAuth && !isGoogleConnected ? <button type="button" onClick={() => startGoogleOAuth()}><DDProIcon name="settings" />Google ile DDPro'ya giriş yap</button> : null}
+                    {integration.requiresOAuth && isGoogleConnected ? <button type="button" disabled={status?.google?.pendingRevocation || securityBusy} onClick={() => startGoogleOAuth(true)}><DDProIcon name="settings" />Google izinlerini yenile (Gmail + Calendar + Sheets)</button> : null}
                     <button type="button" disabled={statusLoading || !(integration.id === "whatsapp" ? connection?.sendConfigured : configured) || testing === integration.id || (integration.requiresOAuth && !isGoogleConnected)} onClick={() => runConnectionTest(integration.id)}><DDProIcon name="settings" />{testing === integration.id ? "Test ediliyor…" : "Bağlantıyı test et"}</button>
-                    {integration.requiresOAuth && isGoogleConnected ? <button type="button" onClick={disconnectGoogleAccount}><DDProIcon name="settings" />Google bağlantısını kes (Gmail + Calendar)</button> : null}
                     <button type="button" onClick={() => onNavigate(integration.moduleId)}>{integration.moduleId === "ai-assistant" ? "AI TRADE'i aç" : "Modülü aç"}</button>
                   </div>
                   <span className="integration-secret-note">Credential alanları yalnızca sunucu environment variables üzerinden tanımlanır; secret değeri uygulamada gösterilmez.</span>

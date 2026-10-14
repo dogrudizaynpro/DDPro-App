@@ -47,6 +47,12 @@ export const serviceRoleTables = [
   "project_ai_analyses",
   "whatsapp_inbound_messages",
   "integration_tokens",
+  "browser_accounts",
+  "browser_sessions",
+  "browser_oauth_attempts",
+  "browser_oauth_grants",
+  "browser_action_proofs",
+  "google_pending_revocations",
 ];
 // Tables that must exist with RLS enabled and no direct client access.
 const privateTables = ["schema_migrations"];
@@ -267,6 +273,19 @@ export const applyDatabaseMigrations = async ({
           .map((row) => row.table_name)
           .join(", ")}.`
       );
+    }
+    const rpcPrivileges = await client.query(`
+      SELECT has_function_privilege('service_role','public.ddpro_auth(text,jsonb)','EXECUTE') AS service_access,
+        NOT has_function_privilege('anon','public.ddpro_auth(text,jsonb)','EXECUTE') AS anon_denied,
+        NOT has_function_privilege('authenticated','public.ddpro_auth(text,jsonb)','EXECUTE') AS authenticated_denied,
+        NOT EXISTS (
+          SELECT 1 FROM pg_proc p, LATERAL aclexplode(COALESCE(p.proacl,acldefault('f',p.proowner))) acl
+          WHERE p.oid='public.ddpro_auth(text,jsonb)'::regprocedure AND acl.grantee=0
+            AND acl.privilege_type='EXECUTE'
+        ) AS public_denied
+    `);
+    if (!rpcPrivileges.rows[0] || !Object.values(rpcPrivileges.rows[0]).every(Boolean)) {
+      throw new MigrationError("Browser authorization RPC execute grants verification failed.");
     }
 
     await client.query("COMMIT");

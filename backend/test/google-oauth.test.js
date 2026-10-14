@@ -4,7 +4,6 @@ import { spawn, spawnSync } from "node:child_process";
 import { once } from "node:events";
 import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createServer } from "node:https";
 import { after, before, test } from "node:test";
@@ -19,6 +18,12 @@ const previous = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
 const originalFetch = globalThis.fetch;
 let savedToken;
 let exchangeGrant;
+const authAttempts = new Map();
+const authGrants = new Map();
+const authSessions = new Map();
+let authEpoch = 1;
+let authSequence = 0;
+let revokedSequence = 0;
 let server;
 let baseUrl;
 let workspaceResponse;
@@ -71,6 +76,42 @@ before(async () => {
   });
   globalThis.fetch = async (input, options = {}) => {
     const url = String(input);
+    if (url.includes("/rest/v1/rpc/ddpro_auth")) {
+      const { op, args } = JSON.parse(options.body);
+      if (op === "ready") return Response.json({ ready: true });
+      if (op === "pending") return Response.json(null);
+      if (op === "begin") {
+        const attempt = { id: randomBytes(16).toString("hex"), sequence: ++authSequence, ...args };
+        authAttempts.set(attempt.id, attempt);
+        return Response.json(attempt);
+      }
+      if (op === "callback") {
+        const attempt = authAttempts.get(args.attempt);
+        if (!attempt || attempt.consumed || attempt.sequence <= revokedSequence) return Response.json({ message: "revoked" }, { status: 409 });
+        attempt.consumed = true;
+        if (!savedToken || !args.adequate) {
+          savedToken = { provider: "google", account: args.account, encrypted_token: args.token, enabled: true };
+          googleTokenUpserts += 1;
+        }
+        authGrants.set(args.code, { ...attempt, account: args.account, epoch: authEpoch });
+        return Response.json({ account: args.account, epoch: authEpoch });
+      }
+      if (op === "exchange") {
+        const grant = authGrants.get(args.code);
+        if (!grant || grant.challenge !== args.challenge || grant.epoch !== authEpoch || grant.sequence <= revokedSequence) return Response.json(null);
+        authGrants.delete(args.code);
+        const session = { account: grant.account, session: args.session, epoch: authEpoch,
+          restore: args.restore, expiresAt: new Date(Date.now() + 30 * 86400_000).toISOString() };
+        authSessions.set(session.session, session);
+        return Response.json(session);
+      }
+      const session = authSessions.get(args.session);
+      if (!session || session.revoked || session.epoch !== authEpoch || Date.parse(session.expiresAt) <= Date.now()) return Response.json(null);
+      if (op === "restore") return Response.json(session.restore === args.restore ? session : null);
+      if (op === "validate") return Response.json(session.account === args.account && session.epoch === args.epoch ? session : null);
+      if (op === "logout") { session.revoked = true; revokedSequence = ++authSequence; return Response.json({ revoked: true }); }
+      throw new Error(`Unexpected auth operation: ${op}`);
+    }
     if (url.includes("/rest/v1/integration_tokens")) {
       if (options.method === "POST") {
         const payload = JSON.parse(options.body);
@@ -124,6 +165,7 @@ before(async () => {
     }
     if (url.includes("/rest/v1/")) {
       const table = new URL(url).pathname.split("/").at(-1);
+      if (table.startsWith("browser_") || table === "google_pending_revocations") return new Response(null, { status: 200 });
       if (options.method === "HEAD") {
         storageProbeMethods.push({ table, method: options.method });
         if (table === "crm_contacts" && crmStorageFailure) {
@@ -252,7 +294,7 @@ test("OAuth readiness requires a valid redirect and encryption key", async () =>
     const status = await getGoogleConfigurationStatus();
     assert.equal(status.oauthFlowAvailable, false);
     assert.ok(status.missingRequirements.includes("INTEGRATION_TOKEN_ENCRYPTION_KEY"));
-    const response = await originalFetch(`${baseUrl}/api/integrations/google/start`, { redirect: "manual" });
+    const response = await originalFetch(`${baseUrl}/api/integrations/google/start?challenge=${"a".repeat(43)}`, { redirect: "manual" });
     assert.equal(response.status, 503);
     process.env.INTEGRATION_TOKEN_ENCRYPTION_KEY = originalKey;
     process.env.GOOGLE_REDIRECT_URI = "https://example.com/wrong-callback";
@@ -298,7 +340,7 @@ test("OAuth start redirects to Google and callback stores encrypted token and se
   const result = await originalFetch(callback, { redirect: "manual", headers: { cookie: stateCookie } });
   assert.equal(result.status, 302);
   assert.match(result.headers.get("location"), /integration=google_connected/);
-  assert.match(result.headers.get("set-cookie"), /ddpro_integration_session=/);
+  assert.doesNotMatch(result.headers.get("set-cookie"), /ddpro_integration_session=/);
   assert.doesNotMatch(result.headers.get("set-cookie"), /ddpro_session_restore|Partitioned/);
   const exchangeCode = new URL(result.headers.get("location").replace("#", "?")).searchParams.get("exchange_code");
   assert.ok(exchangeCode);
@@ -323,7 +365,7 @@ const createBrowserSession = async () => {
   const state = new URL(start.headers.get("location")).searchParams.get("state");
   const callback = `${baseUrl}/api/integrations/google/callback?state=${encodeURIComponent(state)}&code=test-code`;
   const result = await originalFetch(callback, { redirect: "manual", headers: { cookie: stateCookie } });
-  callbackCookie = result.headers.getSetCookie().find((value) => value.startsWith("ddpro_integration_session=")).split(";")[0];
+  callbackCookie = `ddpro_integration_session=${signedPayload({ email: "owner@example.com", expiresAt: Date.now() + 60_000 })}`;
   const code = new URLSearchParams(result.headers.get("location").split("?")[1]).get("exchange_code");
   assert.ok(code);
   const exchange = await originalFetch(`${baseUrl}/api/integrations/google/exchange`, {
@@ -333,7 +375,7 @@ const createBrowserSession = async () => {
   });
   assert.equal(exchange.status, 200);
   const persistent = exchange.headers.getSetCookie().find((value) => value.startsWith("ddpro_session_restore="));
-  assert.match(persistent, /HttpOnly; Path=\/api\/integrations\/google; Max-Age=2592000; Secure; SameSite=None; Partitioned$/);
+  assert.match(persistent, /HttpOnly; Path=\/api\/integrations\/google; Max-Age=(2592000|259199[89]); Secure; SameSite=None; Partitioned$/);
   restoreCookie = persistent.split(";")[0];
   assert.equal(exchange.headers.get("cache-control"), "no-store");
   browserSession = (await exchange.json()).data.session;
@@ -928,9 +970,11 @@ const restore = (cookie = restoreCookie, headers = {}) =>
     },
     body: "{}",
   });
-const restorePayload = () => JSON.parse(Buffer.from(
-  decodeURIComponent(restoreCookie.split("=")[1]).split(".")[0], "base64url",
-).toString("utf8"));
+const restorePayload = () => {
+  const id = decodeURIComponent(restoreCookie.split("=")[1]).split(".")[0];
+  const session = authSessions.get(id);
+  return { ...session, expiresAt: Date.parse(session.expiresAt) };
+};
 
 test("restoration survives backend restart, issues only a short private bearer and never slides expiry", async () => {
   const beforePayload = restorePayload();
@@ -952,10 +996,10 @@ test("restoration survives backend restart, issues only a short private bearer a
   assert.doesNotMatch(JSON.stringify(body), /test-access|test-refresh|test-refreshed-access|clientSecret/);
   const [encoded, signature] = body.data.session.split(".");
   assert.equal(signature, createHmac("sha256", process.env.INTEGRATION_SESSION_SECRET)
-    .update(`browser:${encoded}`).digest("base64url"));
+    .update(`browser:v2:${encoded}`).digest("base64url"));
   const payload = JSON.parse(Buffer.from(encoded, "base64url").toString("utf8"));
-  assert.equal(payload.email, "owner@example.com");
-  assert.equal(payload.sessionVersion, beforePayload.sessionVersion);
+  assert.equal(payload.account, "owner@example.com");
+  assert.equal(payload.session, beforePayload.session);
   assert.ok(payload.expiresAt <= Date.now() + 8 * 60 * 60 * 1000);
   assert.ok(payload.expiresAt <= beforePayload.expiresAt);
   assert.ok(beforePayload.expiresAt > Date.now() + 29 * 24 * 60 * 60 * 1000);
@@ -1083,19 +1127,14 @@ test("Chromium accepts the production-origin CHIPS cookie and restores after ref
   timeout: 60_000,
 }, async () => {
   if (!browserSession) await createBrowserSession();
-  const profile = await mkdtemp(join(tmpdir(), "ddpro-browser-session-"));
+  const profile = await mkdtemp(join(process.cwd(), "ddpro-browser-session-"));
   const { encryptIntegrationToken } = await import("../src/services/integration-vault.service.js");
   const code = randomBytes(32).toString("base64url");
   const verifier = randomBytes(32).toString("base64url");
-  exchangeGrant = {
-    provider: "google_session_exchange",
-    account: createHash("sha256").update(code).digest("base64url"),
-    encrypted_token: encryptIntegrationToken({
-      session: browserSession.split(".")[0],
-      challenge: createHash("sha256").update(verifier).digest("base64url"),
-      expiresAt: Date.now() + 120_000,
-    }),
-  };
+  authGrants.set(createHash("sha256").update(code).digest("base64url"), {
+    account: "owner@example.com", epoch: authEpoch, sequence: ++authSequence,
+    challenge: createHash("sha256").update(verifier).digest("base64url"),
+  });
   const certificate = spawnSync("openssl", ["req", "-x509", "-newkey", "rsa:2048", "-nodes",
     "-keyout", join(profile, "key.pem"), "-out", join(profile, "cert.pem"),
     "-subj", "/CN=ddpro-app.onrender.com", "-days", "1"], { stdio: "ignore" });
@@ -1305,18 +1344,17 @@ test("missing, expired, tampered and malformed restoration proof require browser
   assert.equal((await invalidWithFallback.json()).code, "BROWSER_SESSION_REQUIRED");
 });
 
-test("valid callback cookie bootstraps restoration only from browser-origin JSON", async () => {
+test("legacy callback cookies cannot bootstrap browser authorization", async () => {
   const response = await restore(callbackCookie);
-  assert.equal(response.status, 200);
-  assert.match(response.headers.get("set-cookie"), /ddpro_session_restore=.*Partitioned/);
+  assert.equal(response.status, 401);
+  assert.match(response.headers.get("set-cookie"), /ddpro_session_restore=;.*Partitioned/);
   assert.equal(response.headers.get("cache-control"), "no-store");
-  const bearer = (await response.json()).data.session;
-  assert.ok(bearer);
+  assert.equal((await response.json()).code, "BROWSER_SESSION_REQUIRED");
   const invalid = await restore("ddpro_integration_session=invalid");
   assert.equal((await invalid.json()).code, "BROWSER_SESSION_REQUIRED");
 });
 
-test("legacy callback upgrade stores a version only in the encrypted Google token", async () => {
+test("legacy callback rejection never upgrades or modifies the Google token", async () => {
   const { encryptIntegrationToken, decryptIntegrationToken } = await import("../src/services/integration-vault.service.js");
   const previousToken = structuredClone(savedToken);
   const { sessionVersion: _version, ...legacyToken } = decryptIntegrationToken(savedToken.encrypted_token);
@@ -1326,14 +1364,12 @@ test("legacy callback upgrade stores a version only in the encrypted Google toke
   })}`;
   try {
     const response = await restore(legacyCookie);
-    assert.equal(response.status, 200);
+    assert.equal(response.status, 401);
     assert.equal(savedToken.provider, "google");
     const token = decryptIntegrationToken(savedToken.encrypted_token);
-    assert.match(token.sessionVersion, /^[A-Za-z0-9_-]{43}$/);
+    assert.equal(token.sessionVersion, undefined);
     assert.equal(savedToken.sessionVersion, undefined);
     assert.equal(token.accessToken, legacyToken.accessToken);
-    const cookie = response.headers.getSetCookie().find((value) => value.startsWith("ddpro_session_restore=")).split(";")[0];
-    assert.equal((await restore(cookie)).status, 200);
     assert.doesNotMatch(JSON.stringify(await response.json()), /test-refresh|test-access|test-refreshed-access/);
     const staleLegacy = await restore(legacyCookie);
     assert.equal(staleLegacy.status, 401);
@@ -1345,26 +1381,33 @@ test("legacy callback upgrade stores a version only in the encrypted Google toke
 
 test("restoration bearer cannot extend the absolute cookie expiry", async () => {
   const expiresAt = Date.now() + 60_000;
-  const cookie = `ddpro_session_restore=${signedPayload({ ...restorePayload(), expiresAt }, "restore:")}`;
+  const current = authSessions.get(restorePayload().session);
+  const previousExpiry = current.expiresAt;
+  current.expiresAt = new Date(expiresAt).toISOString();
   const expiredBearer = signedPayload({ email: "owner@example.com", expiresAt: Date.now() - 1 }, "browser:");
-  const response = await restore(cookie, { Authorization: ["Bearer", expiredBearer].join(" ") });
+  const response = await restore(restoreCookie, { Authorization: ["Bearer", expiredBearer].join(" ") });
   assert.equal(response.status, 200);
   assert.equal(response.headers.get("set-cookie"), null);
   const bearer = (await response.json()).data.session;
   const payload = JSON.parse(Buffer.from(bearer.split(".")[0], "base64url").toString("utf8"));
   assert.equal(payload.expiresAt, expiresAt);
+  current.expiresAt = previousExpiry;
 });
 
-test("proven browser without stored Google token gets connection-required, including cookie middleware", async () => {
+test("proven browser without Google tokens can use app routes but not Google APIs", async () => {
   const previousToken = savedToken;
   savedToken = null;
   try {
     const response = await restore();
-    assert.equal(response.status, 401);
-    assert.equal((await response.json()).code, "GOOGLE_CONNECTION_REQUIRED");
-    assert.match(response.headers.get("set-cookie"), /Max-Age=0.*Partitioned/);
+    assert.equal(response.status, 200);
+    assert.ok((await response.json()).data.session);
+    assert.equal(response.headers.get("set-cookie"), null);
+    const appResponse = await originalFetch(`${baseUrl}/api/projects`, {
+      headers: { Origin: frontendOrigin, Authorization: ["Bearer", browserSession].join(" ") },
+    });
+    assert.equal(appResponse.status, 200);
     const protectedResponse = await originalFetch(`${baseUrl}/api/integrations/calendar/events`, {
-      headers: { Cookie: callbackCookie, "X-Forwarded-For": "192.0.2.30" },
+      headers: { Origin: frontendOrigin, Authorization: ["Bearer", browserSession].join(" "), "X-Forwarded-For": "192.0.2.30" },
     });
     assert.equal(protectedResponse.status, 401);
     assert.equal((await protectedResponse.json()).code, "GOOGLE_CONNECTION_REQUIRED");
@@ -1373,7 +1416,7 @@ test("proven browser without stored Google token gets connection-required, inclu
   }
 });
 
-test("session parsing rejects non-finite expiry while legacy signed bearers still authenticate", async () => {
+test("session parsing rejects non-finite expiry and all legacy signed bearers and cookies", async () => {
   for (const expiresAt of [null, "9999999999999", undefined]) {
     const session = signedPayload({ email: "owner@example.com", expiresAt }, "browser:");
     const response = await originalFetch(`${baseUrl}/api/integrations/status`, {
@@ -1394,17 +1437,10 @@ test("session parsing rejects non-finite expiry while legacy signed bearers stil
         email: "owner@example.com", expiresAt: Date.now() + 60_000,
       })}` },
     ]) {
-      const response = await originalFetch(`${baseUrl}/api/integrations/status`, {
-        headers: { Origin: frontendOrigin, ...proof },
-      });
-      const { data } = (await response.json());
-      assert.equal(data.google.authenticated, true);
-      assert.equal(data.google.connected, false);
-      assert.equal(data.gmail.connected, false);
       const protectedResponse = await originalFetch(`${baseUrl}/api/integrations/calendar/events/bad`, {
         headers: { Origin: frontendOrigin, "X-Forwarded-For": "192.0.2.70", ...proof },
       });
-      assert.equal(protectedResponse.status, 400);
+      assert.equal(protectedResponse.status, 401);
     }
   } finally {
     savedToken = previousToken;
@@ -1428,24 +1464,27 @@ test("restoration rate limit returns no-store without changing cookies or contac
   assert.equal(providerRequests, requestsBefore);
 });
 
-test("disconnect clears matching cookies and reconnect cannot revive old restore cookies or versioned sessions", async () => {
-  const { decryptIntegrationToken } = await import("../src/services/integration-vault.service.js");
-  const oldVersion = decryptIntegrationToken(savedToken.encrypted_token).sessionVersion;
-  const legacyPayload = { email: "owner@example.com", expiresAt: Date.now() + 60_000 };
-  const legacyCookie = `ddpro_integration_session=${signedPayload(legacyPayload)}`;
-  const legacyBearer = signedPayload(legacyPayload, "browser:");
+test("legacy Google logout has no effects and browser logout retains provider credentials", async () => {
+  const before = structuredClone(savedToken);
   const disconnected = await originalFetch(`${baseUrl}/api/integrations/google/logout`, {
     method: "POST",
     headers: { Origin: frontendOrigin, Authorization: ["Bearer", browserSession].join(" "),
       "X-Forwarded-For": "192.0.2.50" },
   });
-  assert.equal(disconnected.status, 200);
-  assert.equal(savedToken, null);
-  assert.deepEqual((await disconnected.json()).data, { disconnected: true, providerRevoked: true });
-  const cleared = disconnected.headers.getSetCookie();
+  assert.equal(disconnected.status, 409);
+  assert.equal((await disconnected.json()).code, "UPDATE_REQUIRED");
+  assert.deepEqual(savedToken, before);
+  assert.equal(disconnected.headers.get("set-cookie"), null);
+  const logout = await originalFetch(`${baseUrl}/api/sessions/logout`, {
+    method: "POST", headers: { Origin: frontendOrigin, Authorization: ["Bearer", browserSession].join(" "),
+      "Content-Type": "application/json" }, body: "{}",
+  });
+  assert.equal(logout.status, 200);
+  assert.deepEqual(savedToken, before);
+  const cleared = logout.headers.getSetCookie();
   assert.ok(cleared.some((cookie) => /ddpro_integration_session=; HttpOnly; Path=\/api; Max-Age=0; Secure; SameSite=None$/.test(cookie)));
   assert.ok(cleared.some((cookie) => /ddpro_session_restore=; HttpOnly; Path=\/api\/integrations\/google; Max-Age=0; Secure; SameSite=None; Partitioned$/.test(cookie)));
-  assert.equal((await (await restore(restoreCookie, { "X-Forwarded-For": "192.0.2.50" })).json()).code, "GOOGLE_CONNECTION_REQUIRED");
+  assert.equal((await (await restore(restoreCookie, { "X-Forwarded-For": "192.0.2.50" })).json()).code, "BROWSER_SESSION_REQUIRED");
   const verifier = randomBytes(32).toString("base64url");
   const challenge = createHash("sha256").update(verifier).digest("base64url");
   const headers = { "X-Forwarded-For": "192.0.2.60" };
@@ -1458,14 +1497,10 @@ test("disconnect clears matching cookies and reconnect cannot revive old restore
   });
   assert.equal(callback.status, 302);
   assert.doesNotMatch(callback.headers.get("set-cookie"), /ddpro_session_restore/);
-  assert.notEqual(decryptIntegrationToken(savedToken.encrypted_token).sessionVersion, oldVersion);
+  assert.deepEqual(savedToken, before);
   assert.equal((await (await restore(restoreCookie, { "X-Forwarded-For": "192.0.2.60" })).json()).code, "BROWSER_SESSION_REQUIRED");
-  const legacyRestore = await restore(legacyCookie, headers);
-  assert.equal(legacyRestore.status, 401);
-  assert.equal((await legacyRestore.json()).code, "BROWSER_SESSION_REQUIRED");
   for (const proof of [
     { Authorization: ["Bearer", browserSession].join(" ") }, { Cookie: callbackCookie },
-    { Authorization: ["Bearer", legacyBearer].join(" ") }, { Cookie: legacyCookie },
   ]) {
     const response = await originalFetch(`${baseUrl}/api/integrations/calendar/events`, {
       headers: { ...headers, Origin: frontendOrigin, ...proof },
@@ -1494,7 +1529,9 @@ test("disconnect clears matching cookies and reconnect cannot revive old restore
     body: JSON.stringify({ code, verifier }),
   });
   assert.equal(exchanged.status, 200);
+  browserSession = (await exchanged.json()).data.session;
   const newCookie = exchanged.headers.getSetCookie().find((value) => value.startsWith("ddpro_session_restore=")).split(";")[0];
+  restoreCookie = newCookie;
   assert.equal((await restore(newCookie, headers)).status, 200);
 });
 
@@ -1543,7 +1580,7 @@ test("refresh racing disconnect or OAuth reconnection cannot resurrect or overwr
   }
 });
 
-test("legacy restoration bootstrap racing disconnect or reconnect never replaces the changed Google token", async () => {
+test("legacy restoration rejection cannot race a provider credential update", async () => {
   const { encryptIntegrationToken, decryptIntegrationToken, removeIntegrationToken, saveIntegrationToken } =
     await import("../src/services/integration-vault.service.js");
   const previousToken = structuredClone(savedToken);
@@ -1555,7 +1592,7 @@ test("legacy restoration bootstrap racing disconnect or reconnect never replaces
     for (const change of ["disconnect", "reconnect"]) {
       savedToken = { ...previousToken, encrypted_token: encryptIntegrationToken(legacyToken) };
       let expectedToken;
-      let upsertsAfterChange;
+      let upsertsAfterChange = googleTokenUpserts;
       beforeConditionalTokenUpdate = async () => {
         if (change === "disconnect") {
           await removeIntegrationToken({ provider: "google", account: "owner@example.com" });
@@ -1571,8 +1608,8 @@ test("legacy restoration bootstrap racing disconnect or reconnect never replaces
       const response = await restore(legacyCookie, { "X-Forwarded-For": "192.0.2.90" });
       assert.equal(response.status, 401);
       assert.equal((await response.json()).code, "BROWSER_SESSION_REQUIRED");
-      assert.equal(response.headers.get("set-cookie"), null);
-      assert.deepEqual(savedToken, expectedToken, change);
+      assert.match(response.headers.get("set-cookie"), /Max-Age=0/);
+      assert.deepEqual(decryptIntegrationToken(savedToken.encrypted_token), legacyToken, change);
       assert.equal(googleTokenUpserts, upsertsAfterChange, "stale bootstrap must never upsert");
     }
   } finally {
@@ -1622,12 +1659,7 @@ test("Google invalid_grant rejects and removes only the unchanged saved connecti
         expiresAt: Date.now() - 1,
       }),
     };
-    const currentValue = decryptIntegrationToken(savedToken.encrypted_token);
-    const persistentCookie = `ddpro_session_restore=${encodeURIComponent(signedPayload({
-      email: "owner@example.com",
-      sessionVersion: currentValue.sessionVersion,
-      expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
-    }, "restore:"))}`;
+    const persistentCookie = restoreCookie;
     const restored = await restore(persistentCookie);
     assert.equal(restored.status, 200);
     const activeSession = (await restored.json()).data.session;
@@ -1650,8 +1682,8 @@ test("Google invalid_grant rejects and removes only the unchanged saved connecti
     assert.deepEqual(savedToken, null);
     assert.equal(googleTokenDeletes, deletesBeforeRevokedGrant + 1);
     const restoration = await restore(persistentCookie);
-    assert.equal(restoration.status, 401);
-    assert.equal((await restoration.json()).code, "GOOGLE_CONNECTION_REQUIRED");
+    assert.equal(restoration.status, 200);
+    assert.ok((await restoration.json()).data.session);
   } finally {
     savedToken = previousToken;
     refreshResponse = null;

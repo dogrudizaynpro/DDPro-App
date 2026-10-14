@@ -5,8 +5,11 @@ const originals = {
   window: globalThis.window,
   sessionStorage: globalThis.sessionStorage,
   fetch: globalThis.fetch,
+  localStorage: globalThis.localStorage,
 };
 const storage = new Map();
+const sharedStorage = new Map();
+const listeners = new Map();
 let requests;
 let response;
 let fetchAPI;
@@ -21,13 +24,34 @@ let requestAiCompletion;
 let executeAiVoiceTool;
 let disconnectGoogle;
 let sendWhatsAppText;
+let logoutBrowser;
+let endBrowserSession;
+let beginSessionReauthentication;
+let getPendingSecurityAction;
+let finishSecurityAction;
+let beginGoogleConnection;
+let retryGoogleDisconnect;
+let redirectedTo;
 
 before(async () => {
   globalThis.window = {
-    location: { hostname: "localhost", pathname: "/DDPro-App/", search: "", hash: "" },
+    location: { hostname: "localhost", pathname: "/DDPro-App/", search: "", hash: "",
+      assign: (url) => { redirectedTo = url; } },
     history: { replaceState: (_state, _title, url) => {
       window.location.hash = new URL(url, "http://localhost").hash;
     } },
+    addEventListener: (type, listener) => {
+      if (!listeners.has(type)) listeners.set(type, new Set());
+      listeners.get(type).add(listener);
+    },
+    dispatchEvent: (event) => {
+      listeners.get(event.type)?.forEach((listener) => listener(event));
+    },
+  };
+  globalThis.localStorage = {
+    getItem: (key) => sharedStorage.get(key) ?? null,
+    setItem: (key, value) => sharedStorage.set(key, value),
+    removeItem: (key) => sharedStorage.delete(key),
   };
   globalThis.sessionStorage = {
     getItem: (key) => storage.get(key) ?? null,
@@ -38,15 +62,20 @@ before(async () => {
     requests.push({ url, options });
     return response(url, options);
   };
-  ({ fetchAPI, setBrowserSession, clearBrowserSession } = await import("../src/services/api.js"));
+  ({ fetchAPI, setBrowserSession, clearBrowserSession, endBrowserSession } = await import("../src/services/api.js"));
   ({ testIntegrationConnection, getIntegrationStatus } = await import("../src/services/integrations.service.js"));
-  ({ formatGoogleIntegrationError, completeGoogleConnection, disconnectGoogle, sendWhatsAppText } = await import("../src/services/operations-integrations.service.js"));
+  ({ formatGoogleIntegrationError, completeGoogleConnection, disconnectGoogle, sendWhatsAppText,
+    logoutBrowser, beginSessionReauthentication, getPendingSecurityAction, finishSecurityAction,
+    beginGoogleConnection, retryGoogleDisconnect,
+  } = await import("../src/services/operations-integrations.service.js"));
   ({ confirmAiAction, requestAiCompletion, executeAiVoiceTool } = await import("../src/services/ai.service.js"));
 });
 
 beforeEach(() => {
   requests = [];
+  redirectedTo = null;
   storage.clear();
+  sharedStorage.clear();
   setBrowserSession("existing-browser-session");
   window.location.hash = "";
 });
@@ -552,17 +581,122 @@ test("non-Google provider tests remain usable without browser authorization", as
   assert.ok(requests.every(({ url }) => !url.includes("restore")));
 });
 
-test("disconnect clears the browser bearer only after backend success", async () => {
+test("disconnect requires action proof and never calls legacy global logout", async () => {
+  await assert.rejects(disconnectGoogle(), /doğrulama/);
+  assert.equal(requests.length, 0);
   response = () => Response.json({ message: "Revocation unavailable." }, { status: 502 });
-  await assert.rejects(disconnectGoogle(), (error) => error.status === 502);
+  await assert.rejects(disconnectGoogle("action-proof"), (error) => error.status === 502);
   assert.equal(storage.get("ddpro_browser_session"), "existing-browser-session");
-  response = () => Response.json({ data: { disconnected: true } });
-  await disconnectGoogle();
+  response = () => Response.json({ data: { disconnected: true, providerRevoked: false } });
+  await disconnectGoogle("action-proof");
   assert.equal(storage.has("ddpro_browser_session"), false);
+  assert.match(requests[1].url, /google\/disconnect$/);
+  assert.deepEqual(JSON.parse(requests[1].options.body), { proof: "action-proof" });
   response = () => Response.json({ code: "BROWSER_SESSION_REQUIRED" }, { status: 401 });
   await assert.rejects(fetchAPI("/api/projects"), (error) => error.status === 401);
-  assert.equal(requests.length, 3);
-  assert.match(requests[2].url, /google\/restore$/);
+  assert.equal(requests.length, 2, "explicit logout must not silently restore");
+});
+
+test("device logout clears locally even offline and reports unconfirmed server revocation", async () => {
+  response = () => { throw new TypeError("Offline"); };
+  await assert.rejects(logoutBrowser(), /sunucudaki oturum iptali doğrulanamadı/);
+  assert.equal(storage.has("ddpro_browser_session"), false);
+  assert.equal(requests.length, 1);
+  assert.match(requests[0].url, /sessions\/logout$/);
+  await assert.rejects(fetchAPI("/api/projects"), (error) => error.code === "BROWSER_SESSION_REQUIRED");
+  assert.equal(requests.length, 1);
+  const { fetchAPI: afterReload } = await import("../src/services/api.js?offline-logout");
+  await assert.rejects(afterReload("/api/projects"), (error) => error.code === "BROWSER_SESSION_REQUIRED");
+  assert.equal(requests.length, 1, "reload must not restore an unconfirmed offline logout");
+});
+
+test("local logout closes the browser session before a slow server response", async () => {
+  let finish;
+  response = () => new Promise((resolve) => { finish = resolve; });
+  const pending = logoutBrowser();
+  assert.equal(storage.has("ddpro_browser_session"), false);
+  assert.equal(requests[0].options.headers.Authorization, ["Bearer", "existing-browser-session"].join(" "));
+  finish(Response.json({ data: { revoked: true } }));
+  assert.equal((await pending).data.revoked, true);
+});
+
+test("cross-tab logout stops local voice and prevents a delayed restore from restoring access", async () => {
+  storage.clear();
+  let finishRestore;
+  let stopped = 0;
+  const onLogout = () => { stopped += 1; };
+  window.addEventListener("ddpro:session-ended", onLogout);
+  response = () => new Promise((resolve) => { finishRestore = resolve; });
+  const pending = fetchAPI("/api/projects");
+  await new Promise((resolve) => setImmediate(resolve));
+  sharedStorage.set("ddpro_session_logout", "logout-event");
+  window.dispatchEvent({ type: "storage", key: "ddpro_session_logout", newValue: "logout-event" });
+  finishRestore(Response.json({ data: { session: "late-session" } }));
+  await assert.rejects(pending, (error) => error.code === "BROWSER_SESSION_CHANGED");
+  assert.equal(storage.has("ddpro_browser_session"), false);
+  assert.ok(stopped > 0);
+  listeners.get("ddpro:session-ended").delete(onLogout);
+});
+
+test("new OAuth login permits access after local logout but a late exchange cannot undo logout", async () => {
+  endBrowserSession();
+  storage.set("ddpro_oauth_verifier", "verifier");
+  window.location.hash = "#/ayarlar?exchange_code=login-after-logout";
+  response = () => Response.json({ data: { session: "new-login" } });
+  await completeGoogleConnection();
+  assert.equal(storage.get("ddpro_browser_session"), "new-login");
+  assert.equal(sharedStorage.has("ddpro_session_logout"), false);
+  let finish;
+  storage.set("ddpro_oauth_verifier", "verifier");
+  window.location.hash = "#/ayarlar?exchange_code=late-login";
+  response = () => new Promise((resolve) => { finish = resolve; });
+  const pending = completeGoogleConnection();
+  endBrowserSession();
+  finish(Response.json({ data: { session: "too-late-login" } }));
+  await assert.rejects(pending, (error) => error.code === "BROWSER_SESSION_CHANGED");
+  assert.equal(storage.has("ddpro_browser_session"), false);
+});
+
+test("reauth exchange stores only an in-memory action proof, not a replacement session", async () => {
+  storage.set("ddpro_oauth_verifier", "verifier");
+  storage.set("ddpro_oauth_action", "revoke-all");
+  window.location.hash = "#/ayarlar?exchange_code=fresh-proof";
+  response = () => Response.json({ data: { proof: "fresh-action-proof", action: "revoke-all" } });
+  await completeGoogleConnection();
+  assert.equal(storage.get("ddpro_browser_session"), "existing-browser-session");
+  assert.deepEqual(getPendingSecurityAction(), { proof: "fresh-action-proof", action: "revoke-all" });
+  assert.ok([...storage.values()].every((value) => value !== "fresh-action-proof"));
+  assert.equal(requests.length, 1, "exchange must not auto-execute the destructive action");
+  response = () => Response.json({ data: { revoked: true } });
+  await finishSecurityAction();
+  assert.match(requests[1].url, /sessions\/revoke-all$/);
+  assert.equal(storage.has("ddpro_browser_session"), false);
+  assert.equal(getPendingSecurityAction(), null);
+});
+
+test("security reauthentication binds its action and verifier without putting bearer credentials in URLs", async () => {
+  response = () => Response.json({ data: { url: "https://accounts.google.com/o/oauth2/v2/auth?state=opaque" } });
+  await beginSessionReauthentication("disconnect");
+  assert.match(requests[0].url, /sessions\/reauth$/);
+  const payload = JSON.parse(requests[0].options.body);
+  assert.equal(payload.action, "disconnect");
+  assert.match(payload.challenge, /^[A-Za-z0-9_-]{43}$/);
+  assert.equal(storage.get("ddpro_oauth_action"), "disconnect");
+  assert.match(storage.get("ddpro_oauth_verifier"), /^[A-Za-z0-9_-]{43}$/);
+  assert.equal(redirectedTo, "https://accounts.google.com/o/oauth2/v2/auth?state=opaque");
+  assert.doesNotMatch(redirectedTo, /existing-browser-session/);
+  assert.equal(requests.length, 1);
+});
+
+test("ordinary login and explicit Google reconnection are different intents and pending revocation retries do not logout", async () => {
+  await beginGoogleConnection();
+  assert.doesNotMatch(redirectedTo, /reconnect=/);
+  await beginGoogleConnection({ reconnect: true });
+  assert.match(redirectedTo, /reconnect=1/);
+  response = () => Response.json({ data: { providerRevoked: false, pendingRevocation: true } });
+  assert.equal((await retryGoogleDisconnect()).data.pendingRevocation, true);
+  assert.match(requests[0].url, /google\/disconnect\/retry$/);
+  assert.equal(storage.get("ddpro_browser_session"), "existing-browser-session");
 });
 
 test("a consumed exchange cannot block backend status or discard an existing session", async () => {

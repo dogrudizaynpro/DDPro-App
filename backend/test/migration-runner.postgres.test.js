@@ -60,8 +60,11 @@ test(
           GRANT ALL ON TABLES TO anon, authenticated;
         CREATE SCHEMA IF NOT EXISTS storage;
         CREATE TABLE IF NOT EXISTS storage.buckets (
-          id TEXT PRIMARY KEY, name TEXT NOT NULL, public BOOLEAN DEFAULT false
+          id TEXT PRIMARY KEY, name TEXT NOT NULL, public BOOLEAN DEFAULT false,
+          file_size_limit bigint, allowed_mime_types text[]
         );
+        ALTER TABLE storage.buckets ADD COLUMN IF NOT EXISTS file_size_limit bigint;
+        ALTER TABLE storage.buckets ADD COLUMN IF NOT EXISTS allowed_mime_types text[];
       `);
       // Reproduce production: only migration 015 was ever applied.
       const deployedFixture = migrations.find((migration) => migration.version === "015");
