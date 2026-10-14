@@ -5,6 +5,7 @@ import { executeOperationalTool } from "./ai-tools.service.js";
 import {
   findUnavailableAiCapability,
   planAiAgents,
+  REQUEST_ACTION_PATTERN,
 } from "./ai-agent-registry.service.js";
 
 const MAX_COMMAND_LENGTH = 8_000;
@@ -31,7 +32,7 @@ const QUANTITY_CALCULATION_PATTERN =
 const QUANTITY_TERMS_PATTERN =
   /\b(?:metraj\p{L}*|quantity\s+(?:takeoff|calculation)|miktar\p{L}*|alan\p{L}*)\b|m²/iu;
 const DRAWING_BASED_QUANTITY_PATTERN =
-  /\b(?:çizim\p{L}*|plandan|planlardan)\b/iu;
+  /(?<![\p{L}\p{N}_])(?:çizim\p{L}*|plandan|planlardan)(?![\p{L}\p{N}_])/iu;
 const QUANTITY_TAKEOFF_CAPABILITY = {
   capability: "quantity_takeoff",
   label: "kaynak ölçülü ve doğrulanmış metraj çıkarımı",

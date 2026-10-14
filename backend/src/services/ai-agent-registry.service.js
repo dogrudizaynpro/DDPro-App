@@ -112,7 +112,7 @@ const unavailableOperations = [
   },
 ];
 
-const REQUEST_ACTION_PATTERN =
+export const REQUEST_ACTION_PATTERN =
   /(?<![\p{L}\p{N}_])(?:oluştur|üret|hazırla|çıkar|hesapla|çiz|render(?:la|le)?|görselleştir|başlat|create|generate|prepare|calculate|draw|start)[\p{L}]*(?![\p{L}\p{N}_])|(?<![\p{L}\p{N}_])ara(?![\p{L}\p{N}_])/iu;
 
 export const findUnavailableAiCapability = (message = "") => {
