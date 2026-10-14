@@ -154,26 +154,40 @@ export const renderVoiceProjectRecords = (operation) => {
   );
 };
 
-function AudioWaveform({ sessionRef, active, microphoneActive }) {
+function AudioWaveform({ sessionRef, active, microphoneActive, children }) {
   const barsRef = useRef([]);
-  const barWeights = Array.from(
-    { length: 31 },
-    (_, index) => 0.32 + Math.abs(Math.sin(index * 0.57)) * 0.68
+  const edges = [
+    { name: "top", count: 37, axis: "Y", phase: 0 },
+    { name: "right", count: 19, axis: "X", phase: 1.7 },
+    { name: "bottom", count: 37, axis: "Y", phase: 3.1 },
+    { name: "left", count: 19, axis: "X", phase: 4.6 },
+  ];
+  const edgeBars = edges.map(({ count, phase }) =>
+    Array.from({ length: count }, (_, index) => 0.2 + Math.abs(Math.sin((index + phase) * 0.57)) * 0.8)
   );
+  const barWeights = edgeBars.flat();
 
   useEffect(() => {
     if (!active) {
       barsRef.current.forEach((bar) => {
-        if (bar) bar.style.transform = "scaleY(0.08)";
+        if (bar) bar.style.transform = bar.dataset.axis === "x" ? "scaleX(0.08)" : "scaleY(0.08)";
       });
       return undefined;
     }
 
     let frameId;
     const updateWaveform = () => {
-      const level = Math.min(1, (sessionRef.current?.getOutputLevel() || 0) * 8);
+      let level = 0;
+      try {
+        level = Math.min(1, Math.max(0, (sessionRef.current?.getOutputLevel() || 0) * 8));
+      } catch {
+        // Keep the voice session independent from visualizer failures.
+      }
       barsRef.current.forEach((bar, index) => {
-        if (bar) bar.style.transform = `scaleY(${0.08 + level * barWeights[index]})`;
+        if (bar) {
+          const scale = 0.08 + level * barWeights[index];
+          bar.style.transform = `scale${bar.dataset.axis.toUpperCase()}(${scale})`;
+        }
       });
       frameId = window.requestAnimationFrame(updateWaveform);
     };
@@ -182,10 +196,12 @@ function AudioWaveform({ sessionRef, active, microphoneActive }) {
     return () => {
       window.cancelAnimationFrame(frameId);
       barsRef.current.forEach((bar) => {
-        if (bar) bar.style.transform = "scaleY(0.08)";
+        if (bar) bar.style.transform = bar.dataset.axis === "x" ? "scaleX(0.08)" : "scaleY(0.08)";
       });
     };
   }, [active, sessionRef]);
+
+  let barOffset = 0;
 
   return (
     <div
@@ -193,19 +209,44 @@ function AudioWaveform({ sessionRef, active, microphoneActive }) {
       role="group"
       aria-label="Asistanın oynatılan ses seviyesi; mikrofon durumu ayrı gösterilir"
     >
-      <span className="ai-audio-visualizer-label">DDPRO AI TRADE <span>·</span> ASİSTAN SESİ</span>
-      <div className="ai-audio-waveform" aria-hidden="true">
-        {barWeights.map((_, index) => (
-          <span
-            className="ai-audio-waveform-bar"
-            key={index}
-            ref={(element) => { barsRef.current[index] = element; }}
-          />
-        ))}
+      {children ? (
+        <div className="ai-audio-frame">
+          {children}
+          {edges.map(({ name, axis }, edgeIndex) => {
+            const startIndex = barOffset;
+            barOffset += edgeBars[edgeIndex].length;
+            return (
+              <div className={`ai-audio-frame-edge is-${name}`} key={name} aria-hidden="true">
+                {edgeBars[edgeIndex].map((weight, index) => (
+                  <span
+                    className="ai-audio-frame-bar"
+                    data-axis={axis.toLowerCase()}
+                    key={index}
+                    ref={(element) => { barsRef.current[startIndex + index] = element; }}
+                  />
+                ))}
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="ai-audio-waveform" aria-hidden="true">
+          {edgeBars[0].map((_, index) => (
+            <span
+              className="ai-audio-waveform-bar"
+              data-axis="y"
+              key={index}
+              ref={(element) => { barsRef.current[index] = element; }}
+            />
+          ))}
+        </div>
+      )}
+      <div className="ai-audio-visualizer-meta">
+        <span className="ai-audio-visualizer-label">DDPRO AI TRADE <span>·</span> ASİSTAN SESİ</span>
+        <span className={`ai-audio-input-indicator${microphoneActive ? " is-active" : ""}`}>
+          {microphoneActive ? "Mikrofon algılıyor" : active ? "Mikrofon açık" : "Mikrofon kapalı"}
+        </span>
       </div>
-      <span className={`ai-audio-input-indicator${microphoneActive ? " is-active" : ""}`}>
-        {microphoneActive ? "Mikrofon algılıyor" : active ? "Mikrofon açık" : "Mikrofon kapalı"}
-      </span>
     </div>
   );
 }
@@ -459,33 +500,34 @@ function AIModule({
   return (
     <div className={`module-page ai-module${messagesOnly ? " ai-messages-module" : ""}`}>
       <section className="ai-live-composition" aria-label="Canlı AI asistan görüşmesi">
-        {!messagesOnly ? (
-          <div className="ai-trade-master-reference" aria-label="DDPro AI TRADE karakteri ve çalışma alanı">
-            <img
-              className="ai-trade-master-image"
-              src={aiTradeDesignReference}
-              alt="DDPro AI TRADE'in kadın karakteri ve marka dili"
-            />
-            <img className="ai-character-crop ai-character-front" src={aiCharacterFront} alt="" aria-hidden="true" />
-            <img className="ai-character-crop ai-character-back" src={aiCharacterBack} alt="" aria-hidden="true" />
-            <div className="ai-trade-role-hotspots" role="group" aria-label="AI TRADE rollerini başlat">
-              {aiTradeRoles.map((role) => (
-                <button
-                  className={`ai-trade-role-hotspot ${role.className}`}
-                  key={role.className}
-                  type="button"
-                  aria-label={role.label}
-                  onClick={() => activateRole(role.prompt)}
-                />
-              ))}
-            </div>
-          </div>
-        ) : null}
         <AudioWaveform
           sessionRef={voiceSessionRef}
           active={voiceListening}
           microphoneActive={voicePhase === "transcribing"}
-        />
+        >
+          {!messagesOnly ? (
+            <div className="ai-trade-master-reference" aria-label="DDPro AI TRADE karakteri ve çalışma alanı">
+              <img
+                className="ai-trade-master-image"
+                src={aiTradeDesignReference}
+                alt="DDPro AI TRADE'in kadın karakteri ve marka dili"
+              />
+              <img className="ai-character-crop ai-character-front" src={aiCharacterFront} alt="" aria-hidden="true" />
+              <img className="ai-character-crop ai-character-back" src={aiCharacterBack} alt="" aria-hidden="true" />
+              <div className="ai-trade-role-hotspots" role="group" aria-label="AI TRADE rollerini başlat">
+                {aiTradeRoles.map((role) => (
+                  <button
+                    className={`ai-trade-role-hotspot ${role.className}`}
+                    key={role.className}
+                    type="button"
+                    aria-label={role.label}
+                    onClick={() => activateRole(role.prompt)}
+                  />
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </AudioWaveform>
         <div className="ai-live-controls">
           <button
             className={`ai-voice-button${voiceListening ? " is-listening" : ""}${voiceSpeaking ? " is-speaking" : ""}`}

@@ -1497,15 +1497,125 @@ button > .ddpro-icon-medallion {
 
 .ai-audio-visualizer {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 3px;
+  min-width: 0;
+}
+
+.ai-audio-frame {
+  position: relative;
+  min-width: 0;
+  padding: 14px;
+}
+
+.ai-audio-frame-edge {
+  position: absolute;
+  display: flex;
   align-items: center;
-  gap: 10px 16px;
-  min-height: 124px;
-  padding: 13px 18px;
-  border: 1px solid rgba(52, 211, 153, 0.2);
-  border-radius: 12px;
-  background: linear-gradient(110deg, rgba(6, 31, 27, 0.82), rgba(10, 20, 19, 0.94));
-  box-shadow: inset 0 1px rgba(255, 255, 255, 0.035);
+  justify-content: center;
+  gap: clamp(2px, 0.65vw, 8px);
+  overflow: hidden;
+  border: 1px solid rgba(52, 211, 153, 0.24);
+  border-radius: 999px;
+  background: rgba(6, 31, 27, 0.54);
+  box-shadow: 0 0 14px rgba(16, 185, 129, 0.12);
+}
+
+.ai-audio-frame-edge.is-top,
+.ai-audio-frame-edge.is-bottom {
+  right: 14px;
+  left: 14px;
+  height: 9px;
+}
+
+.ai-audio-frame-edge.is-top {
+  top: 1px;
+}
+
+.ai-audio-frame-edge.is-bottom {
+  bottom: 1px;
+}
+
+.ai-audio-frame-edge.is-right,
+.ai-audio-frame-edge.is-left {
+  top: 14px;
+  bottom: 14px;
+  justify-content: space-between;
+  flex-direction: column;
+  width: 9px;
+  gap: clamp(2px, 0.45vw, 6px);
+}
+
+.ai-audio-frame-edge.is-right {
+  right: 1px;
+}
+
+.ai-audio-frame-edge.is-left {
+  left: 1px;
+}
+
+.ai-audio-frame-bar {
+  display: block;
+  flex: 0 1 9px;
+  width: min(12px, 100%);
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #a7f3d0, #10b981 62%, #047857);
+  box-shadow: 0 0 9px rgba(16, 185, 129, 0.38);
+  transform: scaleY(0.08);
+  transform-origin: center;
+  transition: transform 70ms linear;
+}
+
+.ai-audio-frame-edge.is-right .ai-audio-frame-bar,
+.ai-audio-frame-edge.is-left .ai-audio-frame-bar {
+  flex-basis: 9px;
+  width: 100%;
+  height: auto;
+  max-height: 12px;
+}
+
+.ai-audio-visualizer.is-active .ai-audio-frame-edge {
+  border-color: rgba(52, 211, 153, 0.42);
+  box-shadow: 0 0 17px rgba(16, 185, 129, 0.2);
+}
+
+.ai-audio-visualizer.is-active .ai-audio-frame-bar {
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.52);
+}
+
+.ai-audio-waveform {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(3px, 0.7vw, 8px);
+  width: 100%;
+  height: 60px;
+}
+
+.ai-audio-waveform-bar {
+  flex: 1 1 6px;
+  width: 6px;
+  max-width: 12px;
+  height: 48px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #a7f3d0, #10b981 62%, #047857);
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.28);
+  transform: scaleY(0.08);
+  transform-origin: center;
+  transition: transform 70ms linear;
+}
+
+.ai-audio-visualizer.is-active .ai-audio-waveform-bar {
+  box-shadow: 0 0 13px rgba(16, 185, 129, 0.38);
+}
+
+.ai-audio-visualizer-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+  padding: 0 14px;
 }
 
 .ai-audio-visualizer-label,
@@ -1520,36 +1630,8 @@ button > .ddpro-icon-medallion {
   color: #34d399;
 }
 
-.ai-audio-waveform {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  grid-column: 1 / -1;
-  gap: clamp(3px, 0.7vw, 8px);
-  width: min(100%, 900px);
-  height: 88px;
-  justify-self: center;
-}
-
-.ai-audio-waveform-bar {
-  flex: 1 1 6px;
-  width: 6px;
-  max-width: 12px;
-  height: 82px;
-  border-radius: 999px;
-  background: linear-gradient(180deg, #a7f3d0, #10b981 62%, #047857);
-  box-shadow: 0 0 12px rgba(16, 185, 129, 0.28);
-  transform: scaleY(0.08);
-  transform-origin: center;
-  transition: transform 70ms linear;
-}
-
-.ai-audio-visualizer.is-active .ai-audio-waveform-bar {
-  box-shadow: 0 0 13px rgba(16, 185, 129, 0.38);
-}
-
 .ai-audio-input-indicator {
-  justify-self: end;
+  flex: 0 0 auto;
   letter-spacing: 0.04em;
   text-align: right;
 }
@@ -1606,27 +1688,46 @@ button > .ddpro-icon-medallion {
 }
 
 @media (max-width: 640px) {
-  .ai-audio-visualizer {
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 8px 10px;
-    min-height: 112px;
-    padding: 10px 12px;
+  .ai-audio-frame {
+    padding: 12px;
+  }
+
+  .ai-audio-frame-edge.is-top,
+  .ai-audio-frame-edge.is-bottom {
+    right: 12px;
+    left: 12px;
+    height: 8px;
+  }
+
+  .ai-audio-frame-edge.is-right,
+  .ai-audio-frame-edge.is-left {
+    top: 12px;
+    bottom: 12px;
+    width: 8px;
+  }
+
+  .ai-audio-visualizer-meta {
+    padding: 0 12px;
+  }
+
+  .ai-audio-visualizer-label,
+  .ai-audio-input-indicator {
+    font-size: 9px;
   }
 
   .ai-audio-waveform {
-    width: 100%;
-    height: 78px;
+    height: 44px;
     gap: clamp(2px, 0.8vw, 4px);
   }
 
   .ai-audio-waveform-bar {
     flex-basis: 4px;
     width: 4px;
-    height: 70px;
+    height: 36px;
   }
 
   .ai-audio-input-indicator {
-    font-size: 9px;
+    letter-spacing: 0.02em;
   }
 
   .ai-live-controls {
@@ -3454,15 +3555,16 @@ textarea::placeholder {
 
 .ai-trade-master-reference {
   position: relative;
-  width: 100%;
-  height: clamp(250px, 34vw, 420px);
+  width: min(100%, 900px);
+  height: clamp(300px, 38vw, 440px);
+  margin: 0 auto;
   aspect-ratio: auto;
   overflow: hidden;
-  border: 1px solid rgba(198, 167, 111, 0.58);
+  border: 1px solid rgba(52, 211, 153, 0.16);
   border-radius: 12px;
   background: #080909;
   box-shadow:
-    0 20px 42px rgba(0, 0, 0, 0.52),
+    0 15px 34px rgba(0, 0, 0, 0.48),
     inset 0 1px rgba(255, 255, 255, 0.15);
 }
 
@@ -3470,17 +3572,19 @@ textarea::placeholder {
   display: block;
   width: 100%;
   height: 100%;
-  object-fit: cover;
-  object-position: center top;
+  object-fit: contain;
+  object-position: center;
   pointer-events: none;
 }
 
 .ai-character-crop {
   position: absolute;
-  top: 0;
-  height: auto;
+  top: 50%;
+  height: 90%;
   object-fit: contain;
+  object-position: center;
   pointer-events: none;
+  transform: translateY(-50%);
 }
 
 .ai-trade-role-hotspots {
@@ -4039,7 +4143,11 @@ textarea::placeholder {
   }
 
   .ai-trade-master-reference {
-    height: clamp(220px, 56vw, 330px);
+    height: clamp(260px, 48vw, 380px);
+  }
+
+  .ai-audio-visualizer-meta {
+    padding: 0 12px;
   }
 
   .ai-trade-hero {
