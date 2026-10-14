@@ -12,6 +12,28 @@ import {
 let server;
 let baseUrl;
 
+const makePdf = (text) => {
+  const stream = `BT /F1 12 Tf 72 72 Td (${text}) Tj ET`;
+  const objects = [
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Kids [4 0 R] /Count 1 >>",
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 144] /Resources << /Font << /F1 3 0 R >> >> /Contents 5 0 R >>",
+    `<< /Length ${Buffer.byteLength(stream)} >>\nstream\n${stream}\nendstream`,
+  ];
+  let pdf = "%PDF-1.4\n";
+  const offsets = [0];
+  objects.forEach((object, index) => {
+    offsets.push(Buffer.byteLength(pdf));
+    pdf += `${index + 1} 0 obj\n${object}\nendobj\n`;
+  });
+  const xrefOffset = Buffer.byteLength(pdf);
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  pdf += offsets.slice(1).map((offset) => `${String(offset).padStart(10, "0")} 00000 n \n`).join("");
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
+  return Buffer.from(pdf);
+};
+
 before(async () => {
   const app = express();
   app.post("/upload", parseAiChatUpload, async (req, res, next) => {
@@ -26,6 +48,8 @@ before(async () => {
         },
         extracted: extracted && {
           type: extracted.extractedType,
+          content: extracted.content,
+          pages: extracted.pages,
           tables: extracted.tables,
         },
       });
@@ -64,6 +88,27 @@ test("AI chat multipart uploads are parsed in memory with message and filename",
     mimeType: "text/plain",
     size: 12,
   });
+});
+
+test("PDF multipart uploads preserve application/pdf and extract document text", async () => {
+  const body = new FormData();
+  body.set("message", "Ekli PDF metnini analiz et.");
+  body.set("context", "{}");
+  body.set(
+    "file",
+    new Blob([makePdf("PDF upload text: 42")], { type: "application/pdf" }),
+    "document.pdf"
+  );
+
+  const response = await fetch(`${baseUrl}/upload`, { method: "POST", body });
+  const result = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(result.file.name, "document.pdf");
+  assert.equal(result.file.mimeType, "application/pdf");
+  assert.ok(result.file.size > 0);
+  assert.equal(result.extracted.type, "document");
+  assert.equal(result.extracted.pages, 1);
+  assert.match(result.extracted.content, /PDF upload text: 42/);
 });
 
 test("unexpected upload fields are rejected", async () => {

@@ -205,24 +205,24 @@ test("PDF candidate analysis sends no operational tools to the provider", async 
       candidates: [{
         type: "product",
         productName: "Zemin kaplama",
-        unit: "m²",
+        unit: "m2",
         quantity: 160,
         price: null,
         currency: null,
         technicalSpecifications: null,
-        quote: "Zemin kaplama alanı: 160 m²",
+        quote: "Zemin kaplama alani: 160 m2",
       }],
     }),
   }));
   const result = await requestAiCompletion({
-    message: "Ekli PDF'de yazılı metraj ve m² miktarını çıkar.",
+    message: "Ekli PDF'de yazili metraj ve miktari cikar.",
     context: {},
-    attachment: { originalName: "offer.pdf", buffer: makePdf("Zemin kaplama alanı: 160 m²") },
+    attachment: { originalName: "offer.pdf", buffer: makePdf("Zemin kaplama alani: 160 m2") },
   });
 
   assert.equal("tools" in requests[0].body, false);
   assert.equal(result.pdfDraft.candidates[0].quantity, 160);
-  assert.equal(result.pdfDraft.candidates[0].unit, "m²");
+  assert.equal(result.pdfDraft.candidates[0].unit, "m2");
   assert.equal(result.pdfDraft.candidates[0].sourcePage, 1);
   assert.equal(result.pdfDraft.candidates[0].verified, true);
   assert.equal(result.toolExecutions.length, 0);
