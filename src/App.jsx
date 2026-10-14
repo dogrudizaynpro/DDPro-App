@@ -2210,6 +2210,7 @@ function App() {
         pendingAction: completion.pendingAction,
         orchestration: completion.orchestration,
         projectImport,
+        pdfDraft: completion.pdfDraft,
       };
       setAiMessages((currentMessages) => [
         ...currentMessages,

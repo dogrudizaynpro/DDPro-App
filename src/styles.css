@@ -4840,6 +4840,59 @@ textarea::placeholder {
   margin-top: 12px;
 }
 
+.ai-pdf-draft,
+.ai-pdf-candidate {
+  display: grid;
+  gap: 8px;
+}
+
+.ai-pdf-draft {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid rgba(165, 214, 75, 0.3);
+  border-radius: 10px;
+}
+
+.ai-pdf-draft h4,
+.ai-pdf-draft p {
+  margin: 0;
+}
+
+.ai-pdf-candidate {
+  padding: 10px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.ai-pdf-candidate dl {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 7px;
+  margin: 0;
+}
+
+.ai-pdf-candidate dl > div {
+  min-width: 0;
+}
+
+.ai-pdf-candidate dt,
+.ai-pdf-candidate small {
+  color: #9fb1c8;
+  font-size: 11px;
+}
+
+.ai-pdf-candidate dd {
+  margin: 2px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.ai-pdf-candidate blockquote {
+  margin: 0;
+  padding-left: 9px;
+  border-left: 2px solid rgba(165, 214, 75, 0.55);
+  overflow-wrap: anywhere;
+}
+
 .ai-project-import h4,
 .ai-project-import p {
   margin: 0;
