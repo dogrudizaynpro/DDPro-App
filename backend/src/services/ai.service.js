@@ -91,7 +91,7 @@ const invalidPdfDraft = () => createProviderError(
   "AI_PDF_DRAFT_INVALID"
 );
 
-const validatePdfDraft = (content, file) => {
+export const validatePdfDraft = (content, file) => {
   let parsed;
   try {
     parsed = JSON.parse(content);
@@ -146,6 +146,7 @@ const validatePdfDraft = (content, file) => {
       technicalSpecifications: candidate.technicalSpecifications,
       sourceFileName: file.name,
       sourcePage: source?.pageNumber ?? null,
+      sourcePageTruncated: source?.truncated ?? false,
       quote: candidate.quote,
       verified: Boolean(source),
       missingFields,

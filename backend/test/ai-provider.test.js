@@ -9,6 +9,7 @@ const realFetch = globalThis.fetch;
 let requests = [];
 let responses = [];
 let requestAiCompletion;
+let validatePdfDraft;
 let testIntegrationConnection;
 
 before(async () => {
@@ -28,7 +29,7 @@ before(async () => {
       headers: { "Content-Type": "application/json" },
     });
   };
-  ({ requestAiCompletion } = await import("../src/services/ai.service.js"));
+  ({ requestAiCompletion, validatePdfDraft } = await import("../src/services/ai.service.js"));
   ({ testIntegrationConnection } = await import("../src/services/integration-health.service.js"));
 });
 
@@ -50,6 +51,28 @@ afterEach(() => {
 });
 
 const completion = (message) => ({ status: 200, body: { choices: [{ message }] } });
+
+const makePdf = (text) => {
+  const stream = `BT /F1 12 Tf 72 72 Td (${text}) Tj ET`;
+  const objects = [
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Kids [4 0 R] /Count 1 >>",
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 144] /Resources << /Font << /F1 3 0 R >> >> /Contents 5 0 R >>",
+    `<< /Length ${Buffer.byteLength(stream)} >>\nstream\n${stream}\nendstream`,
+  ];
+  let pdf = "%PDF-1.4\n";
+  const offsets = [0];
+  objects.forEach((object, index) => {
+    offsets.push(Buffer.byteLength(pdf));
+    pdf += `${index + 1} 0 obj\n${object}\nendobj\n`;
+  });
+  const xrefOffset = Buffer.byteLength(pdf);
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  pdf += offsets.slice(1).map((offset) => `${String(offset).padStart(10, "0")} 00000 n \n`).join("");
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
+  return Buffer.from(pdf);
+};
 
 const rejectReasoningTools = (body) => {
   if (!body.tools?.length || body.reasoning_effort === "none") return null;
@@ -126,6 +149,81 @@ test("image attachments are sent to the configured provider as vision content", 
   assert.match(userMessage.content[0].text, /room\.png/);
   assert.equal(userMessage.content[1].type, "image_url");
   assert.match(userMessage.content[1].image_url.url, /^data:image\/png;base64,/);
+});
+
+test("PDF candidate schema resolves exact quotes to parser pages and leaves unsupported sources unverified", () => {
+  const candidate = {
+    type: "product",
+    productName: "Panel",
+    unit: null,
+    quantity: null,
+    price: null,
+    currency: null,
+    technicalSpecifications: null,
+    quote: "Panel 1200 mm",
+  };
+  const draft = validatePdfDraft(JSON.stringify({
+    candidates: [
+      candidate,
+      { ...candidate, quote: "Unmatched quotation" },
+      { ...candidate, type: "price" },
+    ],
+  }), {
+    name: "catalog.pdf",
+    pages: 3,
+    truncated: false,
+    pdfPages: [
+      { pageNumber: 1, text: "Panel 1200 mm", truncated: false },
+      { pageNumber: 2, text: "Price 50", truncated: false },
+      { pageNumber: 3, text: "Panel 1200 mm", truncated: false },
+    ],
+  });
+  assert.equal(draft.candidates[0].sourceFileName, "catalog.pdf");
+  assert.equal(draft.candidates[0].sourcePage, 1);
+  assert.equal(draft.candidates[0].verified, true);
+  assert.deepEqual(draft.candidates[0].missingFields, [
+    "Birim", "Miktar", "Fiyat", "Para birimi", "Teknik özellik",
+  ]);
+  assert.equal(draft.candidates[1].sourcePage, null);
+  assert.equal(draft.candidates[1].verified, false);
+  assert.equal(draft.candidates[2].sourcePage, null);
+  assert.equal(draft.candidates[2].verified, false);
+  assert.throws(
+    () => validatePdfDraft(JSON.stringify({ candidates: [{ ...candidate, pageNumber: 1 }] }), {
+      name: "catalog.pdf",
+      pages: 1,
+      pdfPages: [{ pageNumber: 1, text: candidate.quote }],
+    }),
+    (error) => error.code === "AI_PDF_DRAFT_INVALID"
+  );
+});
+
+test("PDF candidate analysis sends no operational tools to the provider", async () => {
+  responses.push(completion({
+    role: "assistant",
+    content: JSON.stringify({
+      candidates: [{
+        type: "price",
+        productName: "Panel",
+        unit: null,
+        quantity: null,
+        price: 50,
+        currency: "TRY",
+        technicalSpecifications: null,
+        quote: "Panel price 50 TRY",
+      }],
+    }),
+  }));
+  const result = await requestAiCompletion({
+    message: "Bu PDF'deki ürün ve fiyat adaylarını çıkar.",
+    context: {},
+    attachment: { originalName: "catalog.pdf", buffer: makePdf("Panel price 50 TRY") },
+  });
+
+  assert.equal("tools" in requests[0].body, false);
+  assert.equal(result.pdfDraft.candidates[0].sourcePage, 1);
+  assert.equal(result.pdfDraft.candidates[0].verified, true);
+  assert.equal(result.toolExecutions.length, 0);
 });
 
 test("project spreadsheet data remains available in the AI transfer preview", async () => {

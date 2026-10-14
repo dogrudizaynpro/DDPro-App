@@ -5,7 +5,7 @@ import {
   findProjectSpreadsheetTable,
   previewAiFileProjects,
 } from "../src/controllers/project-import.controller.js";
-import { prepareAiAttachment } from "../src/services/ai-file.service.js";
+import { prepareAiAttachment, splitPdfPages } from "../src/services/ai-file.service.js";
 
 const makeArchive = (entries) => Buffer.from(zipSync(
   Object.fromEntries(Object.entries(entries).map(([name, content]) => [name, strToU8(content)]))
@@ -42,13 +42,20 @@ const makeXlsxFromRows = (rows, {
   });
 };
 
-const makePdf = () => {
+const makePdf = (texts = ["PDF extracted text"]) => {
+  const pageIds = texts.map((_, index) => 4 + index * 2);
   const objects = [
     "<< /Type /Catalog /Pages 2 0 R >>",
-    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 144] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
+    `<< /Type /Pages /Kids [${pageIds.map((id) => `${id} 0 R`).join(" ")}] /Count ${texts.length} >>`,
     "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
-    "<< /Length 52 >>\nstream\nBT /F1 12 Tf 72 72 Td (PDF extracted text) Tj ET\nendstream",
+    ...texts.flatMap((text, index) => {
+      const escapedText = text.replaceAll("\\", "\\\\").replaceAll("(", "\\(").replaceAll(")", "\\)");
+      const stream = text ? `BT /F1 12 Tf 72 72 Td (${escapedText}) Tj ET` : "";
+      return [
+        `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 144] /Resources << /Font << /F1 3 0 R >> >> /Contents ${pageIds[index] + 1} 0 R >>`,
+        `<< /Length ${Buffer.byteLength(stream)} >>\nstream\n${stream}\nendstream`,
+      ];
+    }),
   ];
   let pdf = "%PDF-1.4\n";
   const offsets = [0];
@@ -277,6 +284,41 @@ test("DOCX and PDF document text is extracted", async () => {
   const pdf = await prepareAiAttachment({ originalName: "report.pdf", buffer: makePdf() });
   assert.equal(pdf.pages, 1);
   assert.match(pdf.content, /PDF extracted text/);
+});
+
+test("PDF page joiners preserve deterministic page numbers, empty pages, and bounded text", async () => {
+  const pdf = await prepareAiAttachment({
+    originalName: "multi-page.pdf",
+    buffer: makePdf(["First page quote", "", "Third page quote"]),
+  });
+  assert.equal(pdf.pages, 3);
+  assert.deepEqual(pdf.pdfPages.map(({ pageNumber }) => pageNumber), [1, 2, 3]);
+  assert.match(pdf.pdfPages[0].text, /First page quote/);
+  assert.equal(pdf.pdfPages[1].text, "");
+  assert.match(pdf.pdfPages[2].text, /Third page quote/);
+  assert.ok(pdf.content.length <= 60_000);
+
+  const bounded = await prepareAiAttachment({
+    originalName: "truncated.pdf",
+    buffer: makePdf(["A".repeat(60_050), "Last page quote"]),
+  });
+  assert.equal(bounded.truncated, true);
+  assert.ok(bounded.content.length <= 60_000);
+  assert.equal(bounded.pdfPages.at(-1).truncated, true);
+  assert.equal(bounded.pdfPages.length, 1);
+});
+
+test("PDF page splitting rejects missing or out-of-order page markers", () => {
+  const markerToken = "0123456789abcdef0123456789abcdef";
+  const marker = `\n<<<DDPRO_PDF_PAGE_${markerToken}:{page_number}/{total_number}>>>\n`;
+  const pageBoundary = (page) => marker
+    .replace("{page_number}", String(page))
+    .replace("{total_number}", "2");
+  assert.deepEqual(
+    splitPdfPages(`First${pageBoundary(1)}${pageBoundary(2)}`, 2, markerToken),
+    [{ pageNumber: 1, text: "First" }, { pageNumber: 2, text: "" }]
+  );
+  assert.throws(() => splitPdfPages(`First${pageBoundary(2)}`, 2, markerToken), /page references/);
 });
 
 test("image attachments retain an image data URL for vision-capable providers", async () => {

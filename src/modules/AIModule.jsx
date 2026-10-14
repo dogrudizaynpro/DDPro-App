@@ -646,7 +646,10 @@ function AIModule({
                           <div><dt>Miktar</dt><dd>{candidate.quantity ?? "—"}</dd></div>
                           <div><dt>Fiyat</dt><dd>{candidate.price ?? "—"}{candidate.currency ? ` ${candidate.currency}` : ""}</dd></div>
                           <div><dt>Teknik özellik</dt><dd>{candidate.technicalSpecifications ?? "—"}</dd></div>
-                          <div><dt>Kaynak sayfa</dt><dd>{candidate.sourcePage ?? "Belirsiz"}</dd></div>
+                          <div>
+                            <dt>Kaynak sayfa</dt>
+                            <dd>{candidate.sourcePage ?? "Belirsiz"}{candidate.sourcePageTruncated ? " · sayfa kesilmiş" : ""}</dd>
+                          </div>
                         </dl>
                         <blockquote>{candidate.quote}</blockquote>
                         {candidate.missingFields.length ? (

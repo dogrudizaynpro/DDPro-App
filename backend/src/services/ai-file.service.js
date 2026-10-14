@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { posix } from "node:path";
 import { Unzip, UnzipInflate, UnzipPassThrough } from "fflate";
 import { XMLParser, XMLValidator } from "fast-xml-parser";
@@ -5,7 +6,6 @@ import { PDFParse } from "pdf-parse";
 
 export const MAX_AI_FILE_SIZE = 10 * 1024 * 1024;
 const MAX_EXTRACTED_TEXT = 60_000;
-export const PDF_PAGE_JOINER = "\n<<<DDPRO_PDF_PAGE:{page_number}/{total_number}>>>\n";
 const MAX_SPREADSHEET_ROWS = 300;
 const MAX_SPREADSHEET_COLUMNS = 100;
 const MAX_STRUCTURED_TABLE_SIZE = 700_000;
@@ -398,11 +398,14 @@ const validateAttachment = ({ originalName, buffer }) => {
   return { name, extension, mimeType: MIME_TYPES[extension] };
 };
 
-export const splitPdfPages = (text, totalPages) => {
-  if (typeof text !== "string" || !Number.isInteger(totalPages) || totalPages < 1) {
+export const splitPdfPages = (text, totalPages, markerToken) => {
+  if (
+    typeof text !== "string" || !Number.isInteger(totalPages) || totalPages < 1 ||
+    typeof markerToken !== "string" || !/^[a-f0-9]{32}$/.test(markerToken)
+  ) {
     throw fail("PDF page references could not be verified.", 422);
   }
-  const marker = /<<<DDPRO_PDF_PAGE:(\d+)\/(\d+)>>>/g;
+  const marker = new RegExp(`<<<DDPRO_PDF_PAGE_${markerToken}:(\\d+)/(\\d+)>>>`, "g");
   const pages = [];
   let cursor = 0;
   let match;
@@ -450,17 +453,20 @@ export const prepareAiAttachment = async (file) => {
     parsed = await parseDocx(file.buffer);
   } else {
     const parser = new PDFParse({ data: file.buffer });
+    const markerToken = randomBytes(16).toString("hex");
     let timeoutId;
     try {
       const result = await Promise.race([
-        parser.getText({ pageJoiner: PDF_PAGE_JOINER }),
+        parser.getText({
+          pageJoiner: `\n<<<DDPRO_PDF_PAGE_${markerToken}:{page_number}/{total_number}>>>\n`,
+        }),
         new Promise((_, reject) => {
           timeoutId = setTimeout(() => reject(fail("PDF processing timed out.", 422)), 15_000);
         }),
       ]);
       const fullText = result.text?.trim() || "";
       if (!fullText) throw fail("No text could be extracted from the PDF. Image-only PDFs need an OCR-capable provider.");
-      const sourcePages = splitPdfPages(fullText, result.total);
+      const sourcePages = splitPdfPages(fullText, result.total, markerToken);
       if (!sourcePages.some(({ text }) => text)) {
         throw fail("No text could be extracted from the PDF. Image-only PDFs need an OCR-capable provider.");
       }
@@ -469,7 +475,7 @@ export const prepareAiAttachment = async (file) => {
       const pages = [];
       let content = "";
       for (const page of sourcePages) {
-        const pageJoiner = PDF_PAGE_JOINER
+        const pageJoiner = `\n<<<DDPRO_PDF_PAGE_${markerToken}:{page_number}/{total_number}>>>\n`
           .replace("{page_number}", String(page.pageNumber))
           .replace("{total_number}", String(result.total));
         if (remaining < pageJoiner.length) {
