@@ -470,7 +470,9 @@ export const prepareAiAttachment = async (file) => {
       if (!sourcePages.some(({ text }) => text)) {
         throw fail("No text could be extracted from the PDF. Image-only PDFs need an OCR-capable provider.");
       }
-      let remaining = MAX_EXTRACTED_TEXT;
+      const truncationNoteLength = "\n[İçerik güvenli işlem sınırında kısaltıldı.]".length;
+      let remaining = MAX_EXTRACTED_TEXT -
+        (fullText.length > MAX_EXTRACTED_TEXT ? truncationNoteLength : 0);
       let truncated = fullText.length > MAX_EXTRACTED_TEXT;
       const pages = [];
       let content = "";

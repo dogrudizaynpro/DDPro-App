@@ -49,10 +49,15 @@ const makePdf = (texts = ["PDF extracted text"]) => {
     `<< /Type /Pages /Kids [${pageIds.map((id) => `${id} 0 R`).join(" ")}] /Count ${texts.length} >>`,
     "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
     ...texts.flatMap((text, index) => {
-      const escapedText = text.replaceAll("\\", "\\\\").replaceAll("(", "\\(").replaceAll(")", "\\)");
-      const stream = text ? `BT /F1 12 Tf 72 72 Td (${escapedText}) Tj ET` : "";
+      const lines = text.match(/.{1,60}/g) || [];
+      const textOperators = lines.map((line, lineIndex) => {
+        const escapedLine = line.replaceAll("\\", "\\\\").replaceAll("(", "\\(").replaceAll(")", "\\)");
+        return `${lineIndex ? "0 -14 Td " : ""}(${escapedLine}) Tj`;
+      }).join(" ");
+      const pageHeight = Math.max(144, lines.length * 14 + 90);
+      const stream = text ? `BT /F1 12 Tf 72 ${pageHeight - 50} Td ${textOperators} ET` : "";
       return [
-        `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 144] /Resources << /Font << /F1 3 0 R >> >> /Contents ${pageIds[index] + 1} 0 R >>`,
+        `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 600 ${pageHeight}] /Resources << /Font << /F1 3 0 R >> >> /Contents ${pageIds[index] + 1} 0 R >>`,
         `<< /Length ${Buffer.byteLength(stream)} >>\nstream\n${stream}\nendstream`,
       ];
     }),
