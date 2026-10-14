@@ -203,24 +203,26 @@ test("PDF candidate analysis sends no operational tools to the provider", async 
     role: "assistant",
     content: JSON.stringify({
       candidates: [{
-        type: "price",
-        productName: "Panel",
-        unit: null,
-        quantity: null,
-        price: 50,
-        currency: "TRY",
+        type: "product",
+        productName: "Zemin kaplama",
+        unit: "m²",
+        quantity: 160,
+        price: null,
+        currency: null,
         technicalSpecifications: null,
-        quote: "Panel price 50 TRY",
+        quote: "Zemin kaplama alanı: 160 m²",
       }],
     }),
   }));
   const result = await requestAiCompletion({
-    message: "Bu PDF'deki ürün ve fiyat adaylarını çıkar.",
+    message: "Ekli PDF'de yazılı metraj ve m² miktarını çıkar.",
     context: {},
-    attachment: { originalName: "catalog.pdf", buffer: makePdf("Panel price 50 TRY") },
+    attachment: { originalName: "offer.pdf", buffer: makePdf("Zemin kaplama alanı: 160 m²") },
   });
 
   assert.equal("tools" in requests[0].body, false);
+  assert.equal(result.pdfDraft.candidates[0].quantity, 160);
+  assert.equal(result.pdfDraft.candidates[0].unit, "m²");
   assert.equal(result.pdfDraft.candidates[0].sourcePage, 1);
   assert.equal(result.pdfDraft.candidates[0].verified, true);
   assert.equal(result.toolExecutions.length, 0);
