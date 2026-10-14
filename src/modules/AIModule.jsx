@@ -156,7 +156,10 @@ export const renderVoiceProjectRecords = (operation) => {
 
 function AudioWaveform({ sessionRef, active, microphoneActive }) {
   const barsRef = useRef([]);
-  const barWeights = [0.42, 0.62, 0.82, 1, 0.7, 0.92, 0.58, 0.76, 0.48, 0.88, 0.56, 0.72, 0.4];
+  const barWeights = Array.from(
+    { length: 31 },
+    (_, index) => 0.32 + Math.abs(Math.sin(index * 0.57)) * 0.68
+  );
 
   useEffect(() => {
     if (!active) {
@@ -168,7 +171,7 @@ function AudioWaveform({ sessionRef, active, microphoneActive }) {
 
     let frameId;
     const updateWaveform = () => {
-      const level = Math.min(1, (sessionRef.current?.getOutputLevel() || 0) * 5);
+      const level = Math.min(1, (sessionRef.current?.getOutputLevel() || 0) * 8);
       barsRef.current.forEach((bar, index) => {
         if (bar) bar.style.transform = `scaleY(${0.08 + level * barWeights[index]})`;
       });
@@ -188,9 +191,9 @@ function AudioWaveform({ sessionRef, active, microphoneActive }) {
     <div
       className={`ai-audio-visualizer${active ? " is-active" : ""}`}
       role="group"
-      aria-label="Asistan ses seviyesi"
+      aria-label="Asistanın oynatılan ses seviyesi; mikrofon durumu ayrı gösterilir"
     >
-      <span className="ai-audio-visualizer-label">DDPRO AI TRADE <span>·</span> SES AKIŞI</span>
+      <span className="ai-audio-visualizer-label">DDPRO AI TRADE <span>·</span> ASİSTAN SESİ</span>
       <div className="ai-audio-waveform" aria-hidden="true">
         {barWeights.map((_, index) => (
           <span
@@ -201,7 +204,7 @@ function AudioWaveform({ sessionRef, active, microphoneActive }) {
         ))}
       </div>
       <span className={`ai-audio-input-indicator${microphoneActive ? " is-active" : ""}`}>
-        {microphoneActive ? "Mikrofon algılıyor" : active ? "Dinleme açık" : "Beklemede"}
+        {microphoneActive ? "Mikrofon algılıyor" : active ? "Mikrofon açık" : "Mikrofon kapalı"}
       </span>
     </div>
   );
@@ -455,33 +458,50 @@ function AIModule({
 
   return (
     <div className={`module-page ai-module${messagesOnly ? " ai-messages-module" : ""}`}>
-      {!messagesOnly ? (
-        <section className="ai-trade-master-reference" aria-label="DDPro AI TRADE ana tasarım referansı">
-          <img
-            className="ai-trade-master-image"
-            src={aiTradeDesignReference}
-            alt="DDPro AI TRADE'in kadın karakteri, marka dili ve merkezi teknik kompozisyonunu içeren ana referans"
-          />
-          <img className="ai-character-crop ai-character-front" src={aiCharacterFront} alt="" aria-hidden="true" />
-          <img className="ai-character-crop ai-character-back" src={aiCharacterBack} alt="" aria-hidden="true" />
-          <div className="ai-trade-role-hotspots" role="group" aria-label="AI TRADE rollerini başlat">
-            {aiTradeRoles.map((role) => (
-              <button
-                className={`ai-trade-role-hotspot ${role.className}`}
-                key={role.className}
-                type="button"
-                aria-label={role.label}
-                onClick={() => activateRole(role.prompt)}
-              />
-            ))}
+      <section className="ai-live-composition" aria-label="Canlı AI asistan görüşmesi">
+        {!messagesOnly ? (
+          <div className="ai-trade-master-reference" aria-label="DDPro AI TRADE karakteri ve çalışma alanı">
+            <img
+              className="ai-trade-master-image"
+              src={aiTradeDesignReference}
+              alt="DDPro AI TRADE'in kadın karakteri ve marka dili"
+            />
+            <img className="ai-character-crop ai-character-front" src={aiCharacterFront} alt="" aria-hidden="true" />
+            <img className="ai-character-crop ai-character-back" src={aiCharacterBack} alt="" aria-hidden="true" />
+            <div className="ai-trade-role-hotspots" role="group" aria-label="AI TRADE rollerini başlat">
+              {aiTradeRoles.map((role) => (
+                <button
+                  className={`ai-trade-role-hotspot ${role.className}`}
+                  key={role.className}
+                  type="button"
+                  aria-label={role.label}
+                  onClick={() => activateRole(role.prompt)}
+                />
+              ))}
+            </div>
           </div>
-        </section>
-      ) : null}
-      <AudioWaveform
-        sessionRef={voiceSessionRef}
-        active={voiceListening}
-        microphoneActive={voicePhase === "transcribing"}
-      />
+        ) : null}
+        <AudioWaveform
+          sessionRef={voiceSessionRef}
+          active={voiceListening}
+          microphoneActive={voicePhase === "transcribing"}
+        />
+        <div className="ai-live-controls">
+          <button
+            className={`ai-voice-button${voiceListening ? " is-listening" : ""}${voiceSpeaking ? " is-speaking" : ""}`}
+            type="button"
+            aria-label={voiceListening ? "Gerçek zamanlı sesli sohbeti durdur" : "Gerçek zamanlı sesli sohbeti başlat"}
+            aria-pressed={voiceListening}
+            disabled={aiSending || (!voiceListening && !voiceProviderConfigured)}
+            onClick={toggleRealtimeVoice}
+          >
+            <span aria-hidden="true">🎙</span>
+            {voiceListening ? "Sohbeti durdur" : "Canlı sesli sohbet"}
+          </button>
+          {voiceError ? <p className="ai-live-error" role="alert">{voiceError}</p> : null}
+          <p className="ai-live-status" role="status" aria-live="polite">{voiceStatus}</p>
+        </div>
+      </section>
 
       <div className={`ai-workspace${messagesOnly ? " ai-messages-workspace" : ""}`}>
         {!messagesOnly ? (
@@ -778,19 +798,6 @@ function AIModule({
               <span aria-hidden="true">＋</span>
             </button>
             <button
-              className={`ai-voice-button${voiceListening ? " is-listening" : ""}${voiceSpeaking ? " is-speaking" : ""}`}
-              type="button"
-              aria-label={voiceListening ? "Gerçek zamanlı sesli sohbeti durdur" : "Gerçek zamanlı sesli sohbeti başlat"}
-              aria-pressed={voiceListening}
-              disabled={aiSending || (!voiceListening && !voiceProviderConfigured)}
-              onClick={toggleRealtimeVoice}
-            >
-              <span aria-hidden="true">🎙</span>
-              {voiceListening
-                ? "Sohbeti durdur"
-                : "Canlı sesli sohbet"}
-            </button>
-            <button
               type="submit"
               disabled={aiSending || voiceListening || (!aiInput.trim() && !aiAttachment)}
             >
@@ -815,8 +822,6 @@ function AIModule({
               </div>
             ) : null}
             {fileError ? <p className="ai-file-error" role="alert">{fileError}</p> : null}
-            {voiceError ? <p className="ai-voice-status" role="alert">{voiceError}</p> : null}
-            <p className="ai-voice-status" role="status" aria-live="polite">{voiceStatus}</p>
             {voiceTranscript ? (
               <p className="ai-voice-status ai-voice-transcript" aria-live="polite">
                 <strong>Algılanan konuşma:</strong> {voiceTranscript}
