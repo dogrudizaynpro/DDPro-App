@@ -74,6 +74,8 @@ export class RealtimeVoiceSession {
     this.socket = null;
     this.stream = null;
     this.audioContext = null;
+    this.outputAnalyser = null;
+    this.outputAnalysisBuffer = null;
     this.processor = null;
     this.sources = new Set();
     this.nextPlaybackTime = 0;
@@ -106,6 +108,12 @@ export class RealtimeVoiceSession {
       });
       this.audioContext = new this.browser.AudioContext();
       await this.audioContext.resume();
+      if (typeof this.audioContext.createAnalyser === "function") {
+        this.outputAnalyser = this.audioContext.createAnalyser();
+        this.outputAnalyser.fftSize = 256;
+        this.outputAnalysisBuffer = new Float32Array(this.outputAnalyser.fftSize);
+        this.outputAnalyser.connect(this.audioContext.destination);
+      }
       const session = await this.createSession({
         context: this.context,
         history: this.history,
@@ -489,13 +497,21 @@ export class RealtimeVoiceSession {
     buffer.copyToChannel(samples, 0);
     const source = this.audioContext.createBufferSource();
     source.buffer = buffer;
-    source.connect(this.audioContext.destination);
+    source.connect(this.outputAnalyser || this.audioContext.destination);
     const now = this.audioContext.currentTime;
     this.nextPlaybackTime = Math.max(now, this.nextPlaybackTime);
     source.start(this.nextPlaybackTime);
     this.nextPlaybackTime += buffer.duration;
     this.sources.add(source);
     source.onended = () => this.sources.delete(source);
+  }
+
+  getOutputLevel() {
+    if (!this.sources.size || !this.outputAnalyser || !this.outputAnalysisBuffer) return 0;
+    this.outputAnalyser.getFloatTimeDomainData(this.outputAnalysisBuffer);
+    let sum = 0;
+    for (const sample of this.outputAnalysisBuffer) sum += sample * sample;
+    return Math.sqrt(sum / this.outputAnalysisBuffer.length);
   }
 
   stopPlayback() {
@@ -555,6 +571,9 @@ export class RealtimeVoiceSession {
     this.processor = null;
     this.inputSource = null;
     this.silentOutput = null;
+    this.outputAnalyser?.disconnect();
+    this.outputAnalyser = null;
+    this.outputAnalysisBuffer = null;
     this.stream = null;
     this.socket = null;
     this.audioContext = null;

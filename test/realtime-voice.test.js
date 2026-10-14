@@ -49,11 +49,24 @@ class FakeAudioContext {
     this.destination = {};
     this.state = "running";
     this.createdSources = [];
+    this.createdAnalysers = [];
     FakeAudioContext.latest = this;
   }
 
   async resume() {}
   async close() { this.state = "closed"; }
+  createAnalyser() {
+    const analyser = {
+      fftSize: 0,
+      connectedTo: null,
+      samples: new Float32Array(256),
+      connect(destination) { this.connectedTo = destination; },
+      disconnect() { this.connectedTo = null; },
+      getFloatTimeDomainData(buffer) { buffer.set(this.samples); },
+    };
+    this.createdAnalysers.push(analyser);
+    return analyser;
+  }
   createMediaStreamSource() { return { connect() {}, disconnect() {} }; }
   createScriptProcessor() {
     const processor = { connect() {}, disconnect() {}, onaudioprocess: null };
@@ -69,7 +82,8 @@ class FakeAudioContext {
   }
   createBufferSource() {
     const source = {
-      connect() {},
+      connectedTo: null,
+      connect(destination) { source.connectedTo = destination; },
       start: () => { source.started = true; },
       stop: () => { source.stopped = true; source.onended?.(); },
     };
@@ -137,8 +151,13 @@ test("realtime session streams microphone audio, transcripts, and stops playback
     },
   });
   assert.equal(FakeAudioContext.latest.createdSources[0].started, true);
+  const analyser = FakeAudioContext.latest.createdAnalysers[0];
+  assert.equal(FakeAudioContext.latest.createdSources[0].connectedTo, analyser);
+  analyser.samples.fill(0.25);
+  assert.equal(session.getOutputLevel(), 0.25);
   await socket.emit({ serverContent: { interrupted: true } });
   assert.equal(FakeAudioContext.latest.createdSources[0].stopped, true);
+  assert.equal(session.getOutputLevel(), 0);
 
   await socket.emit({
     serverContent: {
@@ -154,6 +173,7 @@ test("realtime session streams microphone audio, transcripts, and stops playback
   assert.ok(events.states.includes("listening"));
   session.stop();
   assert.equal(FakeAudioContext.latest.state, "closed");
+  assert.equal(analyser.connectedTo, null);
 });
 
 test("Gemini Live tool calls use backend results and deduplicate repeated call IDs", async () => {
