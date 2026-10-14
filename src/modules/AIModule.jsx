@@ -1,8 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { RealtimeVoiceSession } from "../utils/realtime-voice.js";
 import aiTradeDesignReference from "../assets/DDPro-AI-Trade-Referans.png";
-import aiCharacterFront from "../assets/ddpro-ai-character-front.png";
-import aiCharacterBack from "../assets/ddpro-ai-character-back.png";
 import {
   createAiVoiceSession,
   executeAiVoiceTool,
@@ -217,7 +215,7 @@ function AudioWaveform({ sessionRef, active, microphoneActive, children }) {
             barOffset += edgeBars[edgeIndex].length;
             return (
               <div className={`ai-audio-frame-edge is-${name}`} key={name} aria-hidden="true">
-                {edgeBars[edgeIndex].map((weight, index) => (
+                {edgeBars[edgeIndex].map((_, index) => (
                   <span
                     className="ai-audio-frame-bar"
                     data-axis={axis.toLowerCase()}
@@ -512,8 +510,6 @@ function AIModule({
                 src={aiTradeDesignReference}
                 alt="DDPro AI TRADE'in kadın karakteri ve marka dili"
               />
-              <img className="ai-character-crop ai-character-front" src={aiCharacterFront} alt="" aria-hidden="true" />
-              <img className="ai-character-crop ai-character-back" src={aiCharacterBack} alt="" aria-hidden="true" />
               <div className="ai-trade-role-hotspots" role="group" aria-label="AI TRADE rollerini başlat">
                 {aiTradeRoles.map((role) => (
                   <button
